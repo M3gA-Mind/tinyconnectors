@@ -104,7 +104,12 @@ async fn compiled_restricted_module_attests_and_performs_confidential_read_witho
         .unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
-            if proxy.attestation().await.unwrap().is_some() {
+            if proxy.attestation().await.unwrap().is_some()
+                && host
+                    .list()
+                    .iter()
+                    .any(|module| matches!(module.state, tinybus::module::ModuleState::Ready))
+            {
                 break;
             }
             tokio::task::yield_now().await;
@@ -186,7 +191,12 @@ async fn compiled_instance(
         .unwrap();
     tokio::time::timeout(std::time::Duration::from_secs(5), async {
         loop {
-            if proxy.attestation().await.unwrap().is_some() {
+            if proxy.attestation().await.unwrap().is_some()
+                && host
+                    .list()
+                    .iter()
+                    .any(|module| matches!(module.state, tinybus::module::ModuleState::Ready))
+            {
                 break;
             }
             tokio::task::yield_now().await;
