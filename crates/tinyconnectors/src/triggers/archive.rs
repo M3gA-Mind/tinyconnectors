@@ -83,6 +83,8 @@ impl TriggerArchive {
 
         let mut file = OpenOptions::new()
             .create(true)
+            // LockFileEx needs read or generic write access; append alone is insufficient.
+            .read(true)
             .append(true)
             .open(&path)
             .map_err(|error| failed(format!("could not open the archive file: {error}")))?;

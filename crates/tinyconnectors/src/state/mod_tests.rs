@@ -174,7 +174,10 @@ async fn a_write_creates_the_namespace_directory() {
 async fn a_write_into_an_unwritable_root_is_reported() {
     // Reported rather than swallowed: a preference that silently fails to save
     // would revert at the next restart with no explanation.
-    let store = FilePrefsStore::new(std::path::Path::new("/proc/nonexistent-for-tests"));
+    let dir = TempDir::new("blocked-parent");
+    let blocked = dir.0.join("file");
+    fs::write(&blocked, b"not a directory").unwrap();
+    let store = FilePrefsStore::new(&blocked);
     let error = store.set("gmail", &json!({})).await.unwrap_err();
     assert!(matches!(error, Error::Store { .. }));
 }
