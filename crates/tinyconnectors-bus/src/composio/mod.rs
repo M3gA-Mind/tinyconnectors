@@ -33,6 +33,10 @@
 //! Composio's envelopes, and naming them as if they were a neutral abstraction
 //! would be a lie the moment a second backend disagreed about a field.
 
+pub mod routed;
+pub use routed::{
+    ComposioCallRoute, ComposioReadOperation, ComposioRoutedReadReply, ComposioRoutedReadRequest,
+};
 pub mod connections;
 pub mod direct;
 pub mod execute;

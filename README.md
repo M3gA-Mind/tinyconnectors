@@ -55,6 +55,24 @@ is refused before any request is made — parsed, not prefix-matched, because
 `http://127.0.0.1:8080@evil.com` resolves to `evil.com` and would carry the
 credential header there.
 
+## Concurrent caller routes
+
+Contract 1.14 adds `RoutedRead`: one request carries a required proxy or direct
+route and one of `ListToolkits`, `ListConnections`, `ListGithubRepos`,
+`ListAvailableTriggers`, or `ListTriggers`. The module builds a local client
+for that call. Concurrent callers can use different endpoints and credentials;
+`Configure`, including sign-out, does not change an in-flight routed read.
+Hosts must send this credential-bearing envelope with TinyBus confidential
+transport. Route `Debug` output redacts credentials and private endpoints.
+Direct mode retains its existing named refusals for proxy-only reads.
+
+`Configure` remains available for existing single-route hosts. Its route is
+module-wide, so separate configure-and-call sequences do not isolate concurrent
+callers. `RoutedRead` does not read or change that route, preference stores,
+profile caches, or trigger archives. Execution, filtered tools, provider profile
+chains, and durable preferences/archive operations still need an independently
+admitted state scope; this read contract does not provide one.
+
 ## No sync engine
 
 The module does not pull records out of connected accounts. Contract 1.12
