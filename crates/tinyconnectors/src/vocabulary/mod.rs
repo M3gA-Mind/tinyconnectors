@@ -127,5 +127,6 @@ pub(crate) fn prepare_task_filter(filter: TaskFetchFilter) -> PreparedTaskFilter
 }
 
 #[cfg(test)]
+#[doc = "Compatibility tests for the compiled connector vocabulary."]
 #[path = "mod_tests.rs"]
 mod tests;

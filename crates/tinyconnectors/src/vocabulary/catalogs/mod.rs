@@ -81,8 +81,8 @@ pub(crate) fn catalog_for_toolkit(toolkit: &str) -> Option<&'static [CuratedTool
         "airtable" => Some(business::AIRTABLE_CURATED),
         "figma" => Some(business::FIGMA_CURATED),
         "youtube" => Some(social_media::YOUTUBE_CURATED),
-        // `ONE_DRIVE_*` slugs extract to "one" via `toolkit_from_slug`; alias
-        // both the prefix and the canonical UI/backend slugs.
+        // The multi-segment prefix extracts to "one_drive"; retain "one" as
+        // a legacy alias alongside the canonical UI/backend spellings.
         "one" | "one_drive" | "onedrive" => Some(microsoft::ONE_DRIVE_CURATED),
         "excel" => Some(microsoft::EXCEL_CURATED),
         "todoist" => Some(productivity::TODOIST_CURATED),
@@ -129,6 +129,7 @@ pub(crate) fn curated_scope_for(slug: &str) -> Option<ToolScope> {
 }
 
 #[cfg(test)]
+#[doc = "Compatibility tests for the compiled connector vocabulary."]
 #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 #[path = "mod_tests.rs"]
 mod tests;

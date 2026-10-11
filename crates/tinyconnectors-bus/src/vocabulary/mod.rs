@@ -144,5 +144,6 @@ pub struct PreparedTaskFilter {
 }
 
 #[cfg(test)]
+#[doc = "Wire compatibility tests for portable connector payloads."]
 #[path = "mod_tests.rs"]
 mod tests;

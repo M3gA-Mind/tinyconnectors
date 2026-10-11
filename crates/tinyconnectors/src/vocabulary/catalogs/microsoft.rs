@@ -162,5 +162,6 @@ pub(crate) const EXCEL_CURATED: &[CuratedTool] = &[
 ];
 
 #[cfg(test)]
+#[doc = "Compatibility tests for the compiled connector vocabulary."]
 #[path = "microsoft_tests.rs"]
 mod tests;

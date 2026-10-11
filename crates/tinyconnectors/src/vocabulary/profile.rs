@@ -153,9 +153,11 @@ fn sanitize_prompt_value(raw: &str) -> String {
 }
 
 #[cfg(test)]
+#[doc = "Compatibility tests for the compiled connector vocabulary."]
 #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 #[path = "profile_tests.rs"]
 mod tests;
 
 #[cfg(test)]
+#[doc = "Compatibility tests for the compiled connector vocabulary."]
 use tinyconnectors_bus::vocabulary::ProviderUserProfile;

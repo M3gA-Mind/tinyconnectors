@@ -195,6 +195,7 @@ pub(crate) fn agent_ready_toolkits() -> Vec<&'static str> {
 }
 
 #[cfg(test)]
+#[doc = "Compatibility tests for the compiled connector vocabulary."]
 #[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 #[path = "scopes_tests.rs"]
 mod tests;

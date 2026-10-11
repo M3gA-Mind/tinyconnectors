@@ -134,3 +134,16 @@ fn identity_metadata_is_computed_by_the_module() {
     assert_eq!(response.connection_identifiers, ["conn"]);
     assert!(response.prompt_section.is_empty());
 }
+
+#[test]
+fn every_curated_catalog_is_reported_ready() -> serde_json::Result<()> {
+    let golden: std::collections::BTreeMap<String, serde_json::Value> =
+        serde_json::from_str(include_str!("catalogs/fixtures/catalog-actions.json"))?;
+    let catalogs = get_vocabulary(VocabularyRequest { toolkits: golden.keys().cloned().collect() });
+    let ready = get_vocabulary(VocabularyRequest { toolkits: catalogs.agent_ready_toolkits });
+    for toolkit in catalogs.toolkits {
+        assert!(ready.toolkits.iter().any(|entry| entry.actions == toolkit.actions),
+            "{} has a compiled catalog but no ready-list entry", toolkit.toolkit);
+    }
+    Ok(())
+}
