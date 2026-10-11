@@ -90,7 +90,8 @@ fn action_aliases_are_compared_inside_the_module() {
         response[0].canonical_slug.as_deref(),
         Some("GOOGLECALENDAR_CREATE_EVENT")
     );
-    assert_eq!(response[0].matches, Some(true));
+    // Matching treats the first slug as a catalog candidate, preserving the extracted asymmetry.
+    assert_eq!(response[0].matches, Some(false));
 }
 
 #[test]
@@ -101,4 +102,35 @@ fn unknown_toolkits_retain_fallback_descriptions_without_a_catalog() {
     assert!(response.toolkits[0].actions.is_none());
     assert!(!response.toolkits[0].native_provider);
     assert!(!response.toolkits[0].description.is_empty());
+}
+
+#[test]
+fn toolkit_descriptions_preserve_the_extracted_prompt_vocabulary() -> serde_json::Result<()> {
+    let golden: std::collections::BTreeMap<String, String> =
+        serde_json::from_str(include_str!("catalogs/fixtures/descriptions.json"))?;
+    let response = get_vocabulary(VocabularyRequest {
+        toolkits: golden.keys().cloned().collect(),
+    });
+    for toolkit in response.toolkits {
+        assert_eq!(toolkit.description, golden[&toolkit.toolkit]);
+    }
+    Ok(())
+}
+
+#[test]
+fn identity_metadata_is_computed_by_the_module() {
+    use tinyconnectors_bus::vocabulary::{IdentityKind, IdentityValueRequest};
+    let response = normalize_identities(NormalizeIdentitiesRequest {
+        values: vec![IdentityValueRequest {
+            kind: IdentityKind::Email,
+            value: " A@B.COM ".into(),
+        }],
+        connection_identifiers: vec![" Conn ".into()],
+        identities: vec![],
+    });
+    assert_eq!(response.values[0].value.as_deref(), Some("a@b.com"));
+    assert_eq!(response.values[0].confidence, 0.95);
+    assert!(response.values[0].matchable);
+    assert_eq!(response.connection_identifiers, ["conn"]);
+    assert!(response.prompt_section.is_empty());
 }

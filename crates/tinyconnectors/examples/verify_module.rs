@@ -163,7 +163,7 @@ async fn verify_vocabulary(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::er
     if actions.len() != 3
         || actions[0].visible
         || !actions[1].visible
-        || actions[2].matches != Some(true)
+        || actions[2].matches != Some(false)
         || actions[2].canonical_slug.as_deref() != Some("GOOGLECALENDAR_CREATE_EVENT")
     {
         return Err(io::Error::other("action alias or classifier profile changed").into());
