@@ -29,13 +29,13 @@ pub const OBJECT_PATH: &str = "/ai/tinyhumans/connectors/Composio";
 /// minor bumps of [`crate::CONTRACT_VERSION`] rather than as constants nothing
 /// answers, which a host would only discover as a runtime "unknown method".
 pub mod methods {
-    /// Returns compiled catalog metadata for a VocabularyRequest.
+    /// Returns compiled catalog metadata for a `VocabularyRequest`.
     pub const GET_VOCABULARY: &str = "GetVocabulary";
-    /// Evaluates a batch of ActionVocabularyRequest values without executing.
+    /// Evaluates a batch of `ActionVocabularyRequest` values without executing.
     pub const EVALUATE_ACTIONS: &str = "EvaluateActions";
-    /// Computes normalized values and prompt output for NormalizeIdentitiesRequest.
+    /// Computes normalized values and prompt output for `NormalizeIdentitiesRequest`.
     pub const NORMALIZE_IDENTITIES: &str = "NormalizeIdentities";
-    /// Returns PreparedTaskFilter for a TaskFetchFilter; does not fetch tasks.
+    /// Returns `PreparedTaskFilter` for a `TaskFetchFilter`; does not fetch tasks.
     pub const PREPARE_TASK_FILTER: &str = "PrepareTaskFilter";
 
     /// Lists the toolkits the backend allowlist currently enables.

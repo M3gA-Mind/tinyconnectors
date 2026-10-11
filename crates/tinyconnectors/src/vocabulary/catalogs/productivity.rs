@@ -6,7 +6,7 @@
 //! have no user-profile fetch, no initial/periodic sync, no trigger
 //! webhooks, and no memory ingestion. The agent invokes their actions
 //! through Composio's API, but their data is not pre-ingested into
-//! OpenHuman's memory.
+//! `OpenHuman`'s memory.
 
 use crate::vocabulary::scopes::{CuratedTool, ToolScope};
 

@@ -15,10 +15,17 @@ fn task_preparation_preserves_provider_extras() {
 fn every_extracted_catalog_alias_preserves_action_order_and_scope() {
     let golden: std::collections::BTreeMap<String, serde_json::Value> =
         serde_json::from_str(include_str!("catalogs/fixtures/catalog-actions.json")).unwrap();
-    let request = VocabularyRequest { toolkits: golden.keys().cloned().collect() };
+    let request = VocabularyRequest {
+        toolkits: golden.keys().cloned().collect(),
+    };
     let response = get_vocabulary(request);
     for toolkit in response.toolkits {
-        assert_eq!(serde_json::to_value(toolkit.actions.unwrap()).unwrap(), golden[&toolkit.toolkit], "{}", toolkit.toolkit);
+        assert_eq!(
+            serde_json::to_value(toolkit.actions.unwrap()).unwrap(),
+            golden[&toolkit.toolkit],
+            "{}",
+            toolkit.toolkit
+        );
     }
     assert_eq!(response.agent_ready_toolkits.len(), 30);
 }
@@ -28,14 +35,24 @@ fn unknown_scope_profiles_are_explicit_and_curated_actions_take_precedence() {
     use tinyconnectors_bus::vocabulary::{ToolScope, UserScopePref};
     let query = |slug: &str, profile| ActionVocabularyRequest {
         slug: slug.into(),
-        preference: UserScopePref { read: true, write: false, admin: false },
+        preference: UserScopePref {
+            read: true,
+            write: false,
+            admin: false,
+        },
         unknown_scope_profile: profile,
         compare_with: None,
     };
     let response = evaluate_actions(vec![
-        query("CUSTOM_LIST_DRAFTS", UnknownScopeProfile::SubstringCompatibility),
+        query(
+            "CUSTOM_LIST_DRAFTS",
+            UnknownScopeProfile::SubstringCompatibility,
+        ),
         query("CUSTOM_LIST_DRAFTS", UnknownScopeProfile::LeadingVerb),
-        query("GMAIL_LIST_DRAFTS", UnknownScopeProfile::SubstringCompatibility),
+        query(
+            "GMAIL_LIST_DRAFTS",
+            UnknownScopeProfile::SubstringCompatibility,
+        ),
         query("GMAIL_LIST_DRAFTS", UnknownScopeProfile::LeadingVerb),
         query("CUSTOM_DELETE_POST", UnknownScopeProfile::LeadingVerb),
         query("CUSTOM_CREATE_RECORD", UnknownScopeProfile::LeadingVerb),
@@ -68,13 +85,18 @@ fn action_aliases_are_compared_inside_the_module() {
         compare_with: Some("googlecalendar_create_event".into()),
     }]);
     assert_eq!(response[0].toolkit.as_deref(), Some("googlecalendar"));
-    assert_eq!(response[0].canonical_slug.as_deref(), Some("GOOGLECALENDAR_CREATE_EVENT"));
+    assert_eq!(
+        response[0].canonical_slug.as_deref(),
+        Some("GOOGLECALENDAR_CREATE_EVENT")
+    );
     assert_eq!(response[0].matches, Some(true));
 }
 
 #[test]
 fn unknown_toolkits_retain_fallback_descriptions_without_a_catalog() {
-    let response = get_vocabulary(VocabularyRequest { toolkits: vec!["unknown".into()] });
+    let response = get_vocabulary(VocabularyRequest {
+        toolkits: vec!["unknown".into()],
+    });
     assert!(response.toolkits[0].actions.is_none());
     assert!(!response.toolkits[0].native_provider);
     assert!(!response.toolkits[0].description.is_empty());

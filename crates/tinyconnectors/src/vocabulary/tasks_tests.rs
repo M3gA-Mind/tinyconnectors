@@ -38,7 +38,7 @@ fn an_undifferentiated_task_defaults_to_generic() {
 #[test]
 fn the_github_fetch_mode_defaults_to_auto() {
     // `Auto` is the safe default: a shipped user with no `gh` on `PATH` still
-    // reaches GitHub through the connected Composio account.
+    // reaches `GitHub` through the connected Composio account.
     assert_eq!(GithubFetchMode::default(), GithubFetchMode::Auto);
     assert_eq!(
         TaskFetchFilter::default().github_fetch_mode,

@@ -1,7 +1,7 @@
-//! Curated catalog of ClickUp Composio actions exposed to the agent.
+//! Curated catalog of `ClickUp` Composio actions exposed to the agent.
 //!
 //! Slugs match Composio's naming convention (`<TOOLKIT>_<ACTION>`) for
-//! the ClickUp REST surface. See <https://composio.dev/docs/toolkits/clickup>
+//! the `ClickUp` REST surface. See <https://composio.dev/docs/toolkits/clickup>
 //! for the canonical action list; the entries here are the read-oriented
 //! subset the memory document sync relies on, plus the most common
 //! task-write surface the agent already uses through generic tool-calling.

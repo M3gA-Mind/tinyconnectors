@@ -18,6 +18,7 @@ pub enum ToolScope {
 
 impl ToolScope {
     /// Stable lowercase tag, matching the serde representation.
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             ToolScope::Read => "read",

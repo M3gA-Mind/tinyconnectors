@@ -6,7 +6,7 @@
 //! user-profile fetch, no initial/periodic sync, no trigger webhooks,
 //! and no memory ingestion. Connecting them via the UI lets the agent
 //! invoke the listed actions through Composio's API, but their data
-//! is not pre-ingested into OpenHuman's memory.
+//! is not pre-ingested into `OpenHuman`'s memory.
 //!
 //! Action slugs are sourced best-effort from
 //! `https://docs.composio.dev/toolkits/<id>.md`. Slugs that don't

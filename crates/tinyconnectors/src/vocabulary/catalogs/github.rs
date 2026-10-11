@@ -1,6 +1,6 @@
-//! Curated catalog of GitHub Composio actions exposed to the agent.
+//! Curated catalog of `GitHub` Composio actions exposed to the agent.
 //!
-//! Composio publishes hundreds of GitHub actions; this hand-tuned slice
+//! Composio publishes hundreds of `GitHub` actions; this hand-tuned slice
 //! covers the day-to-day operations an AI assistant actually performs
 //! (browsing repos, reading/writing issues + PRs, code search, basic
 //! workflow control) and hides the long tail of admin endpoints.

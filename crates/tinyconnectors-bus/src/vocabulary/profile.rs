@@ -49,6 +49,7 @@ impl IdentityKind {
     ///
     /// Durable: it is the last segment of a persisted facet key, so renaming a
     /// variant's string orphans every row filed under the old one.
+    #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
             Self::UserId => "user_id",
@@ -67,6 +68,7 @@ impl IdentityKind {
     /// `username` segment written before the identifier rewrite. Callers skip
     /// those rows rather than failing the load, so one stale row cannot make a
     /// user's whole identity set unreadable.
+    #[must_use]
     pub fn parse(s: &str) -> Option<Self> {
         Some(match s {
             "user_id" => Self::UserId,

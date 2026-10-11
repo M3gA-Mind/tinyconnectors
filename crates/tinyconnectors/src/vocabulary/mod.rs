@@ -1,8 +1,8 @@
 //! Compiled connector catalogs and portable identity/task normalization.
 //!
-//! Extracted from OpenHuman's contract vocabulary without changing its stored
+//! Extracted from `OpenHuman`'s contract vocabulary without changing its stored
 //! tags, action names, catalog order, or prompt output. Hosts receive metadata
-//! over TinyBus and apply their own policy; no operation here executes a tool.
+//! over `TinyBus` and apply their own policy; no operation here executes a tool.
 
 pub(crate) mod catalogs;
 pub(crate) mod profile;

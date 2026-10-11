@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 
 /// What kind of work an ingested task implies.
 ///
-/// GitHub's issues-and-pull-requests search returns both shapes and the job
+/// `GitHub`'s issues-and-pull-requests search returns both shapes and the job
 /// differs fundamentally — *resolve* an issue versus *review* a pull request —
 /// so providers tag each task and the enrichment phrases the objective and the
 /// agent prompt accordingly. Providers that do not distinguish (Notion, Linear,
-/// ClickUp) leave this [`Generic`](Self::Generic).
+/// `ClickUp`) leave this [`Generic`](Self::Generic).
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskKind {
@@ -23,6 +23,7 @@ pub enum TaskKind {
 
 impl TaskKind {
     /// Stable lowercase tag, mirrored into the card's `source_metadata`.
+    #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
             TaskKind::Generic => "generic",
@@ -32,9 +33,9 @@ impl TaskKind {
     }
 }
 
-/// How the GitHub task-source fetch reaches GitHub.
+/// How the `GitHub` task-source fetch reaches `GitHub`.
 ///
-/// Shipped desktop users connect GitHub through Composio OAuth — no `gh` on
+/// Shipped desktop users connect `GitHub` through Composio OAuth — no `gh` on
 /// `PATH`, no `GITHUB_TOKEN` — while local development and self-hosted setups
 /// often have the reverse. [`Auto`](Self::Auto) does the right thing for both;
 /// the other two force a path when the user wants one.
@@ -111,7 +112,7 @@ pub struct NormalizedTask {
 /// A selectable upstream task container — a board, database or list.
 ///
 /// Populates a picker so the user chooses from a list instead of pasting a raw
-/// id. Today this is a Notion database; later a Linear team or a ClickUp list.
+/// id. Today this is a Notion database; later a Linear team or a `ClickUp` list.
 /// Surfaced to the task-source UI as `{ id, title }`.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -125,8 +126,8 @@ pub struct TaskContainer {
 /// Provider-agnostic filter passed into a task fetch.
 ///
 /// The host builds this from a user-configured, per-provider filter spec. Each
-/// provider reads only the fields that apply to it — GitHub reads `repo` and
-/// `labels`, Notion reads `database_id`, Linear and ClickUp read `team_id` —
+/// provider reads only the fields that apply to it — `GitHub` reads `repo` and
+/// `labels`, Notion reads `database_id`, Linear and `ClickUp` read `team_id` —
 /// and ignores the rest. [`extra`](Self::extra) is a free-form escape hatch
 /// surfaced in the UI for advanced provider-native query fragments.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -135,13 +136,13 @@ pub struct TaskFetchFilter {
     /// Scope to items assigned to — or involving — the authenticated user.
     #[serde(default)]
     pub assignee_is_me: bool,
-    /// GitHub fetch-path selector. Defaults to [`GithubFetchMode::Auto`].
+    /// `GitHub` fetch-path selector. Defaults to [`GithubFetchMode::Auto`].
     #[serde(default)]
     pub github_fetch_mode: GithubFetchMode,
-    /// GitHub `owner/name` repository scope.
+    /// `GitHub` `owner/name` repository scope.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repo: Option<String>,
-    /// GitHub label filter.
+    /// `GitHub` label filter.
     #[serde(default)]
     pub labels: Vec<String>,
     /// Issue or task state filter, e.g. `"open"` or `"todo"`.
@@ -153,10 +154,10 @@ pub struct TaskFetchFilter {
     /// Notion status property filter.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
-    /// Linear or ClickUp team — workspace — id.
+    /// Linear or `ClickUp` team — workspace — id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team_id: Option<String>,
-    /// ClickUp list id.
+    /// `ClickUp` list id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub list_id: Option<String>,
     /// Free-form provider-native filter fragment, for advanced users.
