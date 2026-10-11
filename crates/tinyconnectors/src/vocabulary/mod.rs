@@ -10,7 +10,6 @@ pub(crate) mod scopes;
 mod tasks;
 
 use profile::IdentityMetadata;
-use scopes::ScopePreference;
 use tasks::TaskLimit;
 use tinyconnectors_bus::vocabulary::{
     ActionVocabularyRequest, ActionVocabularyResponse, IdentityValueResponse,
@@ -59,17 +58,7 @@ pub(crate) fn evaluate_actions(
                     scopes::classify_unknown(&request.slug)
                 }
                 UnknownScopeProfile::LeadingVerb => {
-                    match tinyconnectors_sync::classify_unknown(&request.slug) {
-                        tinyconnectors_sync::ToolScope::Read => {
-                            tinyconnectors_bus::vocabulary::ToolScope::Read
-                        }
-                        tinyconnectors_sync::ToolScope::Write => {
-                            tinyconnectors_bus::vocabulary::ToolScope::Write
-                        }
-                        tinyconnectors_sync::ToolScope::Admin => {
-                            tinyconnectors_bus::vocabulary::ToolScope::Admin
-                        }
-                    }
+                    tinyconnectors_sync::classify_unknown(&request.slug)
                 }
             });
             let visible = if request.unknown_scope_profile

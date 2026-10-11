@@ -6,7 +6,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use serde_json::json;
-use tinyconnectors_sync::{Error, PREFS_NAMESPACE, PrefsStore, UserScopePref};
+use tinyconnectors_sync::{Error, PREFS_NAMESPACE, PrefsStore, ScopePrefStore, UserScopePref};
 
 use super::FilePrefsStore;
 

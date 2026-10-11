@@ -11,20 +11,6 @@ pub(crate) struct CuratedTool {
     pub scope: ToolScope,
 }
 
-/// Apply a supplied display preference without changing persisted execution policy.
-pub(crate) trait ScopePreference {
-    fn allows(&self, scope: ToolScope) -> bool;
-}
-impl ScopePreference for UserScopePref {
-    fn allows(&self, scope: ToolScope) -> bool {
-        match scope {
-            ToolScope::Read => self.read,
-            ToolScope::Write => self.write,
-            ToolScope::Admin => self.admin,
-        }
-    }
-}
-
 /// Heuristic fallback for gating a tool that is not in any provider's curated
 /// list.
 ///

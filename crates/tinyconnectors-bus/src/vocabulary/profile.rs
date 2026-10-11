@@ -2,25 +2,39 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Normalized profile returned by a provider.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// The connected account's identity, as far as a toolkit reports it.
+///
+/// Every field is optional because the toolkits disagree about which they have:
+/// Gmail knows an email, Slack knows a workspace and a display name, GitHub
+/// knows a login. A UI picking a label falls back through them in that order.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProviderUserProfile {
-    /// Composio toolkit slug the profile was fetched from, e.g. `"gmail"`.
+    /// Toolkit the profile is for.
     pub toolkit: String,
-    /// The connection the profile belongs to; `None` on toolkit-wide fetches.
+    /// Connection the profile was read through.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub connection_id: Option<String>,
-    /// Human display label, when the provider exposes one.
+    /// Human name, when the provider reports one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
-    /// Primary email address on the connected account.
+    /// Account email.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
-    /// Platform username or screen name, without any leading `@`.
+    /// Login or handle.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub username: Option<String>,
-    /// URL of the account's avatar image.
+    /// Avatar image URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar_url: Option<String>,
-    /// URL of the account's public profile page.
+    /// Link to the account on the provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile_url: Option<String>,
-    /// Provider-specific extras (raw JSON object).
-    #[serde(default)]
+    /// Anything toolkit-specific.
+    ///
+    /// Here so a new toolkit with an interesting field does not require
+    /// widening this shape — and every consumer of it — to carry something one
+    /// provider reports.
+    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
     pub extras: serde_json::Value,
 }
 

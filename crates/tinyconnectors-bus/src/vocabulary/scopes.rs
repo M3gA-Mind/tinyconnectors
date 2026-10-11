@@ -2,29 +2,39 @@
 
 use serde::{Deserialize, Serialize};
 
-/// Classification of how invasive an action is.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// How invasive an action is.
+///
+/// Ordered by consequence, which is what makes a user preference of "read only"
+/// expressible as a threshold rather than a set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ToolScope {
-    /// Pure reads — `GET` / `FETCH` / `LIST` / `SEARCH` / `GET_PROFILE`.
+    /// Pure reads — get, fetch, list, search.
     Read,
-    /// Side-effectful actions that create or mutate user data —
-    /// `SEND` / `CREATE` / `UPDATE` / `REPLY` / `APPEND`.
+    /// Creates or changes the user's data — send, create, update, reply.
     Write,
-    /// Destructive or permission-changing actions — `DELETE` / `TRASH` /
-    /// `REMOVE` / `MODIFY_LABELS` / `SHARE`.
+    /// Destructive or permission-changing — delete, trash, share, revoke.
     Admin,
 }
 
 impl ToolScope {
-    /// Stable lowercase tag, matching the serde representation.
+    /// The stable wire name used in preferences and catalogs.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
-            ToolScope::Read => "read",
-            ToolScope::Write => "write",
-            ToolScope::Admin => "admin",
+            Self::Read => "read",
+            Self::Write => "write",
+            Self::Admin => "admin",
         }
+    }
+
+    /// Whether this scope is permitted when the user has allowed up to `limit`.
+    ///
+    /// The ordering is the point: allowing write allows read, because a user
+    /// who consented to changes has necessarily consented to looking.
+    #[must_use]
+    pub fn is_allowed_by(self, limit: Self) -> bool {
+        self <= limit
     }
 }
 
@@ -53,5 +63,23 @@ impl Default for UserScopePref {
             write: true,
             admin: false,
         }
+    }
+}
+
+impl UserScopePref {
+    /// Whether the supplied scope is permitted by these independent flags.
+    #[must_use]
+    pub fn allows(self, scope: ToolScope) -> bool {
+        match scope {
+            ToolScope::Read => self.read,
+            ToolScope::Write => self.write,
+            ToolScope::Admin => self.admin,
+        }
+    }
+
+    /// Durable preference row key: toolkit trimmed and lowercased.
+    #[must_use]
+    pub fn key(toolkit: &str) -> String {
+        toolkit.trim().to_ascii_lowercase()
     }
 }

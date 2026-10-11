@@ -23,8 +23,7 @@ pub(crate) mod productivity;
 pub(crate) mod social_media;
 
 use super::scopes::{
-    CuratedTool, ScopePreference, ToolScope, UserScopePref, classify_unknown, find_curated,
-    toolkit_from_slug,
+    CuratedTool, ToolScope, UserScopePref, classify_unknown, find_curated, toolkit_from_slug,
 };
 
 pub(crate) use descriptions::toolkit_description;

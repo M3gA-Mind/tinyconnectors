@@ -4,43 +4,8 @@ use super::context::ProviderContext;
 use crate::Result;
 use crate::scope::CuratedTool;
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 
-/// The connected account's identity, as far as a toolkit reports it.
-///
-/// Every field is optional because the toolkits disagree about which they have:
-/// Gmail knows an email, Slack knows a workspace and a display name, GitHub
-/// knows a login. A UI picking a label falls back through them in that order.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ProviderUserProfile {
-    /// Toolkit the profile is for.
-    pub toolkit: String,
-    /// Connection the profile was read through.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub connection_id: Option<String>,
-    /// Human name, when the provider reports one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub display_name: Option<String>,
-    /// Account email.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub email: Option<String>,
-    /// Login or handle.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub username: Option<String>,
-    /// Avatar image URL.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub avatar_url: Option<String>,
-    /// Link to the account on the provider.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub profile_url: Option<String>,
-    /// Anything toolkit-specific.
-    ///
-    /// Here so a new toolkit with an interesting field does not require
-    /// widening this shape — and every consumer of it — to carry something one
-    /// provider reports.
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
-    pub extras: serde_json::Value,
-}
+pub use tinyconnectors_bus::vocabulary::ProviderUserProfile;
 
 /// What a connector knows about one toolkit.
 #[async_trait]
