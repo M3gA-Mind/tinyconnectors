@@ -1064,11 +1064,14 @@ async fn setup_on_the_direct_route_serves_too() -> tinybus::Result<()> {
 #[tokio::test]
 async fn setup_refuses_a_state_dir_it_cannot_use() -> tinybus::Result<()> {
     // Failing at load beats failing on the first trigger, weeks later.
+    let dir = TempDir::new("blocked-state");
+    let blocked = dir.0.join("file");
+    std::fs::write(&blocked, b"not a directory").expect("fixture file");
     let config: ModuleConfig = serde_json::from_value(json!({
         "route": "proxy",
         "base_url": "https://api.example.invalid",
         "auth_token": "t0ken",
-        "state_dir": "/proc/nonexistent-for-tests",
+        "state_dir": blocked.to_string_lossy(),
     }))
     .expect("parses");
 

@@ -202,8 +202,10 @@ fn writes_land_in_the_current_day_file() {
 #[test]
 fn opening_under_an_unwritable_root_is_reported() {
     // Reported at load, not at the first delivery weeks later.
-    let error = TriggerArchive::open(std::path::Path::new("/proc/nonexistent-for-tests"))
-        .expect_err("must refuse");
+    let dir = TempDir::new("blocked-parent");
+    let blocked = dir.0.join("file");
+    fs::write(&blocked, b"not a directory").unwrap();
+    let error = TriggerArchive::open(&blocked).expect_err("must refuse");
     assert!(matches!(error, crate::Error::Archive { .. }));
     assert!(error.to_string().contains("archive directory"));
 }
