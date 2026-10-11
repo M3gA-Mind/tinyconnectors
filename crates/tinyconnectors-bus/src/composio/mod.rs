@@ -34,6 +34,7 @@
 //! would be a lie the moment a second backend disagreed about a field.
 
 pub mod routed;
+pub mod runtime;
 pub use routed::{
     ComposioCallRoute, ComposioReadOperation, ComposioRoutedReadReply, ComposioRoutedReadRequest,
 };
@@ -77,3 +78,5 @@ pub use triggers::{
     ComposioListTriggersRequest, ComposioTriggerEvent, ComposioTriggerHistoryEntry,
     ComposioTriggerHistoryResult, ComposioTriggerMetadata,
 };
+
+pub use runtime::{ComposioRuntimeMode, ComposioRuntimeModeResponse};
