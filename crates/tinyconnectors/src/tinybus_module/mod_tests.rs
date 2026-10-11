@@ -1587,3 +1587,25 @@ async fn closed_archive_calls_fail(
             .is_err()
     );
 }
+
+#[test]
+fn restricted_initialization_rejects_stored_routes_and_unknown_modes() {
+    for config in [
+        serde_json::json!({"runtime_mode":"routed_read_only","route":"proxy","base_url":"https://example.com","auth_token":"private-token"}),
+        serde_json::json!({"runtime_mode":"routd_read_only"}),
+        serde_json::json!({"runtime_mode":true}),
+    ] {
+        assert!(
+            serde_json::from_value::<ModuleConfig>(config).is_err(),
+            "restricted initialization must not silently ignore admission fields"
+        );
+    }
+}
+
+#[tokio::test]
+async fn classic_runtime_handshake_preserves_existing_initialization_mode() {
+    let service = service_over(StubTransport::replying(serde_json::json!({})));
+    let mode = service.runtime_mode().await.unwrap();
+    assert_eq!(mode.mode, tinyconnectors_bus::ComposioRuntimeMode::Classic);
+    assert_eq!(mode.contract_version, tinyconnectors_bus::CONTRACT_VERSION);
+}

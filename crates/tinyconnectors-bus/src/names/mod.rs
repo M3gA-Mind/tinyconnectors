@@ -34,6 +34,8 @@ pub mod methods {
     /// Takes `ComposioRoutedReadRequest` and returns `ComposioRoutedReadReply`;
     /// it never reads or replaces the legacy configured route.
     pub const ROUTED_READ: &str = "RoutedRead";
+    /// Return the live immutable initialization mode and contract version.
+    pub const RUNTIME_MODE: &str = "RuntimeMode";
 
     /// Lists the toolkits the backend allowlist currently enables.
     ///
@@ -256,6 +258,7 @@ pub const METHODS: &[&str] = &[
     methods::LIST_CONNECTIONS_DIRECT,
     methods::LIST_TOOLS_DIRECT,
     methods::ROUTED_READ,
+    methods::RUNTIME_MODE,
 ];
 
 #[cfg(test)]

@@ -31,6 +31,7 @@
 //! distinguishing detail — the failing path, or the user-facing rate-limit
 //! guidance — because that is all a host will have to act on.
 
+mod restricted;
 mod routed;
 
 use std::sync::{Arc, RwLock};
@@ -152,6 +153,7 @@ pub(crate) enum RouteConfig {
 pub(crate) struct ModuleConfig {
     /// How to reach Composio, when the host has said.
     route: Option<RouteConfig>,
+    runtime_mode: tinyconnectors_bus::ComposioRuntimeMode,
 }
 
 impl<'de> Deserialize<'de> for ModuleConfig {
@@ -167,12 +169,29 @@ impl<'de> Deserialize<'de> for ModuleConfig {
         deserializer: D,
     ) -> std::result::Result<Self, D::Error> {
         let value = serde_json::Value::deserialize(deserializer)?;
-        if value.get("route").is_none_or(serde_json::Value::is_null) {
-            return Ok(Self { route: None });
+        let runtime_mode = value
+            .get("runtime_mode")
+            .cloned()
+            .map(serde_json::from_value::<tinyconnectors_bus::ComposioRuntimeMode>)
+            .transpose()
+            .map_err(serde::de::Error::custom)?
+            .unwrap_or_default();
+        let route = if value.get("route").is_none_or(serde_json::Value::is_null) {
+            None
+        } else {
+            Some(RouteConfig::deserialize(value.clone()).map_err(serde::de::Error::custom)?)
+        };
+        if runtime_mode == tinyconnectors_bus::ComposioRuntimeMode::RoutedReadOnly
+            && (route.is_some() || value.get("state_dir").is_some())
+        {
+            return Err(serde::de::Error::custom(
+                "routed_read_only does not admit a stored route or state directory",
+            ));
         }
-        RouteConfig::deserialize(value)
-            .map(|route| Self { route: Some(route) })
-            .map_err(serde::de::Error::custom)
+        Ok(Self {
+            route,
+            runtime_mode,
+        })
     }
 }
 
@@ -870,6 +889,16 @@ impl ConnectorService {
     ) -> TinyBusResult<tinyconnectors_bus::ComposioRoutedReadReply> {
         routed::read(request).await
     }
+    #[allow(
+        clippy::unused_async,
+        reason = "TinyBus methods are async; mode is immutable"
+    )]
+    async fn runtime_mode(&self) -> TinyBusResult<tinyconnectors_bus::ComposioRuntimeModeResponse> {
+        Ok(tinyconnectors_bus::ComposioRuntimeModeResponse {
+            mode: tinyconnectors_bus::ComposioRuntimeMode::Classic,
+            contract_version: tinyconnectors_bus::CONTRACT_VERSION,
+        })
+    }
 }
 
 /// The preference store for a host that named a directory, or an ephemeral one.
@@ -929,6 +958,10 @@ fn to_bus_error(error: &crate::Error) -> tinybus::Error {
 }
 
 async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()> {
+    if config.runtime_mode == tinyconnectors_bus::ComposioRuntimeMode::RoutedReadOnly {
+        return restricted::setup(connection).await;
+    }
+
     // Opened before the route so a bad state directory fails at load rather
     // than on the first trigger, weeks later.
     let config_state_dir = config.state_dir().map(std::path::Path::to_path_buf);
@@ -968,6 +1001,28 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
     Ok(())
 }
 
+type SetupFuture = std::pin::Pin<Box<dyn std::future::Future<Output = TinyBusResult<()>> + Send>>;
+
+/// Capture the first admitted mode for this ABI instance. `TinyBus` retains the
+/// same callback for reinitialization, so another instance has its own seal.
+fn setup_factory() -> impl Fn(Connection, ModuleConfig) -> SetupFuture + Send + Sync {
+    let mode = Arc::new(tokio::sync::Mutex::new(None));
+    move |connection, config: ModuleConfig| {
+        let mode = mode.clone();
+        Box::pin(async move {
+            let mut admitted = mode.lock().await;
+            if admitted.is_some_and(|initial| initial != config.runtime_mode) {
+                return Err(tinybus::Error::failed(
+                    "runtime mode cannot change after module initialization",
+                ));
+            }
+            *admitted = Some(config.runtime_mode);
+            drop(admitted);
+            setup(connection, config).await
+        })
+    }
+}
+
 macro_rules! export_module {
     ($($declaration:tt)*) => {
         mod exports {
@@ -985,7 +1040,7 @@ macro_rules! export_module {
 }
 
 export_module! {
-    setup = setup,
+    setup_factory = setup_factory,
     config = ModuleConfig,
     worker_threads = 1,
     provides = ["ai.tinyhumans.connectors.Composio"],
@@ -1021,6 +1076,7 @@ export_module! {
         "ListConnectionsDirect",
         "ListToolsDirect",
         "RoutedRead",
+        "RuntimeMode",
 
     ],
     signals = [],

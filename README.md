@@ -73,6 +73,36 @@ profile caches, or trigger archives. Execution, filtered tools, provider profile
 chains, and durable preferences/archive operations still need an independently
 admitted state scope; this read contract does not provide one.
 
+## Immutable routed-read-only module mode
+
+Contract 1.15 adds the no-argument RuntimeMode handshake. To initialize a
+module for concurrent callers without global state, supply exactly:
+
+~~~json
+{"runtime_mode":"routed_read_only"}
+~~~
+
+This immutable instance serves confidential RoutedRead, RuntimeMode, and
+the static ListCapabilities / ListAgentReadyToolkits reads, plus framework
+introspection. It allocates no client slot, preference store or archive.
+All other connector members, including Configure, execution, providers,
+preferences and archives, return typed unknown-method refusal before decoding
+their arguments. A stored route or state directory is rejected during admission.
+
+The handshake reports the **actual** live mode and contract version. A host
+must require routed_read_only and a compatible 1.15 contract on its admitted
+artifact before using this path. Sending an unknown configuration field to an
+older module is insufficient: older releases may ignore it. Missing handshake,
+classic mode, or unavailable confidential transport is a terminal refusal.
+
+In restricted mode, ListCapabilities returns an empty matrix: native provider,
+profile and execution methods are unavailable. ListAgentReadyToolkits remains a
+pure catalog of compiled curated toolkit slugs, independent of account state.
+
+Omitting runtime_mode retains classic initialization and its existing methods.
+This mode grants no durable state scope; stateful cloud operations still require
+a future admitted owning persistence contract.
+
 ## No sync engine
 
 The module does not pull records out of connected accounts. Contract 1.12
