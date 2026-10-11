@@ -1,6 +1,6 @@
 //! Curated catalog of Linear Composio actions.
 
-use crate::vocabulary::scopes::{CuratedTool, ToolScope};
+use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
 
 /// The curated action catalog for the `linear` toolkit.
 pub(crate) const LINEAR_CURATED: &[CuratedTool] = &[

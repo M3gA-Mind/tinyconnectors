@@ -13,7 +13,7 @@
 //! exist on the backend simply never appear in `composio_list_tools`,
 //! so over-shooting is harmless.
 
-use crate::vocabulary::scopes::{CuratedTool, ToolScope};
+use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
 
 // ── onedrive ────────────────────────────────────────────────────────
 /// The curated action catalog for the `one_drive` toolkit.

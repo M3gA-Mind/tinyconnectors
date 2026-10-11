@@ -5,7 +5,7 @@
 //! (browsing repos, reading/writing issues + PRs, code search, basic
 //! workflow control) and hides the long tail of admin endpoints.
 
-use crate::vocabulary::scopes::{CuratedTool, ToolScope};
+use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
 
 /// The curated action catalog for the `github` toolkit.
 pub(crate) const GITHUB_CURATED: &[CuratedTool] = &[

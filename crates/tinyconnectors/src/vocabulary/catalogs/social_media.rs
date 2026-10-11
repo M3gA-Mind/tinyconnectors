@@ -1,7 +1,7 @@
 //! Curated catalogs — social media / entertainment toolkits: Twitter,
 //! Spotify, `YouTube`.
 
-use crate::vocabulary::scopes::{CuratedTool, ToolScope};
+use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
 
 // ── twitter ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `twitter` toolkit.

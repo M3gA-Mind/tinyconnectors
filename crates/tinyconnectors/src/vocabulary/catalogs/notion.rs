@@ -1,6 +1,6 @@
 //! Curated catalog of Notion Composio actions exposed to the agent.
 
-use crate::vocabulary::scopes::{CuratedTool, ToolScope};
+use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
 
 /// The curated action catalog for the `notion` toolkit.
 pub(crate) const NOTION_CURATED: &[CuratedTool] = &[

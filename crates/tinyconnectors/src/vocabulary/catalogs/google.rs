@@ -1,7 +1,7 @@
 //! Curated catalogs — Google toolkits: `GoogleCalendar`, `GoogleDrive`,
 //! `GoogleDocs`, `GoogleSheets`.
 
-use crate::vocabulary::scopes::{CuratedTool, ToolScope};
+use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
 
 // ── googlecalendar ──────────────────────────────────────────────────
 /// The curated action catalog for the `googlecalendar` toolkit.

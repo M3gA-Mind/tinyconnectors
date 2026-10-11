@@ -8,7 +8,7 @@
 //! through Composio's API, but their data is not pre-ingested into
 //! `OpenHuman`'s memory.
 
-use crate::vocabulary::scopes::{CuratedTool, ToolScope};
+use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
 
 // ── outlook ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `outlook` toolkit.

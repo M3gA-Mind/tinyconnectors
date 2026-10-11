@@ -1,7 +1,7 @@
 //! Curated catalogs — messaging toolkits: Slack, Discord, Telegram,
 //! `WhatsApp`, Microsoft Teams.
 
-use crate::vocabulary::scopes::{CuratedTool, ToolScope};
+use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
 
 // ── slack ───────────────────────────────────────────────────────────
 /// The curated action catalog for the `slack` toolkit.

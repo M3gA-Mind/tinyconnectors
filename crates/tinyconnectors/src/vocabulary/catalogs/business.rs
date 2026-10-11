@@ -1,7 +1,7 @@
 //! Curated catalogs — business toolkits: Shopify, Stripe, `HubSpot`,
 //! Salesforce, Airtable, Figma.
 
-use crate::vocabulary::scopes::{CuratedTool, ToolScope};
+use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
 
 // ── shopify ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `shopify` toolkit.
