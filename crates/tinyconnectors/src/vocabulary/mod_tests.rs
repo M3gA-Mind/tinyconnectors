@@ -201,3 +201,40 @@ fn recognized_aliases_use_canonical_catalog_scope_and_visibility() {
         }
     }
 }
+
+#[test]
+fn identifiers_without_canonical_characters_are_rejected() {
+    use tinyconnectors_bus::vocabulary::{IdentityKind, IdentityValueRequest};
+    let response = normalize_identities(NormalizeIdentitiesRequest {
+        values: vec![
+            IdentityValueRequest {
+                kind: IdentityKind::Phone,
+                value: " --- ".into(),
+            },
+            IdentityValueRequest {
+                kind: IdentityKind::Handle,
+                value: " @@@ ".into(),
+            },
+        ],
+        connection_identifiers: vec![],
+        identities: vec![],
+    });
+    for value in response.values {
+        assert_eq!(value.value, None);
+    }
+}
+
+#[test]
+fn toolkit_casing_and_padding_preserve_consistent_metadata() {
+    let response = get_vocabulary(VocabularyRequest {
+        toolkits: vec!["gmail".into(), "GMAIL".into(), "  gmail  ".into()],
+    });
+    let canonical = &response.toolkits[0];
+    assert!(canonical.native_provider);
+    for (variant, original) in response.toolkits[1..].iter().zip(["GMAIL", "  gmail  "]) {
+        assert_eq!(variant.toolkit, original);
+        assert_eq!(variant.description, canonical.description);
+        assert_eq!(variant.native_provider, canonical.native_provider);
+        assert_eq!(variant.actions, canonical.actions);
+    }
+}
