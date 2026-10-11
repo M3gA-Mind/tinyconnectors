@@ -152,7 +152,7 @@ fn every_curated_catalog_is_reported_ready() -> serde_json::Result<()> {
             ready
                 .toolkits
                 .iter()
-                .any(|entry| entry.actions == toolkit.actions),
+                .any(|entry| entry.toolkit == toolkit.toolkit),
             "{} has a compiled catalog but no ready-list entry",
             toolkit.toolkit
         );
@@ -236,5 +236,24 @@ fn toolkit_casing_and_padding_preserve_consistent_metadata() {
         assert_eq!(variant.description, canonical.description);
         assert_eq!(variant.native_provider, canonical.native_provider);
         assert_eq!(variant.actions, canonical.actions);
+    }
+}
+
+#[test]
+fn phones_without_digits_have_no_canonical_identity() {
+    use tinyconnectors_bus::vocabulary::{IdentityKind, IdentityValueRequest};
+    let response = normalize_identities(NormalizeIdentitiesRequest {
+        values: ["+", "+++", "---+---", "abc+", "１２３+"]
+            .into_iter()
+            .map(|value| IdentityValueRequest {
+                kind: IdentityKind::Phone,
+                value: value.into(),
+            })
+            .collect(),
+        connection_identifiers: vec![],
+        identities: vec![],
+    });
+    for value in response.values {
+        assert_eq!(value.value, None);
     }
 }
