@@ -213,3 +213,6 @@ fn the_manifest_declares_every_member_the_contract_names_in_order() {
         .collect();
     assert_eq!(declared, tinyconnectors_bus::METHODS);
 }
+
+#[path = "route_tests.rs"]
+mod route_tests;

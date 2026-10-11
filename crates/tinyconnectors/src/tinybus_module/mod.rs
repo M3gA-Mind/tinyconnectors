@@ -31,6 +31,8 @@
 //! distinguishing detail — the failing path, or the user-facing rate-limit
 //! guidance — because that is all a host will have to act on.
 
+mod routed;
+
 use std::sync::{Arc, RwLock};
 
 use serde::Deserialize;
@@ -82,7 +84,7 @@ use crate::triggers::TriggerArchive;
 ///
 /// Reachable only through `module_export!`, which names the type in the ABI
 /// entrypoint it generates; nothing re-exports it from the crate root.
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(tag = "route", rename_all = "snake_case")]
 pub(crate) enum RouteConfig {
     /// Reach Composio through the `TinyHumans` backend.
@@ -860,6 +862,14 @@ impl ConnectorService {
             .await
             .map_err(tinybus::Error::failed)
     }
+    /// Read through only the request's immutable confidential route.
+    #[tinybus(confidential)]
+    async fn routed_read(
+        &self,
+        request: tinyconnectors_bus::ComposioRoutedReadRequest,
+    ) -> TinyBusResult<tinyconnectors_bus::ComposioRoutedReadReply> {
+        routed::read(request).await
+    }
 }
 
 /// The preference store for a host that named a directory, or an ephemeral one.
@@ -1010,6 +1020,7 @@ export_module! {
         "ListTriggerHistory",
         "ListConnectionsDirect",
         "ListToolsDirect",
+        "RoutedRead",
 
     ],
     signals = [],
@@ -1029,3 +1040,12 @@ mod direct_test;
 mod processing;
 
 mod archives;
+
+impl std::fmt::Debug for RouteConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Proxy { .. } => f.write_str("RouteConfig::Proxy(<redacted>)"),
+            Self::Direct { .. } => f.write_str("RouteConfig::Direct(<redacted>)"),
+        }
+    }
+}

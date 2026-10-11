@@ -55,6 +55,7 @@ fn the_method_table_holds_the_declared_members() {
             methods::LIST_TRIGGER_HISTORY,
             methods::LIST_CONNECTIONS_DIRECT,
             methods::LIST_TOOLS_DIRECT,
+            methods::ROUTED_READ,
         ]
     );
 }
