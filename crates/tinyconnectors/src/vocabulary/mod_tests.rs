@@ -12,22 +12,23 @@ fn task_preparation_preserves_provider_extras() {
 }
 
 #[test]
-fn every_extracted_catalog_alias_preserves_action_order_and_scope() {
+fn every_extracted_catalog_alias_preserves_action_order_and_scope() -> serde_json::Result<()> {
     let golden: std::collections::BTreeMap<String, serde_json::Value> =
-        serde_json::from_str(include_str!("catalogs/fixtures/catalog-actions.json")).unwrap();
+        serde_json::from_str(include_str!("catalogs/fixtures/catalog-actions.json"))?;
     let request = VocabularyRequest {
         toolkits: golden.keys().cloned().collect(),
     };
     let response = get_vocabulary(request);
     for toolkit in response.toolkits {
         assert_eq!(
-            serde_json::to_value(toolkit.actions.unwrap()).unwrap(),
+            serde_json::to_value(toolkit.actions)?,
             golden[&toolkit.toolkit],
             "{}",
             toolkit.toolkit
         );
     }
     assert_eq!(response.agent_ready_toolkits.len(), 30);
+    Ok(())
 }
 
 #[test]

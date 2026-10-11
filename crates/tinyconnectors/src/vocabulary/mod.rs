@@ -75,7 +75,7 @@ pub(crate) fn evaluate_actions(
             let visible = if request.unknown_scope_profile
                 == UnknownScopeProfile::SubstringCompatibility
             {
-                catalogs::is_action_visible_with_pref(&request.slug, &request.preference)
+                catalogs::is_action_visible_with_pref(&request.slug, request.preference)
             } else {
                 toolkit.as_deref().is_none_or(|toolkit| {
                     (catalogs::catalog_for_toolkit(toolkit).is_none() || curated_scope.is_some())

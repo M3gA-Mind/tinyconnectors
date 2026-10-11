@@ -34,7 +34,6 @@ impl ScopePreference for UserScopePref {
 /// bucket on the `UPDATE` substring rule — the ordering is the whole point of
 /// the function and not an implementation detail.
 pub(crate) fn classify_unknown(slug: &str) -> ToolScope {
-    let upper = slug.to_ascii_uppercase();
     const ADMIN: &[&str] = &[
         "DELETE",
         "TRASH",
@@ -48,6 +47,7 @@ pub(crate) fn classify_unknown(slug: &str) -> ToolScope {
         "SEND", "CREATE", "UPDATE", "REPLY", "APPEND", "INSERT", "ADD", "POST", "PATCH", "WRITE",
         "DRAFT",
     ];
+    let upper = slug.to_ascii_uppercase();
     if ADMIN.iter().any(|kw| upper.contains(kw)) {
         return ToolScope::Admin;
     }

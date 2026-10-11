@@ -129,23 +129,23 @@ fn is_action_visible_gates_on_the_curated_scope() {
         write: false,
         admin: false,
     };
-    assert!(is_action_visible_with_pref(read_action.slug, &read_only));
-    assert!(!is_action_visible_with_pref(admin_action.slug, &read_only));
+    assert!(is_action_visible_with_pref(read_action.slug, read_only));
+    assert!(!is_action_visible_with_pref(admin_action.slug, read_only));
 
     let all = UserScopePref {
         read: true,
         write: true,
         admin: true,
     };
-    assert!(is_action_visible_with_pref(admin_action.slug, &all));
+    assert!(is_action_visible_with_pref(admin_action.slug, all));
 
     // Uncurated action on a curated toolkit is hidden regardless of pref —
     // curation is a whitelist, so absence means "not surfaced", never
     // "fall back to the heuristic".
-    assert!(!is_action_visible_with_pref("GMAIL_NO_SUCH_ACTION", &all));
+    assert!(!is_action_visible_with_pref("GMAIL_NO_SUCH_ACTION", all));
 
     // A slug with no toolkit prefix is not ours to gate.
-    assert!(is_action_visible_with_pref("nonsense", &read_only));
+    assert!(is_action_visible_with_pref("nonsense", read_only));
 }
 
 #[test]

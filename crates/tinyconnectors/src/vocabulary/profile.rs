@@ -1,11 +1,13 @@
 //! Compiled identifier normalization and prompt rendering.
 
+use std::fmt::Write;
+
 use tinyconnectors_bus::vocabulary::{ConnectedIdentity, IdentityKind};
 
 /// Matching metadata evaluated inside the module.
 pub(crate) trait IdentityMetadata {
     fn confidence(self) -> f64;
-    fn is_matchable(self) -> bool;
+    fn is_matchable(&self) -> bool;
 }
 impl IdentityMetadata for IdentityKind {
     /// Confidence the matcher records on a row of this kind.
@@ -25,7 +27,7 @@ impl IdentityMetadata for IdentityKind {
 
     /// Whether this kind is a real identity signal worth running through the
     /// matcher, as opposed to a UI-only field.
-    fn is_matchable(self) -> bool {
+    fn is_matchable(&self) -> bool {
         matches!(
             self,
             Self::UserId | Self::Email | Self::Handle | Self::Phone | Self::DisplayName
@@ -103,12 +105,13 @@ pub(crate) fn render_connected_identities_section(identities: &[ConnectedIdentit
             continue;
         }
         let identifier = sanitize_prompt_value(&id.identifier);
-        out.push_str(&format!(
-            "- {} ({}): {}\n",
+        let _ = writeln!(
+            out,
+            "- {} ({}): {}",
             title_case(&id.source),
             identifier,
             fields.join(" | ")
-        ));
+        );
     }
     if out.trim() == "## Connected Identities" {
         return String::new();

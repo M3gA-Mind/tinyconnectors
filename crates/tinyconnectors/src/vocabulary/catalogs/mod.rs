@@ -100,7 +100,7 @@ pub(crate) fn catalog_for_toolkit(toolkit: &str) -> Option<&'static [CuratedTool
 /// Takes a pre-loaded preference because the typical caller loops over
 /// toolkits, where awaiting once per toolkit is cheaper than once per action.
 #[must_use]
-pub(crate) fn is_action_visible_with_pref(slug: &str, pref: &UserScopePref) -> bool {
+pub(crate) fn is_action_visible_with_pref(slug: &str, pref: UserScopePref) -> bool {
     let Some(toolkit) = toolkit_from_slug(slug) else {
         return true;
     };
