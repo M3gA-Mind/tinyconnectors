@@ -261,7 +261,7 @@ async fn verify_catalogs(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::erro
             );
         }
     }
-    if reply.agent_ready_toolkits.len() != 31 {
+    if reply.agent_ready_toolkits != golden.keys().cloned().collect::<Vec<_>>() {
         return Err(io::Error::other("catalog-ready toolkit vocabulary changed").into());
     }
     Ok(())

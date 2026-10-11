@@ -29,7 +29,10 @@ fn every_extracted_catalog_alias_preserves_action_order_and_scope() -> serde_jso
             toolkit.toolkit
         );
     }
-    assert_eq!(response.agent_ready_toolkits.len(), 31);
+    assert_eq!(
+        response.agent_ready_toolkits,
+        golden.keys().cloned().collect::<Vec<_>>()
+    );
     Ok(())
 }
 
