@@ -1,3 +1,5 @@
+//! Wire compatibility tests for portable connector payloads.
+
 use super::*;
 
 #[test]
@@ -42,5 +44,28 @@ fn matching_tags_and_unknown_profile_values_fail_closed() -> serde_json::Result<
     );
     assert!(serde_json::from_str::<UnknownScopeProfile>(r#""unknown""#).is_err());
     assert!(serde_json::from_str::<IdentityKind>(r#""username""#).is_err());
+    Ok(())
+}
+
+#[test]
+fn shared_provider_profile_preserves_omitted_fields_and_extras() -> serde_json::Result<()> {
+    let profile = ProviderUserProfile {
+        toolkit: "gmail".into(),
+        email: Some("alice@example.com".into()),
+        extras: serde_json::json!({"future": "preserved"}),
+        ..Default::default()
+    };
+    let wire = serde_json::json!({
+        "toolkit": "gmail", "email": "alice@example.com", "extras": {"future": "preserved"}
+    });
+    assert_eq!(serde_json::to_value(&profile)?, wire);
+    assert_eq!(
+        serde_json::from_value::<ProviderUserProfile>(wire)?,
+        profile
+    );
+    assert_eq!(
+        serde_json::to_value(ProviderUserProfile::default())?,
+        serde_json::json!({"toolkit": ""})
+    );
     Ok(())
 }

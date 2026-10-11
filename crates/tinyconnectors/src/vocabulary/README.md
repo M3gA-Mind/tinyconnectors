@@ -8,7 +8,8 @@ TinyBus interface and link only tinyconnectors-bus.
 GetVocabulary returns requested descriptions and action catalogs without
 credentials. EvaluateActions returns aliases and display metadata in batches.
 The caller selects substring compatibility or leading verb classification.
-Catalog classifications take precedence. Display metadata cannot change the
+Catalog classifications take precedence. Scope preferences and provider profiles
+use the same contract types as the provider registry. Display metadata cannot change the
 persisted preference independently enforced by Execute.
 
 NormalizeIdentities applies durable identifier normalization, confidence and
