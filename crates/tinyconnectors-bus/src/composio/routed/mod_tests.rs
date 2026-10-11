@@ -106,5 +106,5 @@ fn five_read_requests_and_replies_pin_their_tags_and_trigger_fields() {
         );
     }
     assert!(!crate::is_compatible((1, 13)));
-    assert!(crate::is_compatible((1, 14)));
+    assert!(crate::is_compatible(crate::CONTRACT_VERSION));
 }
