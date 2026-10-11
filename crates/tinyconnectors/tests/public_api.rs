@@ -100,3 +100,12 @@ async fn the_built_module_loads_with_an_empty_configuration() {
     assert_eq!(info.name, "tinyconnectors");
     task.abort();
 }
+
+#[test]
+fn vocabulary_payloads_are_available_from_the_module_root() {
+    let request: tinyconnectors_bus::vocabulary::VocabularyRequest =
+        tinyconnectors::VocabularyRequest::default();
+    assert!(request.toolkits.is_empty());
+    let _: tinyconnectors_bus::vocabulary::UserScopePref =
+        tinyconnectors::vocabulary::UserScopePref::default();
+}
