@@ -27,7 +27,7 @@ fn every_extracted_catalog_alias_preserves_action_order_and_scope() -> serde_jso
             toolkit.toolkit
         );
     }
-    assert_eq!(response.agent_ready_toolkits.len(), 30);
+    assert_eq!(response.agent_ready_toolkits.len(), 31);
     Ok(())
 }
 
@@ -139,11 +139,21 @@ fn identity_metadata_is_computed_by_the_module() {
 fn every_curated_catalog_is_reported_ready() -> serde_json::Result<()> {
     let golden: std::collections::BTreeMap<String, serde_json::Value> =
         serde_json::from_str(include_str!("catalogs/fixtures/catalog-actions.json"))?;
-    let catalogs = get_vocabulary(VocabularyRequest { toolkits: golden.keys().cloned().collect() });
-    let ready = get_vocabulary(VocabularyRequest { toolkits: catalogs.agent_ready_toolkits });
+    let catalogs = get_vocabulary(VocabularyRequest {
+        toolkits: golden.keys().cloned().collect(),
+    });
+    let ready = get_vocabulary(VocabularyRequest {
+        toolkits: catalogs.agent_ready_toolkits,
+    });
     for toolkit in catalogs.toolkits {
-        assert!(ready.toolkits.iter().any(|entry| entry.actions == toolkit.actions),
-            "{} has a compiled catalog but no ready-list entry", toolkit.toolkit);
+        assert!(
+            ready
+                .toolkits
+                .iter()
+                .any(|entry| entry.actions == toolkit.actions),
+            "{} has a compiled catalog but no ready-list entry",
+            toolkit.toolkit
+        );
     }
     Ok(())
 }

@@ -161,6 +161,7 @@ pub(crate) fn agent_ready_toolkits() -> Vec<&'static str> {
         "gmail",
         "notion",
         "github",
+        "clickup",
         // Catalog-only toolkits.
         "slack",
         "discord",
