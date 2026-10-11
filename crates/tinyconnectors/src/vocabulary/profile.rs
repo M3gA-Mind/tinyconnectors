@@ -159,5 +159,4 @@ fn sanitize_prompt_value(raw: &str) -> String {
 mod tests;
 
 #[cfg(test)]
-#[doc = "Compatibility tests for the compiled connector vocabulary."]
 use tinyconnectors_bus::vocabulary::ProviderUserProfile;

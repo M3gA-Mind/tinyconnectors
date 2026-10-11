@@ -19,5 +19,4 @@ impl TaskLimit for TaskFetchFilter {
 mod tests;
 
 #[cfg(test)]
-#[doc = "Compatibility tests for the compiled connector vocabulary."]
 use tinyconnectors_bus::vocabulary::{GithubFetchMode, NormalizedTask, TaskContainer, TaskKind};
