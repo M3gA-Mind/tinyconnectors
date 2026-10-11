@@ -40,7 +40,7 @@ pub mod scope;
 pub mod toolkits;
 
 pub use error::{Error, Result};
-pub use prefs::{PREFS_NAMESPACE, PrefsStore, UserScopePref};
+pub use prefs::{PREFS_NAMESPACE, PrefsStore, ScopePrefStore, UserScopePref};
 pub use provider::{
     ActionRunner, ConnectorProvider, ProviderContext, ProviderRegistry, ProviderUserProfile,
 };

@@ -263,3 +263,14 @@ like a hard coupling having no callers at all.
 What remains riskiest is now phase 4's deletion step: until the payload types
 are removed from `tinymemory-api`, they exist in two places and can drift. The
 sooner phase 3 lands far enough to allow that, the shorter that window.
+
+## Portable vocabulary migration (OpenHuman #7413)
+
+1. Pin the missing compiled vocabulary operation with a failing real-bus test.
+2. Move wire shapes to the bus and algorithms/catalogs to the module; migrate
+   existing contract tests and preserve both explicit heuristic profiles.
+3. Add the four implemented members and bump the minor contract version.
+4. Exercise all four operations with the native module loader, run the workspace
+   format, Clippy, build, test and rustdoc checks, and publish the owner PR.
+5. After a released artifact is available, migrate the host adapters and prove
+   action schemas and native recorded-tool resume before deleting its contract.

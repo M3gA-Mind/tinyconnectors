@@ -49,3 +49,8 @@ curated catalog and its profile action. Every catalog is ported
 action-for-action from the lists these toolkits were already curated against,
 and a test asserts that each action belongs to its own toolkit, appears once,
 and is scoped no less invasively than its verb.
+
+Scope and profile payloads are re-exported from `tinyconnectors-bus::vocabulary`;
+provider and bus callers use the same types. Import `ScopePrefStore` alongside
+`UserScopePref` to call `UserScopePref::load` and `preference.save`. Persistence
+stays in this crate, while the contract carries the fields and stable row key.

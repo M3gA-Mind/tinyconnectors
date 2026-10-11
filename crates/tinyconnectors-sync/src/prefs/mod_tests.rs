@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use async_trait::async_trait;
 use serde_json::json;
 
-use super::{PREFS_NAMESPACE, PrefsStore, UserScopePref};
+use super::{PREFS_NAMESPACE, PrefsStore, ScopePrefStore, UserScopePref};
 use crate::scope::ToolScope;
 use crate::{Error, Result};
 

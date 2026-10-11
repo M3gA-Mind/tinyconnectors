@@ -34,6 +34,14 @@ pub mod methods {
     /// Takes `ComposioRoutedReadRequest` and returns `ComposioRoutedReadReply`;
     /// it never reads or replaces the legacy configured route.
     pub const ROUTED_READ: &str = "RoutedRead";
+    /// Returns compiled catalog metadata for a `VocabularyRequest`.
+    pub const GET_VOCABULARY: &str = "GetVocabulary";
+    /// Evaluates a batch of `ActionVocabularyRequest` values without executing.
+    pub const EVALUATE_ACTIONS: &str = "EvaluateActions";
+    /// Computes normalized values and prompt output for `NormalizeIdentitiesRequest`.
+    pub const NORMALIZE_IDENTITIES: &str = "NormalizeIdentities";
+    /// Returns `PreparedTaskFilter` for a `TaskFetchFilter`; does not fetch tasks.
+    pub const PREPARE_TASK_FILTER: &str = "PrepareTaskFilter";
     /// Return the live immutable initialization mode and contract version.
     pub const RUNTIME_MODE: &str = "RuntimeMode";
 
@@ -258,6 +266,10 @@ pub const METHODS: &[&str] = &[
     methods::LIST_CONNECTIONS_DIRECT,
     methods::LIST_TOOLS_DIRECT,
     methods::ROUTED_READ,
+    methods::GET_VOCABULARY,
+    methods::EVALUATE_ACTIONS,
+    methods::NORMALIZE_IDENTITIES,
+    methods::PREPARE_TASK_FILTER,
     methods::RUNTIME_MODE,
 ];
 

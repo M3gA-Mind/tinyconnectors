@@ -1,3 +1,5 @@
+//! Restricted initialization, dispatch refusals, and immutable runtime handshake.
+
 use super::*;
 use tinybus::{broker::Broker, transport::memory::MemoryBus};
 use tinyconnectors_bus::names::methods;
@@ -139,7 +141,7 @@ async fn compiled_restricted_module_attests_and_performs_confidential_read_witho
     assert!(seen.lock().unwrap()[0].contains("fake-loopback-token"));
     let mode: ComposioRuntimeModeResponse = proxy.call(methods::RUNTIME_MODE, ()).await.unwrap();
     assert_eq!(mode.mode, ComposioRuntimeMode::RoutedReadOnly);
-    assert_eq!(mode.contract_version, (1, 15));
+    assert_eq!(mode.contract_version, tinyconnectors_bus::CONTRACT_VERSION);
     let attempted = host
         .reinitialize("tinyconnectors", serde_json::json!({}))
         .await;

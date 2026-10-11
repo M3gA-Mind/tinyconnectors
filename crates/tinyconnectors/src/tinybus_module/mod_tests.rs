@@ -29,6 +29,7 @@ use tinyconnectors_bus::{
     ComposioToolsResponse, ComposioTriggerHistoryResult, ComposioUserProfile,
     ComposioUserProfileRequest, ComposioUserScopes, ComposioUserScopesResponse, names,
 };
+use tinyconnectors_sync::ScopePrefStore;
 
 use super::{ConnectorService, ModuleConfig};
 use crate::client::{ComposioClient, ProxyRoute, Transport};
@@ -1586,6 +1587,23 @@ async fn closed_archive_calls_fail(
             .await
             .is_err()
     );
+}
+
+#[tokio::test]
+async fn portable_catalog_is_served_without_a_route() -> tinybus::Result<()> {
+    let (_serving, proxy) = serve_via_setup(ModuleConfig::default()).await?;
+    let reply: serde_json::Value = proxy
+        .call(
+            "GetVocabulary",
+            (json!({"toolkits": ["gmail", "google_calendar"]}),),
+        )
+        .await?;
+    assert_eq!(
+        reply["toolkits"][0]["actions"][0]["slug"],
+        "GMAIL_FETCH_EMAILS"
+    );
+    assert!(reply["agent_ready_toolkits"].as_array().unwrap().len() > 20);
+    Ok(())
 }
 
 #[test]

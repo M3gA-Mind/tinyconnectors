@@ -194,3 +194,43 @@ After the migration:
   OpenHuman's direct client actually implements. Inventing v3 calls for the rest
   would mean shipping endpoint shapes nothing in either source repository
   verifies.
+
+## Portable vocabulary extraction (2026-10-11)
+
+OpenHuman #7413 migrates its Composio contract tables and pure normalization
+into this compiled module. The bus carries owned payloads only; it carries no
+catalog tables, scope heuristic, identity matching algorithm, or prompt renderer.
+
+Contract 1.16 preserves the RuntimeMode handshake introduced in 1.15 and adds
+four members to the classic instance. The restricted instance continues to
+refuse them before decoding arguments. These members answer without a connector
+route:
+
+- GetVocabulary: requested toolkit descriptions and curated action catalogs,
+  plus the complete catalog-ready toolkit list. This list describes catalog
+  coverage; it does not change the provider-backed ListAgentReadyToolkits.
+- EvaluateActions: batch toolkit/alias/classification/visibility metadata with
+  explicitly supplied display preferences and unknown-scope classifier profile.
+  substring_compatibility preserves the extracted host heuristic;
+  leading_verb uses the existing provider heuristic. Neither request changes
+  persisted preferences or bypasses the independent Execute enforcement.
+- NormalizeIdentities: canonical values, confidence and matchability, durable
+  connection identifiers, and the exact extracted connected-identity prompt.
+- PrepareTaskFilter: the existing task query envelope and its effective cap.
+  This is vocabulary processing, not account fetching or a replacement Sync.
+
+Toolkit lookups trim whitespace and ignore ASCII casing across descriptions,
+native-provider support and catalogs while retaining the requested toolkit label.
+Identity normalization rejects values whose canonical form is empty, including
+punctuation-only phones and handles.
+
+Wire casing, stored identity segments, catalog order/action slugs, descriptions
+and prompt output remain unchanged. The host applies metadata to its tool
+surface and owns security decisions, task scheduling, routing, enrichment and
+objective prompts. Its task fetch is deliberately unavailable after ADR 0002;
+this extraction does not advertise or restore that removed capability.
+
+Contract tests move beside the implementation and bus types. A native artifact
+check verifies the exact declared member list and executes these members through
+the dynamic loader, without a network or credentials. Host deletion/adoption
+follows an available module release, never a host implementation fallback.
