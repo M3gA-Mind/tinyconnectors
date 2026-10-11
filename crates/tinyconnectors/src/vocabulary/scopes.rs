@@ -129,7 +129,7 @@ pub(crate) fn action_slug_matches(candidate: &str, requested: &str) -> bool {
         || canonical_action_slug(requested).is_some_and(|c| candidate.eq_ignore_ascii_case(&c))
 }
 
-/// Every toolkit slug that has a curated, agent-ready catalog.
+/// Every toolkit slug and accepted alias that has a curated, agent-ready catalog.
 ///
 /// This is the source of truth behind the "preview / agent integration coming
 /// soon" badge: a connected toolkit whose slug is *not* in this list can be
@@ -152,11 +152,16 @@ pub(crate) fn agent_ready_toolkits() -> Vec<&'static str> {
         "slack",
         "discord",
         "googlecalendar",
+        "google_calendar",
         "googledrive",
+        "google_drive",
         "googledocs",
+        "google_docs",
         "googlesheets",
+        "google_sheets",
         "outlook",
         "microsoft_teams",
+        "microsoft",
         "linear",
         "jira",
         "trello",
@@ -174,6 +179,8 @@ pub(crate) fn agent_ready_toolkits() -> Vec<&'static str> {
         "figma",
         "youtube",
         "one_drive",
+        "onedrive",
+        "one",
         "excel",
         "todoist",
     ];

@@ -39,10 +39,12 @@ impl IdentityMetadata for IdentityKind {
 ///
 /// The same routine runs on the entity side at match time, so equality of
 /// canonical forms is the matcher's only test. Returns `None` when the canonical value is empty — storing one would match every chunk that happened to
-/// carry a blank sender.
+/// carry a blank sender. Phones must contain at least one ASCII digit.
 pub(crate) fn canonicalize(kind: IdentityKind, raw: &str) -> Option<String> {
     let trimmed = raw.trim();
-    if trimmed.is_empty() {
+    if trimmed.is_empty()
+        || (kind == IdentityKind::Phone && !trimmed.chars().any(|c| c.is_ascii_digit()))
+    {
         return None;
     }
     let value = match kind {

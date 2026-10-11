@@ -1,7 +1,7 @@
-//! Curated catalogs — productivity toolkits: Outlook, Linear, Jira,
+//! Curated catalogs — productivity toolkits: Outlook, Jira,
 //! Trello, Asana, Dropbox, Todoist.
 //!
-//! Catalog-only toolkits (Linear, Jira, Trello, Asana, Dropbox,
+//! Catalog-only toolkits (Jira, Trello, Asana, Dropbox,
 //! Todoist) don't ship a native `ComposioProvider` — they
 //! have no user-profile fetch, no initial/periodic sync, no trigger
 //! webhooks, and no memory ingestion. The agent invokes their actions
@@ -109,11 +109,8 @@ pub(crate) const OUTLOOK_CURATED: &[CuratedTool] = &[
 
 // ── linear ──────────────────────────────────────────────────────────
 //
-// `LINEAR_CURATED` lives in `super::linear::tools` alongside the native
-// `LinearProvider` impl (per-issue #2400). `catalog_for_toolkit("linear")`
-// in `super::mod` routes through that constant directly. Removing the
-// catalog-only declaration here keeps a single source of truth and
-// matches how `gmail` / `notion` / `clickup` are wired.
+// `LINEAR_CURATED` lives in `super::linear`; `catalog_for_toolkit("linear")`
+// routes to it directly, matching `gmail` / `notion` / `clickup`.
 
 // ── jira ────────────────────────────────────────────────────────────
 /// The curated action catalog for the `jira` toolkit.
