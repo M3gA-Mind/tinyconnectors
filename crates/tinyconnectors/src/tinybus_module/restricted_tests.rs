@@ -167,3 +167,118 @@ impl Drop for Temporary {
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
+
+#[cfg(feature = "static-link")]
+async fn compiled_instance(
+    config: serde_json::Value,
+) -> (tinybus::module::ModuleHost, Connection, tinybus::Proxy) {
+    let bus = MemoryBus::new();
+    let broker = Broker::new();
+    broker.clone().spawn(bus.clone());
+    let host = tinybus::module::ModuleHost::new(broker);
+    host.attach_linked_with_config(crate::tinybus_module::linked_module().unwrap(), config)
+        .unwrap();
+    let caller = Connection::connect(bus.connect().await.unwrap())
+        .await
+        .unwrap();
+    let proxy = caller
+        .proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)
+        .unwrap();
+    tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            if proxy.attestation().await.unwrap().is_some() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    (host, caller, proxy)
+}
+#[cfg(feature = "static-link")]
+#[tokio::test(flavor = "current_thread")]
+async fn compiled_modes_are_per_instance_and_same_mode_reinitialization_remains_compatible() {
+    let (
+        (classic, _classic_caller, classic_proxy),
+        (restricted, _restricted_caller, restricted_proxy),
+    ) = tokio::join!(
+        compiled_instance(serde_json::json!({})),
+        compiled_instance(serde_json::json!({"runtime_mode":"routed_read_only"}))
+    );
+    let (classic_result, restricted_result) = tokio::join!(
+        classic.reinitialize("tinyconnectors", serde_json::json!({})),
+        restricted.reinitialize(
+            "tinyconnectors",
+            serde_json::json!({"runtime_mode":"routed_read_only"})
+        )
+    );
+    classic_result.unwrap();
+    restricted_result.unwrap();
+    let classic_mode: ComposioRuntimeModeResponse =
+        classic_proxy.call(methods::RUNTIME_MODE, ()).await.unwrap();
+    let restricted_mode: ComposioRuntimeModeResponse = restricted_proxy
+        .call(methods::RUNTIME_MODE, ())
+        .await
+        .unwrap();
+    assert_eq!(classic_mode.mode, ComposioRuntimeMode::Classic);
+    assert_eq!(restricted_mode.mode, ComposioRuntimeMode::RoutedReadOnly);
+    assert!(
+        classic
+            .reinitialize(
+                "tinyconnectors",
+                serde_json::json!({"runtime_mode":"routed_read_only"})
+            )
+            .await
+            .is_err(),
+        "an admitted classic instance must keep its original mode"
+    );
+    let classic_mode: ComposioRuntimeModeResponse =
+        classic_proxy.call(methods::RUNTIME_MODE, ()).await.unwrap();
+    assert_eq!(classic_mode.mode, ComposioRuntimeMode::Classic);
+    let capabilities: ComposioCapabilitiesResponse = classic_proxy
+        .call(methods::LIST_CAPABILITIES, ())
+        .await
+        .unwrap();
+    assert!(
+        !capabilities.capabilities.is_empty(),
+        "legacy capability behavior remains available"
+    );
+}
+#[cfg(feature = "static-link")]
+#[tokio::test(flavor = "current_thread")]
+async fn compiled_restricted_instance_refuses_mode_change_before_opening_state() {
+    let directory = Temporary::new();
+    let (host, _caller, proxy) =
+        compiled_instance(serde_json::json!({"runtime_mode":"routed_read_only"})).await;
+    assert!(
+        host.reinitialize(
+            "tinyconnectors",
+            serde_json::json!({
+                "route":"proxy", "base_url":"http://127.0.0.1:1", "auth_token":"fake-token",
+                "state_dir":directory.path()
+            })
+        )
+        .await
+        .is_err()
+    );
+    assert_eq!(
+        std::fs::read_dir(directory.path()).unwrap().count(),
+        0,
+        "refused reinitialization cannot create a preferences or archive directory"
+    );
+    let mode: ComposioRuntimeModeResponse = proxy.call(methods::RUNTIME_MODE, ()).await.unwrap();
+    assert_eq!(mode.mode, ComposioRuntimeMode::RoutedReadOnly);
+    let error = proxy
+        .call::<serde_json::Value>(
+            methods::CONFIGURE,
+            serde_json::json!({
+                "route":"proxy","base_url":"http://127.0.0.1:1","auth_token":"fake-token",
+                "state_dir":directory.path()
+            }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(error.wire_name(), tinybus::Error::UNKNOWN_METHOD);
+    assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
+}
