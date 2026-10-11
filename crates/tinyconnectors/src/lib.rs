@@ -119,3 +119,5 @@ pub use tinyconnectors_bus::{
     ComposioUserScopes, ComposioUserScopesResponse, INTERFACE, METHODS, OBJECT_PATH, composio,
     is_compatible, names, version,
 };
+
+mod vocabulary;

@@ -860,6 +860,38 @@ impl ConnectorService {
             .await
             .map_err(tinybus::Error::failed)
     }
+    /// Returns portable catalogs without credentials or a backend call.
+    #[allow(clippy::unused_async, reason = "required by the interface dispatcher")]
+    #[allow(unknown_lints, clippy::unused_async_trait_impl)]
+    async fn get_vocabulary(&self, request: tinyconnectors_bus::vocabulary::VocabularyRequest)
+        -> TinyBusResult<tinyconnectors_bus::vocabulary::VocabularyResponse> {
+        Ok(crate::vocabulary::get_vocabulary(request))
+    }
+
+    /// Evaluates display metadata; Execute still checks persisted preferences.
+    #[allow(clippy::unused_async, reason = "required by the interface dispatcher")]
+    #[allow(unknown_lints, clippy::unused_async_trait_impl)]
+    async fn evaluate_actions(&self, request: Vec<tinyconnectors_bus::vocabulary::ActionVocabularyRequest>)
+        -> TinyBusResult<Vec<tinyconnectors_bus::vocabulary::ActionVocabularyResponse>> {
+        Ok(crate::vocabulary::evaluate_actions(request))
+    }
+
+    /// Canonicalizes identifiers and renders the unchanged identity prompt.
+    #[allow(clippy::unused_async, reason = "required by the interface dispatcher")]
+    #[allow(unknown_lints, clippy::unused_async_trait_impl)]
+    async fn normalize_identities(&self, request: tinyconnectors_bus::vocabulary::NormalizeIdentitiesRequest)
+        -> TinyBusResult<tinyconnectors_bus::vocabulary::NormalizeIdentitiesResponse> {
+        Ok(crate::vocabulary::normalize_identities(request))
+    }
+
+    /// Applies the portable unset-cap rule without claiming a fetch capability.
+    #[allow(clippy::unused_async, reason = "required by the interface dispatcher")]
+    #[allow(unknown_lints, clippy::unused_async_trait_impl)]
+    async fn prepare_task_filter(&self, request: tinyconnectors_bus::vocabulary::TaskFetchFilter)
+        -> TinyBusResult<tinyconnectors_bus::vocabulary::PreparedTaskFilter> {
+        Ok(crate::vocabulary::prepare_task_filter(request))
+    }
+
 }
 
 /// The preference store for a host that named a directory, or an ephemeral one.

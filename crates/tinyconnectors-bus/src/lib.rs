@@ -125,3 +125,6 @@ pub use composio::{
 };
 pub use names::{INTERFACE, METHODS, OBJECT_PATH};
 pub use version::{CONTRACT_VERSION, is_compatible};
+
+/// Portable connector vocabulary payloads; behavior is served by the module.
+pub mod vocabulary;
