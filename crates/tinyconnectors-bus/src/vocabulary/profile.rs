@@ -79,7 +79,6 @@ impl IdentityKind {
             _ => return None,
         })
     }
-
 }
 
 /// Identifiers for one source and connection.

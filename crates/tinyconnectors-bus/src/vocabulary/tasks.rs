@@ -167,4 +167,3 @@ pub struct TaskFetchFilter {
     #[serde(default)]
     pub max: u32,
 }
-

@@ -29,12 +29,16 @@ fn excel_catalog_is_non_empty_and_unique() {
 #[test]
 fn one_drive_catalog_covers_all_three_scopes() {
     assert!(ONE_DRIVE_CURATED.iter().any(|t| t.scope == ToolScope::Read));
-    assert!(ONE_DRIVE_CURATED
-        .iter()
-        .any(|t| t.scope == ToolScope::Write));
-    assert!(ONE_DRIVE_CURATED
-        .iter()
-        .any(|t| t.scope == ToolScope::Admin));
+    assert!(
+        ONE_DRIVE_CURATED
+            .iter()
+            .any(|t| t.scope == ToolScope::Write)
+    );
+    assert!(
+        ONE_DRIVE_CURATED
+            .iter()
+            .any(|t| t.scope == ToolScope::Admin)
+    );
 }
 
 #[test]

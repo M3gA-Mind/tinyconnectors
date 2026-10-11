@@ -3,7 +3,10 @@
 use tinyconnectors_bus::vocabulary::{ConnectedIdentity, IdentityKind};
 
 /// Matching metadata evaluated inside the module.
-pub(crate) trait IdentityMetadata { fn confidence(self) -> f64; fn is_matchable(self) -> bool; }
+pub(crate) trait IdentityMetadata {
+    fn confidence(self) -> f64;
+    fn is_matchable(self) -> bool;
+}
 impl IdentityMetadata for IdentityKind {
     /// Confidence the matcher records on a row of this kind.
     ///
@@ -28,7 +31,6 @@ impl IdentityMetadata for IdentityKind {
             Self::UserId | Self::Email | Self::Handle | Self::Phone | Self::DisplayName
         )
     }
-
 }
 
 /// Canonicalize a raw identifier for storage and lookup.

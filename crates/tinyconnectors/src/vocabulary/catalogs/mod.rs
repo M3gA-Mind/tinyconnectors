@@ -23,13 +23,15 @@ pub(crate) mod productivity;
 pub(crate) mod social_media;
 
 use super::scopes::{
-    ScopePreference, classify_unknown, find_curated, toolkit_from_slug, CuratedTool, ToolScope, UserScopePref,
+    CuratedTool, ScopePreference, ToolScope, UserScopePref, classify_unknown, find_curated,
+    toolkit_from_slug,
 };
 
 pub(crate) use descriptions::toolkit_description;
 
 /// Toolkits with a native identity provider (profile facets).
-pub(crate) const NATIVE_PROVIDERS: &[&str] = &["gmail", "notion", "slack", "clickup", "github", "linear"];
+pub(crate) const NATIVE_PROVIDERS: &[&str] =
+    &["gmail", "notion", "slack", "clickup", "github", "linear"];
 
 /// Does `toolkit` have a native identity provider?
 #[must_use]

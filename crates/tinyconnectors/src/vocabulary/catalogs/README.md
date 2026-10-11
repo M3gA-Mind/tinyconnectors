@@ -1,21 +1,18 @@
-# `integrations::composio::contract::catalogs`
+# Compiled Composio vocabulary catalogs
 
-Curated per-toolkit Composio action catalogs: which actions an agent may see,
-how each is scoped (read / write / admin), the toolkit descriptions shown to
-the model, and the per-toolkit sync-interval defaults for toolkits that have a
-native provider.
+Curated action names, scope categories and capability descriptions extracted
+from OpenHuman for issue #7413. The module serves owned copies through
+GetVocabulary and computes alias/classification metadata through EvaluateActions.
+Hosts link the bus contract alone.
 
-These tables used to live in TinyMemory's v1 bus contract. They are host data
-about Composio, not memory, so they moved here with memory v2.
+Catalog order, action spelling and descriptions are compatibility surfaces.
+The catalog-ready list describes this vocabulary rather than the module's
+provider registry. Existing description text is preserved, including historical
+references to memory syncing; it does not advertise a new sync operation.
 
-Entry points (re-exported from `contract::mod`): `catalog_for_toolkit`,
-`curated_scope_for`, `has_native_provider`, `is_action_visible_with_pref`,
-`native_provider_sync_interval_secs`, `parse_sync_interval_override`,
-`sync_interval_env_var`, `toolkit_description`, `toolkit_has_scope`,
-`toolkit_result_notes`, `CAPABILITY_TOOLKITS`, `NATIVE_PROVIDERS`.
+Unknown-scope classification has explicit substring compatibility and leading
+verb profiles. Display preferences supplied by a caller never change the
+persisted preference enforced by Execute.
 
-## Further reading
-
-- [Parent module README](../../README.md)
-- [Third-party integrations](../../../../../../../gitbooks/features/integrations/README.md)
-- [tinyconnectors](../../../../../../../vendor/tinyconnectors/README.md)
+See the [extraction specification](../../../../../docs/specs/2026-08-30-connector-extraction.md)
+and [sync retirement decision](../../../../../docs/adr/0002-remove-the-sync-engine.md).
