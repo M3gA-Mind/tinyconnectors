@@ -152,10 +152,9 @@ pub(crate) fn action_slug_matches(candidate: &str, requested: &str) -> bool {
 ///
 /// Returned sorted, so the RPC response is stable across builds.
 ///
-/// The list is here rather than with the catalogs it names because the *host*
-/// renders the badge. Keeping it beside the catalogs would mean the host asking
-/// the module a question — "is this toolkit worth showing?" — that has no
-/// user-visible state behind it and would answer identically forever.
+/// This describes the extracted catalogs rather than provider-registry
+/// capabilities. The compiled vocabulary operation returns owned names to
+/// hosts; hosts do not link these tables or compute their own copy.
 pub(crate) fn agent_ready_toolkits() -> Vec<&'static str> {
     let mut slugs: Vec<&'static str> = vec![
         // Native providers.
