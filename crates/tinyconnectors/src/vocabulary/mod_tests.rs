@@ -129,7 +129,7 @@ fn identity_metadata_is_computed_by_the_module() {
         identities: vec![],
     });
     assert_eq!(response.values[0].value.as_deref(), Some("a@b.com"));
-    assert_eq!(response.values[0].confidence, 0.95);
+    assert!((response.values[0].confidence - 0.95).abs() < f64::EPSILON);
     assert!(response.values[0].matchable);
     assert_eq!(response.connection_identifiers, ["conn"]);
     assert!(response.prompt_section.is_empty());
