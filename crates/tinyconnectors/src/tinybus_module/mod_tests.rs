@@ -29,6 +29,7 @@ use tinyconnectors_bus::{
     ComposioToolsResponse, ComposioTriggerHistoryResult, ComposioUserProfile,
     ComposioUserProfileRequest, ComposioUserScopes, ComposioUserScopesResponse, names,
 };
+use tinyconnectors_sync::ScopePrefStore;
 
 use super::{ConnectorService, ModuleConfig};
 use crate::client::{ComposioClient, ProxyRoute, Transport};
