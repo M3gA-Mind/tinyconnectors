@@ -219,6 +219,11 @@ route:
 - PrepareTaskFilter: the existing task query envelope and its effective cap.
   This is vocabulary processing, not account fetching or a replacement Sync.
 
+Toolkit lookups trim whitespace and ignore ASCII casing across descriptions,
+native-provider support and catalogs while retaining the requested toolkit label.
+Identity normalization rejects values whose canonical form is empty, including
+punctuation-only phones and handles.
+
 Wire casing, stored identity segments, catalog order/action slugs, descriptions
 and prompt output remain unchanged. The host applies metadata to its tool
 surface and owns security decisions, task scheduling, routing, enrichment and

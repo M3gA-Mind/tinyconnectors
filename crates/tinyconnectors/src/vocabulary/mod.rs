@@ -23,19 +23,22 @@ pub(crate) fn get_vocabulary(request: VocabularyRequest) -> VocabularyResponse {
         toolkits: request
             .toolkits
             .into_iter()
-            .map(|toolkit| ToolkitVocabulary {
-                description: catalogs::toolkit_description(&toolkit).into(),
-                native_provider: catalogs::has_native_provider(&toolkit),
-                actions: catalogs::catalog_for_toolkit(&toolkit).map(|catalog| {
-                    catalog
-                        .iter()
-                        .map(|action| VocabularyAction {
-                            slug: action.slug.into(),
-                            scope: action.scope,
-                        })
-                        .collect()
-                }),
-                toolkit,
+            .map(|toolkit| {
+                let lookup = toolkit.trim().to_ascii_lowercase();
+                ToolkitVocabulary {
+                    description: catalogs::toolkit_description(&lookup).into(),
+                    native_provider: catalogs::has_native_provider(&lookup),
+                    actions: catalogs::catalog_for_toolkit(&lookup).map(|catalog| {
+                        catalog
+                            .iter()
+                            .map(|action| VocabularyAction {
+                                slug: action.slug.into(),
+                                scope: action.scope,
+                            })
+                            .collect()
+                    }),
+                    toolkit,
+                }
             })
             .collect(),
         agent_ready_toolkits: scopes::agent_ready_toolkits()

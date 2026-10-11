@@ -38,15 +38,14 @@ impl IdentityMetadata for IdentityKind {
 /// Canonicalize a raw identifier for storage and lookup.
 ///
 /// The same routine runs on the entity side at match time, so equality of
-/// canonical forms is the matcher's only test. Returns `None` for an empty or
-/// whitespace-only value — storing one would match every chunk that happened to
+/// canonical forms is the matcher's only test. Returns `None` when the canonical value is empty — storing one would match every chunk that happened to
 /// carry a blank sender.
 pub(crate) fn canonicalize(kind: IdentityKind, raw: &str) -> Option<String> {
     let trimmed = raw.trim();
     if trimmed.is_empty() {
         return None;
     }
-    Some(match kind {
+    let value = match kind {
         IdentityKind::Email => trimmed.to_lowercase(),
         IdentityKind::Handle => trimmed.trim_start_matches('@').to_lowercase(),
         IdentityKind::Phone => trimmed
@@ -57,7 +56,8 @@ pub(crate) fn canonicalize(kind: IdentityKind, raw: &str) -> Option<String> {
         IdentityKind::UserId | IdentityKind::AvatarUrl | IdentityKind::ProfileUrl => {
             trimmed.to_string()
         }
-    })
+    };
+    (!value.is_empty()).then_some(value)
 }
 
 /// Render a compact prompt section for a set of identities.
