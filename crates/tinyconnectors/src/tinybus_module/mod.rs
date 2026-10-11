@@ -1003,7 +1003,7 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
 
 type SetupFuture = std::pin::Pin<Box<dyn std::future::Future<Output = TinyBusResult<()>> + Send>>;
 
-/// Capture the first admitted mode for this ABI instance. TinyBus retains the
+/// Capture the first admitted mode for this ABI instance. `TinyBus` retains the
 /// same callback for reinitialization, so another instance has its own seal.
 fn setup_factory() -> impl Fn(Connection, ModuleConfig) -> SetupFuture + Send + Sync {
     let mode = Arc::new(tokio::sync::Mutex::new(None));
