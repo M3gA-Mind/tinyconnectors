@@ -1,6 +1,6 @@
 //! Preparation of portable task-query vocabulary.
 
-use tinyconnectors_bus::vocabulary::{GithubFetchMode, NormalizedTask, TaskContainer, TaskFetchFilter, TaskKind};
+use tinyconnectors_bus::vocabulary::{TaskFetchFilter};
 
 /// Default an omitted query cap to 25.
 pub(crate) trait TaskLimit { fn effective_max(&self) -> usize; }
@@ -9,3 +9,6 @@ impl TaskLimit for TaskFetchFilter { fn effective_max(&self) -> usize { if self.
 #[cfg(test)]
 #[path = "tasks_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+use tinyconnectors_bus::vocabulary::{GithubFetchMode, NormalizedTask, TaskContainer, TaskKind};

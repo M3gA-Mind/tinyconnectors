@@ -1,6 +1,6 @@
 //! Compiled action catalogs, aliases and explicit compatibility classifier.
 
-use tinyconnectors_bus::vocabulary::{ToolScope, UserScopePref};
+pub(crate) use tinyconnectors_bus::vocabulary::{ToolScope, UserScopePref};
 
 /// One static curated catalog entry.
 #[derive(Debug, Clone, Copy)]

@@ -1,6 +1,6 @@
 //! Compiled identifier normalization and prompt rendering.
 
-use tinyconnectors_bus::vocabulary::{ConnectedIdentity, IdentityKind, ProviderUserProfile};
+use tinyconnectors_bus::vocabulary::{ConnectedIdentity, IdentityKind};
 
 /// Matching metadata evaluated inside the module.
 pub(crate) trait IdentityMetadata { fn confidence(self) -> f64; fn is_matchable(self) -> bool; }
@@ -150,3 +150,6 @@ fn sanitize_prompt_value(raw: &str) -> String {
 #[cfg(test)]
 #[path = "profile_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+use tinyconnectors_bus::vocabulary::ProviderUserProfile;
