@@ -1001,6 +1001,32 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
     Ok(())
 }
 
+/// Capture the first admitted mode for this ABI instance. TinyBus retains the
+/// same callback for reinitialization, so another instance has its own seal.
+fn setup_factory() -> impl Fn(
+    Connection,
+    ModuleConfig,
+) -> std::pin::Pin<
+    Box<dyn std::future::Future<Output = TinyBusResult<()>> + Send>,
+> + Send
++ Sync {
+    let mode = Arc::new(tokio::sync::Mutex::new(None));
+    move |connection, config: ModuleConfig| {
+        let mode = mode.clone();
+        Box::pin(async move {
+            let mut admitted = mode.lock().await;
+            if admitted.is_some_and(|initial| initial != config.runtime_mode) {
+                return Err(tinybus::Error::failed(
+                    "runtime mode cannot change after module initialization",
+                ));
+            }
+            *admitted = Some(config.runtime_mode);
+            drop(admitted);
+            setup(connection, config).await
+        })
+    }
+}
+
 macro_rules! export_module {
     ($($declaration:tt)*) => {
         mod exports {
@@ -1018,7 +1044,7 @@ macro_rules! export_module {
 }
 
 export_module! {
-    setup = setup,
+    setup_factory = setup_factory,
     config = ModuleConfig,
     worker_threads = 1,
     provides = ["ai.tinyhumans.connectors.Composio"],
