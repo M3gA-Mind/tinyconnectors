@@ -9,6 +9,10 @@ use tinybus::broker::Broker;
 use tinybus::module::{ModuleHost, ModuleInfo};
 use tinybus::transport::memory::MemoryBus;
 use tinyconnectors::names;
+use tinyconnectors_bus::vocabulary::{
+    ActionVocabularyResponse, NormalizeIdentitiesResponse, PreparedTaskFilter, VocabularyRequest,
+    VocabularyResponse,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -126,10 +130,13 @@ fn module_argument() -> Result<PathBuf, io::Error> {
 
 /// Prove migrated vocabulary through the loaded binary, not a linked library.
 async fn verify_vocabulary(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
-    use tinyconnectors_bus::vocabulary::{
-        ActionVocabularyResponse, NormalizeIdentitiesResponse, PreparedTaskFilter,
-        VocabularyRequest, VocabularyResponse,
-    };
+    verify_catalogs(proxy).await?;
+    verify_action_vocabulary(proxy).await?;
+    verify_identity_task_vocabulary(proxy).await?;
+    Ok(())
+}
+
+async fn verify_catalogs(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
     let golden: std::collections::BTreeMap<String, serde_json::Value> = serde_json::from_str(
         include_str!("../src/vocabulary/catalogs/fixtures/catalog-actions.json"),
     )?;
@@ -166,13 +173,19 @@ async fn verify_vocabulary(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::er
             );
         }
     }
+    if reply.agent_ready_toolkits.len() != 30 {
+        return Err(io::Error::other("catalog-ready toolkit vocabulary changed").into());
+    }
+    Ok(())
+}
+
+async fn verify_action_vocabulary(
+    proxy: &tinybus::Proxy,
+) -> Result<(), Box<dyn std::error::Error>> {
     let malformed: tinybus::Result<Vec<ActionVocabularyResponse>> = proxy.call(names::methods::EVALUATE_ACTIONS,
         (serde_json::json!([{"slug":"CUSTOM_LIST_DRAFTS","preference":{},"unknown_scope_profile":"unknown"}]),)).await;
     if malformed.is_ok() {
         return Err(io::Error::other("unknown classification profile was accepted").into());
-    }
-    if reply.agent_ready_toolkits.len() != 30 {
-        return Err(io::Error::other("catalog-ready toolkit vocabulary changed").into());
     }
     let actions: Vec<ActionVocabularyResponse> = proxy.call(names::methods::EVALUATE_ACTIONS,
         (serde_json::json!([
@@ -191,6 +204,12 @@ async fn verify_vocabulary(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::er
     {
         return Err(io::Error::other("action alias or classifier profile changed").into());
     }
+    Ok(())
+}
+
+async fn verify_identity_task_vocabulary(
+    proxy: &tinybus::Proxy,
+) -> Result<(), Box<dyn std::error::Error>> {
     let identities: NormalizeIdentitiesResponse = proxy.call(names::methods::NORMALIZE_IDENTITIES,
         (serde_json::json!({
             "values":[{"kind":"email","value":" Alice@Example.COM "},{"kind":"handle","value":" @Alice "},
