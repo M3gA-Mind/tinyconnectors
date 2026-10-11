@@ -51,8 +51,8 @@ fn catalog_for_toolkit_resolves_every_capability_toolkit() {
 
 #[test]
 fn catalog_for_toolkit_honours_slug_aliases() {
-    // `toolkit_from_slug` extracts "one" from `ONE_DRIVE_*`, while the UI and
-    // the backend both spell it "one_drive" / "onedrive".
+    // Multi-segment `ONE_DRIVE_*` extracts "one_drive"; "one" is a legacy alias.
+    // Both UI/backend spellings remain accepted.
     for alias in ["one", "one_drive", "onedrive", "OneDrive"] {
         assert!(
             catalog_for_toolkit(alias).is_some(),
