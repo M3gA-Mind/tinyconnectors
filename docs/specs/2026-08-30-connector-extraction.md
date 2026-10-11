@@ -201,7 +201,10 @@ OpenHuman #7413 migrates its Composio contract tables and pure normalization
 into this compiled module. The bus carries owned payloads only; it carries no
 catalog tables, scope heuristic, identity matching algorithm, or prompt renderer.
 
-Four additive members answer without a connector route:
+Contract 1.16 preserves the RuntimeMode handshake introduced in 1.15 and adds
+four members to the classic instance. The restricted instance continues to
+refuse them before decoding arguments. These members answer without a connector
+route:
 
 - GetVocabulary: requested toolkit descriptions and curated action catalogs,
   plus the complete catalog-ready toolkit list. This list describes catalog

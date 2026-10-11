@@ -14,9 +14,14 @@ use tinyconnectors_bus::vocabulary::{
     VocabularyResponse,
 };
 
+/// Verify classic behavior and then restricted behavior in a fresh process.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let module = module_argument()?;
+    if std::env::args().nth(2).as_deref() == Some("--restricted") {
+        verify_restricted_surface(&module).await?;
+        return Ok(());
+    }
     let bus = MemoryBus::new();
     let broker = Broker::new();
     let broker_task = broker.spawn(bus.clone());
@@ -34,6 +39,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     verify_served_surface(&bus, &info).await?;
+    // A cdylib owns a process-global tracing subscriber, so a second runtime
+    // of the same artifact must be verified in a fresh process.
+    let status = std::process::Command::new(std::env::current_exe()?)
+        .arg(&module)
+        .arg("--restricted")
+        .status()?;
+    if !status.success() {
+        return Err(io::Error::other("restricted module verification failed").into());
+    }
 
     println!(
         "verified {} as TinyBus module `{}`",
@@ -41,6 +55,79 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         info.name
     );
     broker_task.abort();
+    Ok(())
+}
+
+/// Load another instance with an immutable mode and verify deny-by-default dispatch.
+async fn verify_restricted_surface(
+    module: &std::path::Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let bus = MemoryBus::new();
+    let broker = Broker::new();
+    let task = broker.clone().spawn(bus.clone());
+    let host = ModuleHost::new(broker);
+    host.load_file_with_config(
+        module,
+        serde_json::json!({"runtime_mode":"routed_read_only"}),
+    )
+    .map_err(|error| io::Error::other(format!("restricted initialization: {error}")))?;
+    let client = Connection::connect(bus.connect().await?).await?;
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            if client
+                .list_names()
+                .await?
+                .iter()
+                .any(|name| name.as_str() == names::INTERFACE)
+            {
+                return tinybus::Result::Ok(());
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await??;
+    let proxy = client.proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)?;
+    let mode: tinyconnectors_bus::ComposioRuntimeModeResponse =
+        proxy.call(names::methods::RUNTIME_MODE, ()).await?;
+    if mode.mode != tinyconnectors_bus::ComposioRuntimeMode::RoutedReadOnly
+        || mode.contract_version != tinyconnectors_bus::CONTRACT_VERSION
+    {
+        return Err(io::Error::other("restricted mode handshake mismatch").into());
+    }
+    for member in tinyconnectors_bus::METHODS {
+        if [
+            names::methods::RUNTIME_MODE,
+            names::methods::ROUTED_READ,
+            names::methods::LIST_CAPABILITIES,
+            names::methods::LIST_AGENT_READY_TOOLKITS,
+        ]
+        .contains(member)
+        {
+            continue;
+        }
+        match proxy
+            .call::<serde_json::Value>(member, serde_json::json!({"malformed":true}))
+            .await
+        {
+            Err(error) if error.wire_name() == tinybus::Error::UNKNOWN_METHOD => {}
+            _ => {
+                return Err(
+                    io::Error::other("restricted mode accepted an unsupported member").into(),
+                );
+            }
+        }
+    }
+    let error = proxy
+        .call::<serde_json::Value>(
+            names::methods::ROUTED_READ,
+            serde_json::json!({"malformed":true}),
+        )
+        .await;
+    if !matches!(error, Err(error) if error.wire_name() == tinybus::Error::CONFIDENTIALITY_REQUIRED)
+    {
+        return Err(io::Error::other("restricted read accepted ordinary delivery").into());
+    }
+    task.abort();
     Ok(())
 }
 
@@ -116,6 +203,7 @@ async fn verify_served_surface(
     Ok(())
 }
 
+/// Require the compiled module path supplied to this verifier.
 fn module_argument() -> Result<PathBuf, io::Error> {
     std::env::args_os()
         .nth(1)
