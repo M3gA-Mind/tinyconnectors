@@ -120,4 +120,14 @@ pub use tinyconnectors_bus::{
     is_compatible, names, version,
 };
 
-mod vocabulary;
+#[path = "vocabulary/mod.rs"]
+mod vocabulary_impl;
+
+pub use tinyconnectors_bus::vocabulary;
+pub use tinyconnectors_bus::vocabulary::{
+    ActionVocabularyRequest, ActionVocabularyResponse, ConnectedIdentity, GithubFetchMode,
+    IdentityKind, IdentityValueRequest, IdentityValueResponse, NormalizeIdentitiesRequest,
+    NormalizeIdentitiesResponse, NormalizedTask, PreparedTaskFilter, ProviderUserProfile,
+    TaskContainer, TaskFetchFilter, TaskKind, ToolScope, ToolkitVocabulary, UnknownScopeProfile,
+    UserScopePref, VocabularyAction, VocabularyRequest, VocabularyResponse,
+};

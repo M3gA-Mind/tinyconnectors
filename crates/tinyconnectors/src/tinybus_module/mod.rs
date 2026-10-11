@@ -877,7 +877,7 @@ impl ConnectorService {
         &self,
         request: tinyconnectors_bus::vocabulary::VocabularyRequest,
     ) -> TinyBusResult<tinyconnectors_bus::vocabulary::VocabularyResponse> {
-        Ok(crate::vocabulary::get_vocabulary(request))
+        Ok(crate::vocabulary_impl::get_vocabulary(request))
     }
 
     /// Evaluates display metadata; Execute still checks persisted preferences.
@@ -887,7 +887,7 @@ impl ConnectorService {
         &self,
         request: Vec<tinyconnectors_bus::vocabulary::ActionVocabularyRequest>,
     ) -> TinyBusResult<Vec<tinyconnectors_bus::vocabulary::ActionVocabularyResponse>> {
-        Ok(crate::vocabulary::evaluate_actions(request))
+        Ok(crate::vocabulary_impl::evaluate_actions(request))
     }
 
     /// Canonicalizes identifiers and renders the unchanged identity prompt.
@@ -897,7 +897,7 @@ impl ConnectorService {
         &self,
         request: tinyconnectors_bus::vocabulary::NormalizeIdentitiesRequest,
     ) -> TinyBusResult<tinyconnectors_bus::vocabulary::NormalizeIdentitiesResponse> {
-        Ok(crate::vocabulary::normalize_identities(request))
+        Ok(crate::vocabulary_impl::normalize_identities(request))
     }
 
     /// Applies the portable unset-cap rule without claiming a fetch capability.
@@ -907,7 +907,7 @@ impl ConnectorService {
         &self,
         request: tinyconnectors_bus::vocabulary::TaskFetchFilter,
     ) -> TinyBusResult<tinyconnectors_bus::vocabulary::PreparedTaskFilter> {
-        Ok(crate::vocabulary::prepare_task_filter(request))
+        Ok(crate::vocabulary_impl::prepare_task_filter(request))
     }
 }
 
