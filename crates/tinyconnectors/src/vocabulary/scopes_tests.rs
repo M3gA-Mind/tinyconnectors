@@ -1,3 +1,5 @@
+//! Compatibility tests for the compiled connector vocabulary.
+
 use super::*;
 
 // Tests for the action-scope classification and the per-toolkit preference.

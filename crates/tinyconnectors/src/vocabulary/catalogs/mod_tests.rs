@@ -1,3 +1,5 @@
+//! Compatibility tests for the compiled connector vocabulary.
+
 use super::*;
 
 // Tests for the surrounding module.

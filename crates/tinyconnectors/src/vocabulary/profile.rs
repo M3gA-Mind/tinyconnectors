@@ -108,7 +108,7 @@ pub(crate) fn render_connected_identities_section(identities: &[ConnectedIdentit
         let _ = writeln!(
             out,
             "- {} ({}): {}",
-            title_case(&id.source),
+            title_case(&sanitize_prompt_value(&id.source)),
             identifier,
             fields.join(" | ")
         );

@@ -1,3 +1,5 @@
+//! Compatibility tests for the compiled connector vocabulary.
+
 use super::*;
 
 // Tests for the identity vocabulary — the pure-data half.
@@ -241,6 +243,8 @@ fn identity_source_cannot_inject_prompt_lines_or_field_separators() {
         email: Some("alice@example.com".into()),
         ..Default::default()
     }];
-    assert_eq!(render_connected_identities_section(&identities),
-        "## Connected Identities\n\n- Gmail - forged / source (connection): alice@example.com\n");
+    assert_eq!(
+        render_connected_identities_section(&identities),
+        "## Connected Identities\n\n- Gmail - forged / source (connection): alice@example.com\n"
+    );
 }
