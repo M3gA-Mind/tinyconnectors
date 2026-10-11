@@ -109,3 +109,14 @@ fn vocabulary_payloads_are_available_from_the_module_root() {
     let _: tinyconnectors_bus::vocabulary::UserScopePref =
         tinyconnectors::vocabulary::UserScopePref::default();
 }
+
+#[test]
+fn provider_payloads_are_the_contract_types_without_conversion() {
+    let scope: tinyconnectors::ToolScope = tinyconnectors_sync::ToolScope::Write;
+    assert!(scope.is_allowed_by(tinyconnectors_sync::ToolScope::Admin));
+    let preference: tinyconnectors::UserScopePref = tinyconnectors_sync::UserScopePref::default();
+    assert!(preference.allows(scope));
+    let profile: tinyconnectors::ProviderUserProfile =
+        tinyconnectors_sync::ProviderUserProfile::default();
+    let _: tinyconnectors_sync::ProviderUserProfile = profile;
+}
