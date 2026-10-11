@@ -29,6 +29,11 @@ pub const OBJECT_PATH: &str = "/ai/tinyhumans/connectors/Composio";
 /// minor bumps of [`crate::CONTRACT_VERSION`] rather than as constants nothing
 /// answers, which a host would only discover as a runtime "unknown method".
 pub mod methods {
+    /// Confidential stateless read using the immutable route on this call.
+    ///
+    /// Takes `ComposioRoutedReadRequest` and returns `ComposioRoutedReadReply`;
+    /// it never reads or replaces the legacy configured route.
+    pub const ROUTED_READ: &str = "RoutedRead";
     /// Returns compiled catalog metadata for a `VocabularyRequest`.
     pub const GET_VOCABULARY: &str = "GetVocabulary";
     /// Evaluates a batch of `ActionVocabularyRequest` values without executing.
@@ -258,6 +263,7 @@ pub const METHODS: &[&str] = &[
     methods::LIST_TRIGGER_HISTORY,
     methods::LIST_CONNECTIONS_DIRECT,
     methods::LIST_TOOLS_DIRECT,
+    methods::ROUTED_READ,
     methods::GET_VOCABULARY,
     methods::EVALUATE_ACTIONS,
     methods::NORMALIZE_IDENTITIES,
