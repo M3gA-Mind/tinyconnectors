@@ -70,7 +70,8 @@ pub struct ActionVocabularyRequest {
     pub preference: UserScopePref,
     /// Explicit classifier used only when there is no curated classification.
     pub unknown_scope_profile: UnknownScopeProfile,
-    /// Optional second slug to compare using the compiled alias rules.
+    /// Requested slug to compare against the first slug as a catalog candidate.
+    /// Alias expansion applies to this requested slug, preserving existing matching.
     pub compare_with: Option<String>,
 }
 
@@ -141,3 +142,7 @@ pub struct PreparedTaskFilter {
     /// Effective item cap: 25 when omitted, otherwise the explicit value.
     pub effective_max: usize,
 }
+
+#[cfg(test)]
+#[path = "mod_tests.rs"]
+mod tests;

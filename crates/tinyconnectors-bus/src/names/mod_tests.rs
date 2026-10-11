@@ -55,6 +55,10 @@ fn the_method_table_holds_the_declared_members() {
             methods::LIST_TRIGGER_HISTORY,
             methods::LIST_CONNECTIONS_DIRECT,
             methods::LIST_TOOLS_DIRECT,
+            methods::GET_VOCABULARY,
+            methods::EVALUATE_ACTIONS,
+            methods::NORMALIZE_IDENTITIES,
+            methods::PREPARE_TASK_FILTER,
         ]
     );
 }
