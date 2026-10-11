@@ -1,5 +1,5 @@
 //! Curated catalogs — messaging toolkits: Slack, Discord, Telegram,
-//! WhatsApp, Microsoft Teams.
+//! `WhatsApp`, Microsoft Teams.
 
 use crate::vocabulary::scopes::{CuratedTool, ToolScope};
 

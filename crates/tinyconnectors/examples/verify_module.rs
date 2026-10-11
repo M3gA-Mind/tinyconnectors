@@ -17,17 +17,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let broker = Broker::new();
     let broker_task = broker.spawn(bus.clone());
     let module_host = ModuleHost::new(broker);
-    // The module refuses to load without a route and the credential that route
-    // needs, which is the point: it never invents its own. These are
-    // placeholders — the verifier checks the served surface, not a live call.
-    let info = module_host.load_file_with_config(
-        &module,
-        serde_json::json!({
-            "route": "proxy",
-            "base_url": "https://verify.invalid",
-            "auth_token": "verify-only-not-a-credential",
-        }),
-    )?;
+    // All verifier operations are local and must work without credentials.
+    let info = module_host.load_file_with_config(&module, serde_json::json!({}))?;
 
     if info.name != env!("CARGO_PKG_NAME") {
         return Err(io::Error::other(format!(
@@ -117,6 +108,7 @@ async fn verify_served_surface(
     if classified.class != "action_not_found" {
         return Err(io::Error::other("module did not classify action failure").into());
     }
+    verify_vocabulary(&proxy).await?;
     Ok(())
 }
 
@@ -130,4 +122,85 @@ fn module_argument() -> Result<PathBuf, io::Error> {
                 "usage: cargo run --example verify_module -- <module-path>",
             )
         })
+}
+
+/// Prove migrated vocabulary through the loaded binary, not a linked library.
+async fn verify_vocabulary(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
+    use tinyconnectors_bus::vocabulary::{
+        ActionVocabularyResponse, NormalizeIdentitiesResponse, PreparedTaskFilter,
+        VocabularyRequest, VocabularyResponse,
+    };
+    let golden: std::collections::BTreeMap<String, serde_json::Value> = serde_json::from_str(
+        include_str!("../src/vocabulary/catalogs/fixtures/catalog-actions.json"),
+    )?;
+    let reply: VocabularyResponse = proxy
+        .call(
+            names::methods::GET_VOCABULARY,
+            (VocabularyRequest {
+                toolkits: golden.keys().cloned().collect(),
+            },),
+        )
+        .await?;
+    for toolkit in reply.toolkits {
+        if serde_json::to_value(&toolkit.actions)? != golden[&toolkit.toolkit] {
+            return Err(
+                io::Error::other(format!("catalog changed for {}", toolkit.toolkit)).into(),
+            );
+        }
+    }
+    if reply.agent_ready_toolkits.len() != 30 {
+        return Err(io::Error::other("catalog-ready toolkit vocabulary changed").into());
+    }
+    let actions: Vec<ActionVocabularyResponse> = proxy.call(names::methods::EVALUATE_ACTIONS,
+        (serde_json::json!([
+            {"slug":"CUSTOM_LIST_DRAFTS", "preference":{"read":true,"write":false,"admin":false},
+             "unknown_scope_profile":"substring_compatibility","compare_with":null},
+            {"slug":"CUSTOM_LIST_DRAFTS", "preference":{"read":true,"write":false,"admin":false},
+             "unknown_scope_profile":"leading_verb","compare_with":null},
+            {"slug":"GOOGLE_CALENDAR_CREATE_EVENT", "preference":{},
+             "unknown_scope_profile":"substring_compatibility","compare_with":"googlecalendar_create_event"}
+        ]),)).await?;
+    if actions.len() != 3
+        || actions[0].visible
+        || !actions[1].visible
+        || actions[2].matches != Some(true)
+        || actions[2].canonical_slug.as_deref() != Some("GOOGLECALENDAR_CREATE_EVENT")
+    {
+        return Err(io::Error::other("action alias or classifier profile changed").into());
+    }
+    let identities: NormalizeIdentitiesResponse = proxy.call(names::methods::NORMALIZE_IDENTITIES,
+        (serde_json::json!({
+            "values":[{"kind":"email","value":" Alice@Example.COM "},{"kind":"handle","value":" @Alice "},
+                      {"kind":"user_id","value":"  "},{"kind":"avatar_url","value":"https://example.test/a"}],
+            "connection_identifiers":[" Conn-1 "],
+            "identities":[{"source":"slack","identifier":"conn-1","display_name":"Alice W",
+                           "email":"alice@example.com","handle":"alicew","user_id":"U123ABC"}]
+        }),)).await?;
+    if identities.values.len() != 4
+        || identities.values[0].value.as_deref() != Some("alice@example.com")
+        || identities.values[1].value.as_deref() != Some("alice")
+        || identities.values[2].value.is_some()
+        || identities.values[3].matchable
+        || identities.connection_identifiers != ["conn-1"]
+        || identities.prompt_section
+            != "## Connected Identities\n\n- Slack (conn-1): Alice W | alice@example.com | @alicew\n"
+    {
+        return Err(
+            io::Error::other("durable identity normalization or prompt output changed").into(),
+        );
+    }
+    for (max, expected) in [(0, 25), (3, 3)] {
+        let prepared: PreparedTaskFilter = proxy
+            .call(
+                names::methods::PREPARE_TASK_FILTER,
+                (serde_json::json!({"max":max,"extra":{"future":"kept"}}),),
+            )
+            .await?;
+        if prepared.effective_max != expected
+            || prepared.filter.extra != serde_json::json!({"future":"kept"})
+        {
+            return Err(io::Error::other("task envelope or default cap changed").into());
+        }
+    }
+    Ok(())
 }
