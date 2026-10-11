@@ -1,15 +1,13 @@
-//! Tests for the identity vocabulary — the pure-data half.
-//!
-//! The facet-store half (persisting a profile, loading identities back, the
-//! self-identity lookups, the disconnect delete) is tested in the engine crate
-//! next to the store it drives. What is pinned here is what both sides of the
-//! module boundary have to compute identically: the stored key segments, the
-//! canonical form each kind reduces to, and the identifier normalisation a
-//! delete has to reproduce exactly to match the rows a write created.
-
-#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
-
 use super::*;
+
+// Tests for the identity vocabulary — the pure-data half.
+//
+// The facet-store half (persisting a profile, loading identities back, the
+// self-identity lookups, the disconnect delete) is tested in the engine crate
+// next to the store it drives. What is pinned here is what both sides of the
+// module boundary have to compute identically: the stored key segments, the
+// canonical form each kind reduces to, and the identifier normalisation a
+// delete has to reproduce exactly to match the rows a write created.
 
 const ALL_KINDS: [IdentityKind; 7] = [
     IdentityKind::UserId,

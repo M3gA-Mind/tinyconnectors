@@ -129,5 +129,6 @@ pub(crate) fn curated_scope_for(slug: &str) -> Option<ToolScope> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 #[path = "mod_tests.rs"]
 mod tests;

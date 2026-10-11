@@ -1,6 +1,6 @@
-//! Tests for the surrounding module.
-
 use super::*;
+
+// Tests for the surrounding module.
 
 #[test]
 fn todoist_catalog_is_non_empty_and_unique() {

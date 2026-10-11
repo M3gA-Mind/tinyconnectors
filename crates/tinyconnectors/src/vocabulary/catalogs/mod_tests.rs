@@ -1,7 +1,6 @@
-//! Tests for the surrounding module.
-#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
-
 use super::*;
+
+// Tests for the surrounding module.
 
 /// Every toolkit with a curated catalog, in display order.
 const CAPABILITY_TOOLKITS: &[&str] = &[

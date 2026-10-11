@@ -148,6 +148,29 @@ async fn verify_vocabulary(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::er
             );
         }
     }
+    let descriptions: std::collections::BTreeMap<String, String> = serde_json::from_str(
+        include_str!("../src/vocabulary/catalogs/fixtures/descriptions.json"),
+    )?;
+    let described: VocabularyResponse = proxy
+        .call(
+            names::methods::GET_VOCABULARY,
+            (VocabularyRequest {
+                toolkits: descriptions.keys().cloned().collect(),
+            },),
+        )
+        .await?;
+    for toolkit in described.toolkits {
+        if toolkit.description != descriptions[&toolkit.toolkit] {
+            return Err(
+                io::Error::other(format!("description changed for {}", toolkit.toolkit)).into(),
+            );
+        }
+    }
+    let malformed: tinybus::Result<Vec<ActionVocabularyResponse>> = proxy.call(names::methods::EVALUATE_ACTIONS,
+        (serde_json::json!([{"slug":"CUSTOM_LIST_DRAFTS","preference":{},"unknown_scope_profile":"unknown"}]),)).await;
+    if malformed.is_ok() {
+        return Err(io::Error::other("unknown classification profile was accepted").into());
+    }
     if reply.agent_ready_toolkits.len() != 30 {
         return Err(io::Error::other("catalog-ready toolkit vocabulary changed").into());
     }

@@ -196,5 +196,6 @@ pub(crate) fn agent_ready_toolkits() -> Vec<&'static str> {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 #[path = "scopes_tests.rs"]
 mod tests;

@@ -153,6 +153,7 @@ fn sanitize_prompt_value(raw: &str) -> String {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 #[path = "profile_tests.rs"]
 mod tests;
 

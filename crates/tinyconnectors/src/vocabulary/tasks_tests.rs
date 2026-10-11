@@ -1,14 +1,12 @@
-//! Tests for the task-fetch envelope — the pure-data half.
-//!
-//! The provider mappings that populate a [`super::NormalizedTask`] live in the
-//! engine crate with the providers that own them. What is pinned here is the
-//! envelope itself: the wire casing the task-source UI reads, the enum tags
-//! that end up in a card's `source_metadata`, and the unset-cap rule that would
-//! otherwise read as "fetch nothing".
-
-#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
-
 use super::*;
+
+// Tests for the task-fetch envelope — the pure-data half.
+//
+// The provider mappings that populate a [`super::NormalizedTask`] live in the
+// engine crate with the providers that own them. What is pinned here is the
+// envelope itself: the wire casing the task-source UI reads, the enum tags
+// that end up in a card's `source_metadata`, and the unset-cap rule that would
+// otherwise read as "fetch nothing".
 
 #[test]
 fn every_task_kind_tag_matches_its_serde_form() {

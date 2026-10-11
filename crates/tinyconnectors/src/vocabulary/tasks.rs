@@ -13,6 +13,7 @@ impl TaskLimit for TaskFetchFilter {
 }
 
 #[cfg(test)]
+#[allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
 #[path = "tasks_tests.rs"]
 mod tests;
 
