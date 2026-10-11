@@ -10,6 +10,7 @@ use tinybus::module::{ModuleHost, ModuleInfo};
 use tinybus::transport::memory::MemoryBus;
 use tinyconnectors::names;
 
+/// Verify classic behavior and then restricted behavior in a fresh process.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let module = module_argument()?;
@@ -208,6 +209,7 @@ async fn verify_served_surface(
     Ok(())
 }
 
+/// Require the compiled module path supplied to this verifier.
 fn module_argument() -> Result<PathBuf, io::Error> {
     std::env::args_os()
         .nth(1)

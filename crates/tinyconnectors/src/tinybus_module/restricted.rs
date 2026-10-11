@@ -9,6 +9,7 @@ struct RestrictedService;
 
 #[tinybus::interface(name = "ai.tinyhumans.connectors.Composio")]
 impl RestrictedService {
+    /// Perform one immutable caller-routed read over confidential delivery.
     #[tinybus(confidential)]
     async fn routed_read(
         &self,
@@ -17,6 +18,7 @@ impl RestrictedService {
         routed::read(request).await
     }
 
+    /// Report this instance's sealed runtime mode and supported contract.
     #[allow(
         clippy::unused_async,
         reason = "TinyBus signatures are async; mode is immutable"
@@ -32,6 +34,7 @@ impl RestrictedService {
         clippy::unused_async,
         reason = "TinyBus signatures are async; static registry only"
     )]
+    /// Report no native provider capabilities for a restricted instance.
     async fn list_capabilities(&self) -> TinyBusResult<ComposioCapabilitiesResponse> {
         // No native provider methods are available in this instance.
         // Routed reads are admitted separately through the mode handshake.
@@ -42,6 +45,7 @@ impl RestrictedService {
         clippy::unused_async,
         reason = "TinyBus signatures are async; static registry only"
     )]
+    /// Return the static compiled toolkit catalog without reading preferences.
     async fn list_agent_ready_toolkits(&self) -> TinyBusResult<ComposioAgentReadyToolkitsResponse> {
         Ok(ComposioAgentReadyToolkitsResponse {
             toolkits: crate::providers::default_registry().agent_ready_toolkits(),
@@ -49,6 +53,7 @@ impl RestrictedService {
     }
 }
 
+/// Attach the restricted interface without creating client or durable state.
 pub(super) async fn setup(connection: Connection) -> TinyBusResult<()> {
     connection
         .serve_at(names::OBJECT_PATH.try_into()?, RestrictedService)
