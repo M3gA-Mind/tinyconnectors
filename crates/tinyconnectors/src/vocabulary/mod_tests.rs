@@ -160,22 +160,38 @@ fn every_curated_catalog_is_reported_ready() -> serde_json::Result<()> {
 
 #[test]
 fn recognized_aliases_use_canonical_catalog_scope_and_visibility() {
-    for profile in [UnknownScopeProfile::SubstringCompatibility, UnknownScopeProfile::LeadingVerb] {
+    for profile in [
+        UnknownScopeProfile::SubstringCompatibility,
+        UnknownScopeProfile::LeadingVerb,
+    ] {
         for (alias, canonical) in [
-            ("GOOGLE_CALENDAR_CREATE_EVENT", "GOOGLECALENDAR_CREATE_EVENT"),
+            (
+                "GOOGLE_CALENDAR_CREATE_EVENT",
+                "GOOGLECALENDAR_CREATE_EVENT",
+            ),
             ("google_drive_find_file", "GOOGLEDRIVE_FIND_FILE"),
             ("MICROSOFT_OUTLOOK_SEND_EMAIL", "OUTLOOK_SEND_EMAIL"),
         ] {
             for preference in [
                 tinyconnectors_bus::vocabulary::UserScopePref::default(),
-                tinyconnectors_bus::vocabulary::UserScopePref { read: true, write: false, admin: false },
+                tinyconnectors_bus::vocabulary::UserScopePref {
+                    read: true,
+                    write: false,
+                    admin: false,
+                },
             ] {
                 let request = |slug: &str| ActionVocabularyRequest {
-                    slug: slug.into(), preference, unknown_scope_profile: profile, compare_with: None,
+                    slug: slug.into(),
+                    preference,
+                    unknown_scope_profile: profile,
+                    compare_with: None,
                 };
                 let response = evaluate_actions(vec![request(alias), request(canonical)]);
                 assert!(response[1].curated_scope.is_some(), "{canonical}");
-                assert_eq!(response[0].curated_scope, response[1].curated_scope, "{alias}");
+                assert_eq!(
+                    response[0].curated_scope, response[1].curated_scope,
+                    "{alias}"
+                );
                 assert_eq!(response[0].scope, response[1].scope, "{alias}");
                 assert_eq!(response[0].visible, response[1].visible, "{alias}");
                 assert_eq!(response[0].toolkit, response[1].toolkit, "{alias}");

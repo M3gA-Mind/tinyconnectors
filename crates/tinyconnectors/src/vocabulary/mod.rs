@@ -51,20 +51,18 @@ pub(crate) fn evaluate_actions(
     requests
         .into_iter()
         .map(|request| {
-            let toolkit = scopes::toolkit_from_slug(&request.slug);
-            let curated_scope = catalogs::curated_scope_for(&request.slug);
+            let canonical_slug = scopes::canonical_action_slug(&request.slug);
+            let slug = canonical_slug.as_deref().unwrap_or(&request.slug);
+            let toolkit = scopes::toolkit_from_slug(slug);
+            let curated_scope = catalogs::curated_scope_for(slug);
             let scope = curated_scope.unwrap_or_else(|| match request.unknown_scope_profile {
-                UnknownScopeProfile::SubstringCompatibility => {
-                    scopes::classify_unknown(&request.slug)
-                }
-                UnknownScopeProfile::LeadingVerb => {
-                    tinyconnectors_sync::classify_unknown(&request.slug)
-                }
+                UnknownScopeProfile::SubstringCompatibility => scopes::classify_unknown(slug),
+                UnknownScopeProfile::LeadingVerb => tinyconnectors_sync::classify_unknown(slug),
             });
             let visible = if request.unknown_scope_profile
                 == UnknownScopeProfile::SubstringCompatibility
             {
-                catalogs::is_action_visible_with_pref(&request.slug, request.preference)
+                catalogs::is_action_visible_with_pref(slug, request.preference)
             } else {
                 toolkit.as_deref().is_none_or(|toolkit| {
                     (catalogs::catalog_for_toolkit(toolkit).is_none() || curated_scope.is_some())
@@ -73,7 +71,7 @@ pub(crate) fn evaluate_actions(
             };
             ActionVocabularyResponse {
                 toolkit,
-                canonical_slug: scopes::canonical_action_slug(&request.slug),
+                canonical_slug,
                 curated_scope,
                 scope,
                 visible,
