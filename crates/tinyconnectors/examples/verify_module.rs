@@ -211,10 +211,11 @@ async fn verify_connector_operations(
     use tinyconnectors_bus::{
         ComposioAuthorizeRequest, ComposioConfigureRequest, ComposioCreateTriggerRequest,
         ComposioDeleteConnectionRequest, ComposioDisableTriggerRequest,
+        ComposioDirectConnectionsRequest, ComposioDirectCredential, ComposioDirectToolsRequest,
         ComposioEnableTriggerRequest, ComposioExecuteRequest, ComposioGetUserScopesRequest,
         ComposioListAvailableTriggersRequest, ComposioListGithubReposRequest,
         ComposioListToolsRequest, ComposioListTriggersRequest, ComposioSetUserScopesRequest,
-        ComposioUserProfileRequest, ComposioUserScopes, names::methods,
+        ComposioUserProfileRequest, ComposioUserScopes, FilterResponseRequest, names::methods,
     };
 
     let proxy = client.proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)?;
@@ -244,6 +245,21 @@ async fn verify_connector_operations(
         proxy.call(methods::LIST_CONNECTIONS, ()).await?;
     if connections.connections.first().map(|row| row.id.as_str()) != Some("conn_1") {
         return Err(io::Error::other("mock backend connection was not returned").into());
+    }
+    let capabilities: tinyconnectors_bus::ComposioCapabilitiesResponse =
+        proxy.call(methods::LIST_CAPABILITIES, ()).await?;
+    if capabilities.capabilities.is_empty() {
+        return Err(io::Error::other("module capability registry was empty").into());
+    }
+    let agent_ready: tinyconnectors_bus::ComposioAgentReadyToolkitsResponse =
+        proxy.call(methods::LIST_AGENT_READY_TOOLKITS, ()).await?;
+    if agent_ready.toolkits.is_empty() {
+        return Err(io::Error::other("agent-ready toolkit list was empty").into());
+    }
+    let runtime_mode: tinyconnectors_bus::ComposioRuntimeModeResponse =
+        proxy.call(methods::RUNTIME_MODE, ()).await?;
+    if runtime_mode.mode != tinyconnectors_bus::ComposioRuntimeMode::Classic {
+        return Err(io::Error::other("loaded module did not report classic mode").into());
     }
 
     let authorized: tinyconnectors_bus::ComposioAuthorizeResponse = proxy
@@ -338,6 +354,23 @@ async fn verify_connector_operations(
         return Err(
             io::Error::other("Execute result was not returned from the mock backend").into(),
         );
+    }
+    let filtered: tinyconnectors_bus::ComposioExecuteResponse = proxy
+        .call(
+            methods::FILTER_RESPONSE,
+            (FilterResponseRequest {
+                tool: "GMAIL_GET_PROFILE".into(),
+                response: tinyconnectors_bus::ComposioExecuteResponse {
+                    successful: true,
+                    data: serde_json::json!({"email":"tester@example.test"}),
+                    ..Default::default()
+                },
+                since: "2026-01-01T00:00:00Z".into(),
+            },),
+        )
+        .await?;
+    if !filtered.successful {
+        return Err(io::Error::other("FilterResponse did not preserve the fixture").into());
     }
 
     let profile: tinyconnectors_bus::ComposioUserProfile = proxy
