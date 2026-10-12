@@ -402,7 +402,7 @@ class ScriptContractTests(unittest.TestCase):
                             '"output path release-assets exit=$LASTEXITCODE"; '
                             '$progressive[13]="target\\script-contract-probe"; & $bash @progressive; '
                             '"output path backslashes exit=$LASTEXITCODE"; '
-                            '$priorMSYS=$env:MSYS; $env:MSYS=if($priorMSYS){"$priorMSYS,noglob"}else{"noglob"}; '
+                            '$priorMSYS=$env:MSYS; if([string]::IsNullOrEmpty($priorMSYS)){$env:MSYS="noglob"}else{$env:MSYS="$priorMSYS,noglob"}; '
                             '& $bash @wrapperArgs; "wrapper MSYS noglob exit=$LASTEXITCODE"; '
                             '$env:MSYS=$priorMSYS; '
                             '$noExtra=@("scripts/test-distro.sh","fedora:latest",'
@@ -410,7 +410,7 @@ class ScriptContractTests(unittest.TestCase):
                             '"--target","x86_64-unknown-linux-gnu","--host","fedora-43-x86_64",'
                             '"--output-dir","target/script-contract-probe"); & $bash @noExtra; '
                             '"wrapper without extra-files option exit=$LASTEXITCODE"; '
-                            '$wrapperArgs[11]=''["docs/README.md"]''; & $bash @wrapperArgs; '
+                            '$wrapperArgs[11]=\'["docs/README.md"]\'; & $bash @wrapperArgs; '
                             '"wrapper nonempty JSON exit=$LASTEXITCODE"',
                         ],
                         cwd=ROOT,
@@ -434,6 +434,26 @@ class ScriptContractTests(unittest.TestCase):
         )
         self.assertIn("unsupported module build image", result.stderr)
         self.assertIn(image, result.stderr, "PowerShell did not preserve the image argument")
+
+        nonempty_arguments = arguments.copy()
+        nonempty_arguments[11] = '["docs/README.md"]'
+        nonempty_result = subprocess.run(
+            [
+                shutil.which("pwsh"), "-NoProfile", "-File",
+                str(ROOT / "scripts/test-distro.ps1"), *nonempty_arguments,
+            ],
+            cwd=ROOT,
+            env=self.env(
+                DOCKER_CALLS=str(docker_called),
+                **({"WRONG_BASH_CALLS": str(wrong_bash_called)} if wrong_bash_called else {}),
+            ),
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        self.assertEqual(nonempty_result.returncode, 2, nonempty_result.stderr)
+        self.assertIn("unsupported module build image", nonempty_result.stderr)
+        self.assertIn(image, nonempty_result.stderr)
         self.assertFalse(docker_called.exists(), "unpinned image reached Docker")
         if wrong_bash_called is not None:
             self.assertFalse(wrong_bash_called.exists(), "PowerShell selected the PATH bash launcher")
