@@ -71,6 +71,8 @@ async-trait = { workspace = true }
 # `test-util` gives the retry tests paused time, so a backoff that really sleeps
 # for over a minute in production costs them nothing.
 tokio = { workspace = true, features = ["test-util"] }
+# Shared loader and readiness helpers for the release-artifact E2E verifier.
+tinybus = { workspace = true, features = ["test-support"] }
 
 # The bundled examples drive the loaded module through TinyBus.
 [[example]]
