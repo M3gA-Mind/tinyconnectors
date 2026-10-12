@@ -25,26 +25,7 @@ $arguments = @(
 $bash = (Get-Command bash -ErrorAction Stop).Source
 if ($IsWindows) {
     $git = (Get-Command git -ErrorAction Stop).Source
-    $gitDirectory = Split-Path -Parent $git
-    $gitBash = $null
-    while ($gitDirectory) {
-        $candidate = Join-Path $gitDirectory 'bin/bash.exe'
-        $gitCommand = Join-Path $gitDirectory 'cmd/git.exe'
-        if ((Test-Path -LiteralPath $candidate -PathType Leaf) -and
-            (Test-Path -LiteralPath $gitCommand -PathType Leaf)) {
-            $gitBash = $candidate
-            break
-        }
-        $parent = Split-Path -Parent $gitDirectory
-        if (-not $parent -or $parent -eq $gitDirectory) {
-            break
-        }
-        $gitDirectory = $parent
-    }
-    if (-not $gitBash) {
-        throw "Git Bash was not found in the installation containing git: $git"
-    }
-    $bash = $gitBash
+    $bash = & (Join-Path $root 'scripts/resolve-git-bash.ps1') -GitPath $git
 }
 & $bash @arguments
 exit $LASTEXITCODE
