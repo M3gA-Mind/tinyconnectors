@@ -11,7 +11,7 @@ $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $root
 
-$wrapper = Join-Path $root 'scripts/test-distro.sh'
+$wrapper = 'scripts/test-distro.sh'
 $arguments = @(
     $wrapper,
     $Image,
