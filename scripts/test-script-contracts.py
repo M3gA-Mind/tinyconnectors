@@ -31,12 +31,15 @@ class ScriptContractTests(unittest.TestCase):
         self.fixture.cleanup()
 
     def write_command(self, name, source):
+        script = self.bin / f"{name}.py"
+        script.write_text(source)
         if os.name == "nt":
-            script = self.bin / f"{name}.py"
-            script.write_text(source)
             return script
         command = self.bin / name
-        command.write_text("#!/usr/bin/env python3\n" + source)
+        command.write_text(
+            "#!/usr/bin/env bash\n"
+            f'exec python3 "$(dirname "$0")/{name}.py" "$@"\n'
+        )
         command.chmod(0o755)
         return command
 
@@ -85,6 +88,27 @@ class ScriptContractTests(unittest.TestCase):
 
     def test_distro_powershell_entrypoint_exists(self):
         self.assertTrue((ROOT / "scripts/test-distro.ps1").is_file())
+
+    @unittest.skipUnless(shutil.which("pwsh"), "requires PowerShell Core")
+    def test_distro_powershell_rejects_unpinned_image_before_docker(self):
+        arguments = [
+            "-Image", "fedora:latest",
+            "-Crate", "tinyconnectors",
+            "-Version", VERSION,
+            "-Target", "x86_64-unknown-linux-gnu",
+            "-HostKey", "fedora-43-x86_64",
+            "-ExtraFilesJson", "[]",
+            "-OutputDir", f"target/script-contract-{os.getpid()}",
+        ]
+        result = subprocess.run(
+            [shutil.which("pwsh"), "-NoProfile", "-File", str(ROOT / "scripts/test-distro.ps1"), *arguments],
+            cwd=ROOT,
+            env=self.env(),
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertIn("unsupported module build image", result.stderr)
 
     @unittest.skipUnless(shutil.which("pwsh") and os.name != "nt", "requires POSIX PowerShell Core")
     def test_distro_powershell_delegates_arguments_and_exit_code_to_pinned_wrapper(self):
