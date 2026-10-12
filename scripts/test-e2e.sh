@@ -5,8 +5,7 @@ target="$(rustc -vV | sed -n 's/^host: //p')"
 version="$(cargo metadata --manifest-path Cargo.toml --format-version 1 --no-deps | jq -er '.packages[] | select(.name == "tinyconnectors") | .version')"
 case "${RUNNER_OS:-$(uname -s)}" in
   Windows|MINGW*|MSYS*|CYGWIN*)
-    pwsh -NoProfile -File scripts/build-module.ps1 -Crate tinyconnectors -Version "$version" -Target "$target" -HostKey ci -OutputDir target/module-e2e
-    pwsh -NoProfile -File scripts/verify-module.ps1 -Archive "target/module-e2e/tinyconnectors-$version-ci.zip"
+    pwsh -NoProfile -File scripts/test-e2e.ps1 -Target "$target" -Version "$version"
     ;;
   *)
     scripts/build-module.sh --crate tinyconnectors --version "$version" --target "$target" --host ci --output-dir target/module-e2e
