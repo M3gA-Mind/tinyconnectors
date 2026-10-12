@@ -89,7 +89,7 @@ class ScriptContractTests(unittest.TestCase):
             "function bash {\n"
             "  [System.IO.File]::WriteAllText($env:RUNNER_CALLS, "
             "(ConvertTo-Json -InputObject @($args) -Compress))\n"
-            "  $global:LASTEXITCODE = 37\n"
+            "  Set-Variable -Name LASTEXITCODE -Scope 1 -Value 37\n"
             "}\n"
             ". $env:TEST_DISTRO_SCRIPT -Image $env:IMAGE -Crate tinyconnectors "
             "-Version $env:MODULE_VERSION -Target x86_64-unknown-linux-gnu "
