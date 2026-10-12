@@ -36,15 +36,17 @@ class ScriptContractTests(unittest.TestCase):
         return script
 
     def env(self, **values):
-        bash_env = self.bash_env.relative_to(ROOT).as_posix()
-        return dict(
+        environment = dict(
             os.environ,
             PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
-            MOCK_COMMAND_DIR=self.bin.relative_to(ROOT).as_posix(),
-            BASH_ENV=bash_env,
             **values,
         )
+        if os.name != "nt":
+            environment["BASH_ENV"] = self.bash_env.relative_to(ROOT).as_posix()
+            environment["MOCK_COMMAND_DIR"] = self.bin.relative_to(ROOT).as_posix()
+        return environment
 
+    @unittest.skipIf(os.name == "nt", "Windows shell dispatch is exercised by module-e2e")
     def test_windows_shell_entrypoint_delegates_to_test_e2e_ps1_with_metadata(self):
         calls = self.root / "pwsh-calls.jsonl"
         self.write_command("rustc", "print('host: x86_64-pc-windows-msvc')\n")
@@ -81,13 +83,14 @@ class ScriptContractTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("pwsh"), "requires PowerShell Core")
     def test_distro_powershell_delegates_arguments_and_exit_code_to_pinned_wrapper(self):
-        docker_calls = self.root / "docker-args.json"
-        self.write_command(
-            "docker",
-            "import json, os, sys\n"
-            "open(os.environ['DOCKER_CALLS'], 'w', encoding='utf-8').write(json.dumps(sys.argv[1:]))\n"
-            "raise SystemExit(int(os.environ.get('MOCK_DOCKER_EXIT', '0')))\n",
+        runner_calls = self.root / "runner-args.json"
+        bash_mock = self.root / "bash-mock.ps1"
+        bash_mock.write_text(
+            "[System.IO.File]::WriteAllText($env:RUNNER_CALLS, "
+            "(ConvertTo-Json -InputObject @($args) -Compress))\n"
+            "exit 37\n"
         )
+        wrapper = str(ROOT / "scripts/test-distro.sh")
         image = "fedora:43@sha256:a651ddf48ea28a06ed4e1e6519f51c9f47e7a5a138722ade87369b8fbb7e5b42"
         output_dir = f"target/script-contract-{os.getpid()}"
         arguments = [
@@ -98,8 +101,10 @@ class ScriptContractTests(unittest.TestCase):
             "-HostKey", "fedora-43-x86_64",
             "-ExtraFilesJson", "[]",
             "-OutputDir", output_dir,
+            "-BashExecutable", shutil.which("pwsh"),
+            "-BashScript", str(bash_mock),
         ]
-        env = self.env(DOCKER_CALLS=str(docker_calls), MOCK_DOCKER_EXIT="37")
+        env = self.env(RUNNER_CALLS=str(runner_calls))
         result = subprocess.run(
             [shutil.which("pwsh"), "-NoProfile", "-File", str(ROOT / "scripts/test-distro.ps1"), *arguments],
             cwd=ROOT,
@@ -108,26 +113,18 @@ class ScriptContractTests(unittest.TestCase):
             capture_output=True,
         )
         self.assertEqual(result.returncode, 37, result.stderr)
-        docker_args = json.loads(docker_calls.read_text())
-        self.assertEqual(docker_args[:2], ["run", "--rm"])
-        image_index = docker_args.index(image)
-        self.assertEqual(docker_args[image_index + 1], "bash")
-        self.assertIn("MODULE_CRATE=tinyconnectors", docker_args)
-        self.assertIn(f"MODULE_VERSION={VERSION}", docker_args)
-        self.assertIn("MODULE_TARGET=x86_64-unknown-linux-gnu", docker_args)
-        self.assertIn("MODULE_HOST=fedora-43-x86_64", docker_args)
-
-        docker_calls.unlink()
-        arguments[arguments.index(image)] = "fedora:latest"
-        rejected = subprocess.run(
-            [shutil.which("pwsh"), "-NoProfile", "-File", str(ROOT / "scripts/test-distro.ps1"), *arguments],
-            cwd=ROOT,
-            env=env,
-            text=True,
-            capture_output=True,
+        self.assertEqual(
+            json.loads(runner_calls.read_text()),
+            [
+                wrapper, image,
+                "--crate", "tinyconnectors",
+                "--version", VERSION,
+                "--target", "x86_64-unknown-linux-gnu",
+                "--host", "fedora-43-x86_64",
+                "--extra-files-json", "[]",
+                "--output-dir", output_dir,
+            ],
         )
-        self.assertNotEqual(rejected.returncode, 0, rejected.stdout)
-        self.assertFalse(docker_calls.exists(), "unpinned image reached the Docker command")
 
 
 if __name__ == "__main__":
