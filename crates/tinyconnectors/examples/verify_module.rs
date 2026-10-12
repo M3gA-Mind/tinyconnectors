@@ -199,12 +199,7 @@ async fn verify_served_surface(
 
 /// Drive the backend-facing members through the loaded cdylib and a loopback
 /// fixture. No connector service or third-party API is contacted.
-async fn verify_connector_operations(
-    client: &Connection,
-    backend_url: &str,
-    requests: &std::sync::Arc<std::sync::Mutex<Vec<String>>>,
-) -> Result<(), Box<dyn std::error::Error>> {
-    use tinyconnectors_bus::{
+use tinyconnectors_bus::{
         ComposioAuthorizeRequest, ComposioConfigureRequest, ComposioCreateTriggerRequest,
         ComposioDeleteConnectionRequest, ComposioDirectConnectionsRequest,
         ComposioDirectCredential, ComposioDirectToolsRequest, ComposioDisableTriggerRequest,
@@ -213,9 +208,29 @@ async fn verify_connector_operations(
         ComposioListToolsRequest, ComposioListTriggersRequest, ComposioSetUserScopesRequest,
         ComposioUserProfileRequest, ComposioUserScopes, FilterResponseRequest, names::methods,
     };
+};
 
+async fn verify_connector_operations(
+    client: &Connection,
+    backend_url: &str,
+    requests: &std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let proxy = client.proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)?;
+    verify_route_configuration(&proxy, backend_url).await?;
+    verify_catalog_members(&proxy).await?;
+    verify_scope_and_execute(&proxy).await?;
+    verify_profile_members(&proxy).await?;
+    verify_trigger_members(&proxy).await?;
+    verify_direct_and_routed_members(&proxy, backend_url).await?;
+    verify_archive_members(&proxy).await?;
+    verify_mock_requests(requests)?;
+    Ok(())
+}
 
+async fn verify_route_configuration(
+    proxy: &tinybus::Proxy,
+    backend_url: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     // Configure also exercises a lazy-loaded, initially unconfigured host.
     let configured: tinyconnectors_bus::ComposioConfigureResponse = proxy
         .call(
@@ -232,6 +247,11 @@ async fn verify_connector_operations(
         return Err(io::Error::other("Configure did not install the proxy route").into());
     }
 
+}
+
+async fn verify_catalog_members(
+    proxy: &tinybus::Proxy,
+) -> Result<(), Box<dyn std::error::Error>> {
     let toolkits: tinyconnectors_bus::ComposioToolkitsResponse =
         proxy.call(methods::LIST_TOOLKITS, ()).await?;
     if !toolkits.toolkits.iter().any(|toolkit| toolkit == "gmail") {
@@ -285,6 +305,11 @@ async fn verify_connector_operations(
         return Err(io::Error::other("mock backend tool listing was not returned").into());
     }
 
+}
+
+async fn verify_scope_and_execute(
+    proxy: &tinybus::Proxy,
+) -> Result<(), Box<dyn std::error::Error>> {
     let scopes: tinyconnectors_bus::ComposioUserScopesResponse = proxy
         .call(
             methods::SET_USER_SCOPES,
@@ -369,6 +394,11 @@ async fn verify_connector_operations(
         return Err(io::Error::other("FilterResponse did not preserve the fixture").into());
     }
 
+}
+
+async fn verify_profile_members(
+    proxy: &tinybus::Proxy,
+) -> Result<(), Box<dyn std::error::Error>> {
     let profile: tinyconnectors_bus::ComposioUserProfile = proxy
         .call(
             methods::GET_USER_PROFILE,
@@ -407,6 +437,11 @@ async fn verify_connector_operations(
         );
     }
 
+}
+
+async fn verify_trigger_members(
+    proxy: &tinybus::Proxy,
+) -> Result<(), Box<dyn std::error::Error>> {
     let available: tinyconnectors_bus::ComposioAvailableTriggersResponse = proxy
         .call(
             methods::LIST_AVAILABLE_TRIGGERS,
@@ -485,6 +520,12 @@ async fn verify_connector_operations(
         return Err(io::Error::other("connection deletion was not acknowledged").into());
     }
 
+}
+
+async fn verify_direct_and_routed_members(
+    proxy: &tinybus::Proxy,
+    backend_url: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let direct_credential = || ComposioDirectCredential {
         api_key: "module-e2e-direct-key".into(),
         entity_id: Some("test-entity".into()),
@@ -548,6 +589,11 @@ async fn verify_connector_operations(
         return Err(io::Error::other("confidential routed read failed").into());
     }
 
+}
+
+async fn verify_archive_members(
+    proxy: &tinybus::Proxy,
+) -> Result<(), Box<dyn std::error::Error>> {
     let history_unavailable = proxy
         .call::<tinyconnectors_bus::ComposioTriggerHistoryResult>(
             methods::LIST_TRIGGER_HISTORY,
@@ -622,7 +668,12 @@ async fn verify_connector_operations(
         return Err(io::Error::other("closed archive lease remained usable").into());
     }
 
-    let seen = requests.lock().unwrap();
+}
+
+fn verify_mock_requests(
+    requests: &std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let seen = requests.lock().map_err(|_| io::Error::other("mock request log poisoned"))?;
     for endpoint in [
         "/agent-integrations/composio/toolkits",
         "/agent-integrations/composio/connections",
