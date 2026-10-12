@@ -30,8 +30,8 @@ if ($IsWindows) {
     try {
         if ([string]::IsNullOrEmpty($env:MSYS)) {
             $env:MSYS = 'noglob'
-        } elseif (($env:MSYS -split '[,; ]+') -notcontains 'noglob') {
-            $env:MSYS = "$($env:MSYS),noglob"
+        } elseif (($env:MSYS -split '\s+') -notcontains 'noglob') {
+            $env:MSYS = "$($env:MSYS) noglob"
         }
         & $bash @arguments
         $exitCode = $LASTEXITCODE

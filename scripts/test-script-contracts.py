@@ -202,6 +202,25 @@ class ScriptContractTests(unittest.TestCase):
         self.assertEqual(nonempty_result.returncode, 2, nonempty_result.stderr)
         self.assertIn("unsupported module build image", nonempty_result.stderr)
         self.assertIn(image, nonempty_result.stderr)
+
+        existing_msys_result = subprocess.run(
+            [
+                shutil.which("pwsh"), "-NoProfile", "-File",
+                str(ROOT / "scripts/test-distro.ps1"), *arguments,
+            ],
+            cwd=ROOT,
+            env=self.env(
+                MSYS="winsymlinks:nativestrict",
+                DOCKER_CALLS=str(docker_called),
+                **({"WRONG_BASH_CALLS": str(wrong_bash_called)} if wrong_bash_called else {}),
+            ),
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        self.assertEqual(existing_msys_result.returncode, 2, existing_msys_result.stderr)
+        self.assertIn("unsupported module build image", existing_msys_result.stderr)
+        self.assertIn(image, existing_msys_result.stderr)
         self.assertFalse(docker_called.exists(), "unpinned image reached Docker")
         if wrong_bash_called is not None:
             self.assertFalse(wrong_bash_called.exists(), "PowerShell selected the PATH bash launcher")
