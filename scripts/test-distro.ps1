@@ -22,10 +22,11 @@ $arguments = @(
     '--extra-files-json', $ExtraFilesJson,
     '--output-dir', $OutputDir
 )
-$bash = (Get-Command bash -ErrorAction Stop).Source
 if ($IsWindows) {
     $git = (Get-Command git -ErrorAction Stop).Source
     $bash = & (Join-Path $root 'scripts/resolve-git-bash.ps1') -GitPath $git
+} else {
+    $bash = (Get-Command bash -ErrorAction Stop).Source
 }
 & $bash @arguments
 exit $LASTEXITCODE
