@@ -38,6 +38,8 @@ class PackageTests(unittest.TestCase):
                 RECORDED_MODULE_PATH=str(fixture/"loaded-module-path"),
                 TINYJUICE_TEST_MODULE=str(fixture/"inherited-module"),
                 TINYCHANNELS_MODULE_ARTIFACT=str(fixture/"inherited-channels-module"))
+            env.pop("TINYJUICE_TEST_MODULE", None)
+            env.pop("TINYCHANNELS_MODULE_ARTIFACT", None)
             env.pop("CARGO_TARGET_DIR", None)
             result = subprocess.run(["bash", str(ROOT/"scripts/verify-module.sh"),
                 "--archive", str(archive)], cwd=ROOT, env=env, text=True, capture_output=True)
