@@ -88,6 +88,18 @@ class ScriptContractTests(unittest.TestCase):
 
     @unittest.skipUnless(shutil.which("pwsh"), "requires PowerShell Core")
     def test_distro_powershell_rejects_unpinned_image_before_docker(self):
+        docker_called = self.root / "docker-called"
+        if os.name == "nt":
+            (self.bin / "docker.cmd").write_text(
+                '@echo off\r\necho called>>"%DOCKER_CALLS%"\r\nexit /b 0\r\n'
+            )
+        else:
+            self.write_command(
+                "docker",
+                "import os\n"
+                "from pathlib import Path\n"
+                "Path(os.environ['DOCKER_CALLS']).write_text('called')\n",
+            )
         arguments = [
             "-Image", "fedora:latest",
             "-Crate", "tinyconnectors",
@@ -100,7 +112,7 @@ class ScriptContractTests(unittest.TestCase):
         result = subprocess.run(
             [shutil.which("pwsh"), "-NoProfile", "-File", str(ROOT / "scripts/test-distro.ps1"), *arguments],
             cwd=ROOT,
-            env=self.env(),
+            env=self.env(DOCKER_CALLS=str(docker_called)),
             text=True,
             capture_output=True,
         )
@@ -120,6 +132,7 @@ class ScriptContractTests(unittest.TestCase):
             f"stdout: {result.stdout}\nstderr: {result.stderr}\n{diagnostic.stdout}",
         )
         self.assertIn("unsupported module build image", result.stderr)
+        self.assertFalse(docker_called.exists(), "unpinned image reached Docker")
 
     @unittest.skipUnless(shutil.which("pwsh") and os.name != "nt", "requires POSIX PowerShell Core")
     def test_distro_powershell_delegates_arguments_and_exit_code_to_pinned_wrapper(self):
