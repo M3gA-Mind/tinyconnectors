@@ -5,9 +5,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Target,
     [Parameter(Mandatory = $true)][string]$HostKey,
     [string]$ExtraFilesJson = '[]',
-    [string]$OutputDir = 'release-assets',
-    [string]$BashExecutable = 'bash',
-    [string]$BashScript = ''
+    [string]$OutputDir = 'release-assets'
 )
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -24,9 +22,5 @@ $arguments = @(
     '--extra-files-json', $ExtraFilesJson,
     '--output-dir', $OutputDir
 )
-if ($BashScript) {
-    & $BashExecutable -NoProfile -File $BashScript @arguments
-} else {
-    & $BashExecutable @arguments
-}
+& bash @arguments
 exit $LASTEXITCODE

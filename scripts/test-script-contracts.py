@@ -86,27 +86,27 @@ class ScriptContractTests(unittest.TestCase):
         runner_calls = self.root / "runner-args.json"
         bash_mock = self.root / "bash-mock.ps1"
         bash_mock.write_text(
-            "[System.IO.File]::WriteAllText($env:RUNNER_CALLS, "
+            "function bash {\n"
+            "  [System.IO.File]::WriteAllText($env:RUNNER_CALLS, "
             "(ConvertTo-Json -InputObject @($args) -Compress))\n"
-            "exit 37\n"
+            "  $global:LASTEXITCODE = 37\n"
+            "}\n"
+            ". $env:TEST_DISTRO_SCRIPT -Image $env:IMAGE -Crate tinyconnectors "
+            "-Version $env:MODULE_VERSION -Target x86_64-unknown-linux-gnu "
+            "-HostKey fedora-43-x86_64 -ExtraFilesJson '[]' -OutputDir $env:OUTPUT_DIR\n"
         )
         wrapper = str(ROOT / "scripts/test-distro.sh")
         image = "fedora:43@sha256:a651ddf48ea28a06ed4e1e6519f51c9f47e7a5a138722ade87369b8fbb7e5b42"
         output_dir = f"target/script-contract-{os.getpid()}"
-        arguments = [
-            "-Image", image,
-            "-Crate", "tinyconnectors",
-            "-Version", VERSION,
-            "-Target", "x86_64-unknown-linux-gnu",
-            "-HostKey", "fedora-43-x86_64",
-            "-ExtraFilesJson", "[]",
-            "-OutputDir", output_dir,
-            "-BashExecutable", shutil.which("pwsh"),
-            "-BashScript", str(bash_mock),
-        ]
-        env = self.env(RUNNER_CALLS=str(runner_calls))
+        env = self.env(
+            RUNNER_CALLS=str(runner_calls),
+            TEST_DISTRO_SCRIPT=str(ROOT / "scripts/test-distro.ps1"),
+            IMAGE=image,
+            MODULE_VERSION=VERSION,
+            OUTPUT_DIR=output_dir,
+        )
         result = subprocess.run(
-            [shutil.which("pwsh"), "-NoProfile", "-File", str(ROOT / "scripts/test-distro.ps1"), *arguments],
+            [shutil.which("pwsh"), "-NoProfile", "-File", str(bash_mock)],
             cwd=ROOT,
             env=env,
             text=True,
