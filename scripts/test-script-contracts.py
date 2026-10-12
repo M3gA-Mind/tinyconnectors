@@ -205,33 +205,40 @@ class ScriptContractTests(unittest.TestCase):
                                 )
                             except subprocess.TimeoutExpired:
                                 diagnostic_parts.append(f"direct {args} with {label}: timed out")
-                    for candidate_image in ("fedora:latest", image):
-                        native_args = [
-                            str(ROOT / "scripts/test-distro.sh"),
-                            candidate_image,
-                            "--crate", "tinyconnectors",
-                            "--version", VERSION,
-                            "--target", "x86_64-unknown-linux-gnu",
-                            "--host", "fedora-43-x86_64",
-                            "--extra-files-json", "[]",
-                            "--output-dir", f"target/script-contract-{os.getpid()}",
-                        ]
-                        try:
-                            direct_wrapper = subprocess.run(
-                                [selected_bash, *native_args],
-                                cwd=ROOT,
-                                env=self.env(),
-                                text=True,
-                                capture_output=True,
-                                timeout=10,
-                            )
-                            diagnostic_parts.append(
-                                f"Python→Bash wrapper image={candidate_image!r}: "
-                                f"exit={direct_wrapper.returncode}; stdout={direct_wrapper.stdout!r}; "
-                                f"stderr={direct_wrapper.stderr!r}"
-                            )
-                        except subprocess.TimeoutExpired:
-                            diagnostic_parts.append(f"Python→Bash wrapper image={candidate_image!r}: timed out")
+                    wrapper_path = str(ROOT / "scripts/test-distro.sh")
+                    for label, candidate_path in (
+                        ("Windows separators", wrapper_path),
+                        ("forward slashes", wrapper_path.replace("\\", "/")),
+                    ):
+                        for candidate_image in ("fedora:latest", image):
+                            native_args = [
+                                candidate_path,
+                                candidate_image,
+                                "--crate", "tinyconnectors",
+                                "--version", VERSION,
+                                "--target", "x86_64-unknown-linux-gnu",
+                                "--host", "fedora-43-x86_64",
+                                "--extra-files-json", "[]",
+                                "--output-dir", f"target/script-contract-{os.getpid()}",
+                            ]
+                            try:
+                                direct_wrapper = subprocess.run(
+                                    [selected_bash, *native_args],
+                                    cwd=ROOT,
+                                    env=self.env(),
+                                    text=True,
+                                    capture_output=True,
+                                    timeout=10,
+                                )
+                                diagnostic_parts.append(
+                                    f"Python→Bash {label} image={candidate_image!r}: "
+                                    f"exit={direct_wrapper.returncode}; stdout={direct_wrapper.stdout!r}; "
+                                    f"stderr={direct_wrapper.stderr!r}"
+                                )
+                            except subprocess.TimeoutExpired:
+                                diagnostic_parts.append(
+                                    f"Python→Bash {label} image={candidate_image!r}: timed out"
+                                )
                     through_pwsh = subprocess.run(
                         [
                             shutil.which("pwsh"), "-NoProfile", "-Command",
@@ -239,14 +246,19 @@ class ScriptContractTests(unittest.TestCase):
                             '$bash=& ./scripts/resolve-git-bash.ps1 -GitPath $git; '
                             '& $bash --version; "version exit=$LASTEXITCODE"; '
                             '& $bash -c "exit 2"; "exit-code probe=$LASTEXITCODE"; '
-                            '$script="scripts/test-distro.sh"; '
+                            '$script=(Resolve-Path "scripts/test-distro.sh").Path; '
                             '$wrapperArgs=@($script,"fedora:latest","--crate","tinyconnectors",'
                             '"--version","0.14.2","--target","x86_64-unknown-linux-gnu",'
                             '"--host","fedora-43-x86_64","--extra-files-json","[]",'
                             '"--output-dir","target/script-contract-probe"); '
                             '& $bash @wrapperArgs; "wrapper unspaced image exit=$LASTEXITCODE"; '
                             '$wrapperArgs[1]="fedora image:latest"; & $bash @wrapperArgs; '
-                            '"wrapper spaced image exit=$LASTEXITCODE"',
+                            '"wrapper spaced image exit=$LASTEXITCODE"; '
+                            '$wrapperArgs[0]=$script.Replace("\\","/"); '
+                            '$wrapperArgs[1]="fedora:latest"; & $bash @wrapperArgs; '
+                            '"forward path unspaced image exit=$LASTEXITCODE"; '
+                            '$wrapperArgs[1]="fedora image:latest"; & $bash @wrapperArgs; '
+                            '"forward path spaced image exit=$LASTEXITCODE"',
                         ],
                         cwd=ROOT,
                         env=self.env(),
