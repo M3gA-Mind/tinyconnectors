@@ -36,10 +36,7 @@ class ScriptContractTests(unittest.TestCase):
         if os.name == "nt":
             return script
         command = self.bin / name
-        command.write_text(
-            "#!/usr/bin/env bash\n"
-            f'exec python3 "$(dirname "$0")/{name}.py" "$@"\n'
-        )
+        command.write_text("#!/usr/bin/env python3\n" + source)
         command.chmod(0o755)
         return command
 
