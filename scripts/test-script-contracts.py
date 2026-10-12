@@ -90,18 +90,24 @@ class ScriptContractTests(unittest.TestCase):
     def test_distro_powershell_rejects_unpinned_image_before_docker(self):
         docker_called = self.root / "docker-called"
         if os.name == "nt":
+            wrong_bash_called = self.root / "wrong-bash-called"
+            (self.bin / "bash.cmd").write_text(
+                '@echo off\r\necho called>>"%WRONG_BASH_CALLS%"\r\nexit /b 37\r\n'
+            )
             (self.bin / "docker.cmd").write_text(
                 '@echo off\r\necho called>>"%DOCKER_CALLS%"\r\nexit /b 0\r\n'
             )
         else:
+            wrong_bash_called = None
             self.write_command(
                 "docker",
                 "import os\n"
                 "from pathlib import Path\n"
                 "Path(os.environ['DOCKER_CALLS']).write_text('called')\n",
             )
+        image = "fedora image:latest"
         arguments = [
-            "-Image", "fedora:latest",
+            "-Image", image,
             "-Crate", "tinyconnectors",
             "-Version", VERSION,
             "-Target", "x86_64-unknown-linux-gnu",
@@ -112,7 +118,10 @@ class ScriptContractTests(unittest.TestCase):
         result = subprocess.run(
             [shutil.which("pwsh"), "-NoProfile", "-File", str(ROOT / "scripts/test-distro.ps1"), *arguments],
             cwd=ROOT,
-            env=self.env(DOCKER_CALLS=str(docker_called)),
+            env=self.env(
+                DOCKER_CALLS=str(docker_called),
+                **({"WRONG_BASH_CALLS": str(wrong_bash_called)} if wrong_bash_called else {}),
+            ),
             text=True,
             capture_output=True,
         )
@@ -132,7 +141,10 @@ class ScriptContractTests(unittest.TestCase):
             f"stdout: {result.stdout}\nstderr: {result.stderr}\n{diagnostic.stdout}",
         )
         self.assertIn("unsupported module build image", result.stderr)
+        self.assertIn(image, result.stderr, "PowerShell did not preserve the image argument")
         self.assertFalse(docker_called.exists(), "unpinned image reached Docker")
+        if wrong_bash_called is not None:
+            self.assertFalse(wrong_bash_called.exists(), "PowerShell selected the PATH bash launcher")
 
     @unittest.skipUnless(shutil.which("pwsh") and os.name != "nt", "requires POSIX PowerShell Core")
     def test_distro_powershell_delegates_arguments_and_exit_code_to_pinned_wrapper(self):

@@ -22,5 +22,18 @@ $arguments = @(
     '--extra-files-json', $ExtraFilesJson,
     '--output-dir', $OutputDir
 )
-& bash @arguments
+$bash = (Get-Command bash -ErrorAction Stop).Source
+if ($IsWindows) {
+    $git = (Get-Command git -ErrorAction Stop).Source
+    $gitDirectory = Split-Path -Parent $git
+    if ((Split-Path -Leaf $gitDirectory) -in @('cmd', 'bin')) {
+        $gitDirectory = Split-Path -Parent $gitDirectory
+    }
+    $gitBash = Join-Path $gitDirectory 'bin/bash.exe'
+    if (-not (Test-Path -LiteralPath $gitBash -PathType Leaf)) {
+        throw "Git Bash was not found next to git: $gitBash"
+    }
+    $bash = $gitBash
+}
+& $bash @arguments
 exit $LASTEXITCODE
