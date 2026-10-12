@@ -7,6 +7,8 @@ use std::path::PathBuf;
 use std::thread;
 use std::time::Duration;
 
+type RequestLog = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
+
 use tinybus::Connection;
 use tinybus::broker::Broker;
 use tinybus::module::{ModuleHost, ModuleInfo};
@@ -212,7 +214,7 @@ use tinyconnectors_bus::{
 async fn verify_connector_operations(
     client: &Connection,
     backend_url: &str,
-    requests: &std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+    requests: &RequestLog,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let proxy = client.proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)?;
     verify_route_configuration(&proxy, backend_url).await?;
@@ -245,6 +247,7 @@ async fn verify_route_configuration(
     if configured.route != "proxy" {
         return Err(io::Error::other("Configure did not install the proxy route").into());
     }
+    Ok(())
 }
 
 async fn verify_catalog_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
@@ -654,9 +657,7 @@ async fn verify_archive_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn st
     }
 }
 
-fn verify_mock_requests(
-    requests: &std::sync::Arc<std::sync::Mutex<Vec<String>>>,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn verify_mock_requests(requests: &RequestLog) -> Result<(), Box<dyn std::error::Error>> {
     let seen = requests
         .lock()
         .map_err(|_| io::Error::other("mock request log poisoned"))?;
@@ -679,7 +680,7 @@ fn verify_mock_requests(
     Ok(())
 }
 
-fn mock_backend() -> Result<(String, std::sync::Arc<std::sync::Mutex<Vec<String>>>), io::Error> {
+fn mock_backend() -> Result<(String, RequestLog), io::Error> {
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let address = listener.local_addr()?;
     let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
@@ -695,10 +696,7 @@ fn mock_backend() -> Result<(String, std::sync::Arc<std::sync::Mutex<Vec<String>
     Ok((format!("http://{address}"), requests))
 }
 
-fn serve_mock_request(
-    stream: TcpStream,
-    captured: &std::sync::Arc<std::sync::Mutex<Vec<String>>>,
-) -> Result<(), io::Error> {
+fn serve_mock_request(stream: TcpStream, captured: &RequestLog) -> Result<(), io::Error> {
     let mut reader = std::io::BufReader::new(stream.try_clone()?);
     let mut request_head = String::new();
     let mut content_length = 0usize;
@@ -707,17 +705,20 @@ fn serve_mock_request(
         if reader.read_line(&mut line)? == 0 || line == "\r\n" {
             break;
         }
-        if let Some((name, value)) = line.split_once(':') {
-            if name.eq_ignore_ascii_case("content-length") {
-                content_length = value.trim().parse().unwrap_or(0);
-            }
+        if let Some((name, value)) = line.split_once(':')
+            && name.eq_ignore_ascii_case("content-length")
+        {
+            content_length = value.trim().parse().unwrap_or(0);
         }
         request_head.push_str(&line);
     }
     let mut body = vec![0; content_length];
     reader.read_exact(&mut body)?;
     let request_line = request_head.lines().next().unwrap_or_default().to_string();
-    captured.lock().unwrap().push(request_line.clone());
+    captured
+        .lock()
+        .map_err(|_| io::Error::other("mock request log poisoned"))?
+        .push(request_line.clone());
     let path = request_line.split_whitespace().nth(1).unwrap_or("/");
     let direct = path.contains("/api/v3/");
     let data = if path.contains("/api/v3/connected_accounts") {
@@ -742,9 +743,7 @@ fn serve_mock_request(
         serde_json::json!({"triggers":[{"id":"trigger_1","slug":"GMAIL_NEW_MESSAGE","toolkit":"gmail","connectionId":"conn_1"}]})
     } else if path.ends_with("/triggers") {
         serde_json::json!({"triggerId":"trigger_new","status":"enabled","slug":"GMAIL_NEW_MESSAGE","connectionId":"conn_1"})
-    } else if path.contains("/triggers/") {
-        serde_json::json!({"deleted":true})
-    } else if path.contains("/connections/") {
+    } else if path.contains("/triggers/") || path.contains("/connections/") {
         serde_json::json!({"deleted":true})
     } else {
         serde_json::json!({})
