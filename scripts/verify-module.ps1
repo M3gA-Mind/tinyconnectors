@@ -42,7 +42,9 @@ try {
     Expand-Archive -LiteralPath $resolvedArchive -DestinationPath $work
     $library = Join-Path $work 'tinyconnectors.dll'
     if (-not (Test-Path (Join-Path $work 'modules.toml'))) { throw 'modules.toml missing from archive' }
+    $env:TINYCONNECTORS_TEST_MODULE = $library
     cargo run --locked --release --manifest-path Cargo.toml --package tinyconnectors --example verify_module -- $library
+    Remove-Item Env:TINYCONNECTORS_TEST_MODULE -ErrorAction SilentlyContinue
     if ($LASTEXITCODE -ne 0) { throw 'tinyconnectors module verification failed' }
 } finally {
     Remove-Item -LiteralPath $work -Recurse -Force

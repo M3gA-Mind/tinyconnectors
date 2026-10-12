@@ -1,13 +1,17 @@
 //! Loads a built module through the real `TinyBus` dynamic loader.
 
 use std::io;
+use std::io::{BufRead, Read, Write};
+use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
+use std::thread;
 use std::time::Duration;
+
+type RequestLog = std::sync::Arc<std::sync::Mutex<Vec<String>>>;
 
 use tinybus::Connection;
 use tinybus::broker::Broker;
 use tinybus::module::{ModuleHost, ModuleInfo};
-use tinybus::transport::memory::MemoryBus;
 use tinyconnectors::names;
 use tinyconnectors_bus::vocabulary::{
     ActionVocabularyResponse, NormalizeIdentitiesResponse, PreparedTaskFilter, VocabularyRequest,
@@ -22,12 +26,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         verify_restricted_surface(&module).await?;
         return Ok(());
     }
-    let bus = MemoryBus::new();
-    let broker = Broker::new();
-    let broker_task = broker.spawn(bus.clone());
-    let module_host = ModuleHost::new(broker);
-    // All verifier operations are local and must work without credentials.
-    let info = module_host.load_file_with_config(&module, serde_json::json!({}))?;
+    let (module_host, client, broker_task) = tinybus::test_support::start_bus().await?;
+    let info = tinybus::test_support::admit_module(
+        &module_host,
+        "TINYCONNECTORS_TEST_MODULE",
+        env!("CARGO_PKG_NAME"),
+    )?;
 
     if info.name != env!("CARGO_PKG_NAME") {
         return Err(io::Error::other(format!(
@@ -38,7 +42,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into());
     }
 
-    verify_served_surface(&bus, &info).await?;
+    tinybus::test_support::wait_until_serving(&client, names::INTERFACE, Duration::from_secs(5))
+        .await?;
+    let (backend_url, requests) = mock_backend()?;
+    verify_served_surface(&client, &info).await?;
+    verify_connector_operations(&client, &backend_url, &requests).await?;
     // A cdylib owns a process-global tracing subscriber, so a second runtime
     // of the same artifact must be verified in a fresh process.
     let status = std::process::Command::new(std::env::current_exe()?)
@@ -62,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn verify_restricted_surface(
     module: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let bus = MemoryBus::new();
+    let bus = tinybus::transport::memory::MemoryBus::new();
     let broker = Broker::new();
     let task = broker.clone().spawn(bus.clone());
     let host = ModuleHost::new(broker);
@@ -137,21 +145,9 @@ async fn verify_restricted_surface(
 /// Preparation and classification use local fixture payloads without calling
 /// any backend or requiring a signed-in user.
 async fn verify_served_surface(
-    bus: &MemoryBus,
+    client: &Connection,
     info: &ModuleInfo,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let client = Connection::connect(bus.connect().await?).await?;
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let claimed = client.list_names().await?;
-            if claimed.iter().any(|name| name.as_str() == names::INTERFACE) {
-                return tinybus::Result::Ok(());
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await??;
-
     let declared: Vec<String> = info
         .manifest
         .provides
@@ -201,6 +197,576 @@ async fn verify_served_surface(
     }
     verify_vocabulary(&proxy).await?;
     Ok(())
+}
+
+// Drive the backend-facing members through the loaded cdylib and a loopback
+// fixture. No connector service or third-party API is contacted.
+use tinyconnectors_bus::{
+    ComposioAuthorizeRequest, ComposioConfigureRequest, ComposioCreateTriggerRequest,
+    ComposioDeleteConnectionRequest, ComposioDirectConnectionsRequest, ComposioDirectCredential,
+    ComposioDirectToolsRequest, ComposioDisableTriggerRequest, ComposioEnableTriggerRequest,
+    ComposioExecuteRequest, ComposioGetUserScopesRequest, ComposioListAvailableTriggersRequest,
+    ComposioListGithubReposRequest, ComposioListToolsRequest, ComposioListTriggersRequest,
+    ComposioSetUserScopesRequest, ComposioUserProfileRequest, ComposioUserScopes,
+    FilterResponseRequest, names::methods,
+};
+
+async fn verify_connector_operations(
+    client: &Connection,
+    backend_url: &str,
+    requests: &RequestLog,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let proxy = client.proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)?;
+    verify_route_configuration(&proxy, backend_url).await?;
+    verify_catalog_members(&proxy).await?;
+    verify_scope_and_execute(&proxy).await?;
+    verify_profile_members(&proxy).await?;
+    verify_trigger_members(&proxy).await?;
+    verify_direct_and_routed_members(&proxy, backend_url).await?;
+    verify_archive_members(&proxy).await?;
+    verify_mock_requests(requests)?;
+    Ok(())
+}
+
+async fn verify_route_configuration(
+    proxy: &tinybus::Proxy,
+    backend_url: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Configure also exercises a lazy-loaded, initially unconfigured host.
+    let configured: tinyconnectors_bus::ComposioConfigureResponse = proxy
+        .call(
+            methods::CONFIGURE,
+            (ComposioConfigureRequest::Proxy {
+                base_url: backend_url.to_string(),
+                auth_token: "module-e2e-token".into(),
+                timezone: Some("Asia/Kuwait".into()),
+                transport: None,
+            },),
+        )
+        .await?;
+    if configured.route != "proxy" {
+        return Err(io::Error::other("Configure did not install the proxy route").into());
+    }
+    Ok(())
+}
+
+async fn verify_catalog_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
+    let toolkits: tinyconnectors_bus::ComposioToolkitsResponse =
+        proxy.call(methods::LIST_TOOLKITS, ()).await?;
+    if !toolkits.toolkits.iter().any(|toolkit| toolkit == "gmail") {
+        return Err(io::Error::other("mock backend toolkit was not returned").into());
+    }
+    let connections: tinyconnectors_bus::ComposioConnectionsResponse =
+        proxy.call(methods::LIST_CONNECTIONS, ()).await?;
+    if connections.connections.first().map(|row| row.id.as_str()) != Some("conn_1") {
+        return Err(io::Error::other("mock backend connection was not returned").into());
+    }
+    let capabilities: tinyconnectors_bus::ComposioCapabilitiesResponse =
+        proxy.call(methods::LIST_CAPABILITIES, ()).await?;
+    if capabilities.capabilities.is_empty() {
+        return Err(io::Error::other("module capability registry was empty").into());
+    }
+    let agent_ready: tinyconnectors_bus::ComposioAgentReadyToolkitsResponse =
+        proxy.call(methods::LIST_AGENT_READY_TOOLKITS, ()).await?;
+    if agent_ready.toolkits.is_empty() {
+        return Err(io::Error::other("agent-ready toolkit list was empty").into());
+    }
+    let runtime_mode: tinyconnectors_bus::ComposioRuntimeModeResponse =
+        proxy.call(methods::RUNTIME_MODE, ()).await?;
+    if runtime_mode.mode != tinyconnectors_bus::ComposioRuntimeMode::Classic {
+        return Err(io::Error::other("loaded module did not report classic mode").into());
+    }
+
+    let authorized: tinyconnectors_bus::ComposioAuthorizeResponse = proxy
+        .call(
+            methods::AUTHORIZE,
+            (ComposioAuthorizeRequest {
+                toolkit: "gmail".into(),
+                extra_params: None,
+            },),
+        )
+        .await?;
+    if authorized.connection_id != "conn_new" || !authorized.connect_url.starts_with("https://") {
+        return Err(io::Error::other("authorize handoff did not survive the loaded module").into());
+    }
+
+    let listed: tinyconnectors_bus::ComposioToolsResponse = proxy
+        .call(
+            methods::LIST_TOOLS,
+            (ComposioListToolsRequest {
+                toolkits: vec!["gmail".into()],
+                tags: Vec::new(),
+                apply_user_scopes: false,
+            },),
+        )
+        .await?;
+    if listed.tools.first().map(|tool| tool.function.name.as_str()) != Some("GMAIL_SEND_EMAIL") {
+        return Err(io::Error::other("mock backend tool listing was not returned").into());
+    }
+    Ok(())
+}
+
+async fn verify_scope_and_execute(
+    proxy: &tinybus::Proxy,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let scopes: tinyconnectors_bus::ComposioUserScopesResponse = proxy
+        .call(
+            methods::SET_USER_SCOPES,
+            (ComposioSetUserScopesRequest {
+                toolkit: "gmail".into(),
+                scopes: ComposioUserScopes {
+                    read: true,
+                    write: false,
+                    admin: false,
+                },
+            },),
+        )
+        .await?;
+    let persisted: tinyconnectors_bus::ComposioUserScopesResponse = proxy
+        .call(
+            methods::GET_USER_SCOPES,
+            (ComposioGetUserScopesRequest {
+                toolkit: "gmail".into(),
+            },),
+        )
+        .await?;
+    if scopes.scopes.write || persisted.scopes.write {
+        return Err(
+            io::Error::other("user scope preference was not enforced in module state").into(),
+        );
+    }
+    let execution_error = proxy
+        .call::<tinyconnectors_bus::ComposioExecuteResponse>(
+            methods::EXECUTE,
+            (ComposioExecuteRequest {
+                tool: "GMAIL_SEND_EMAIL".into(),
+                arguments: Some(serde_json::json!({"to":"person@example.test"})),
+                connection_id: Some("conn_1".into()),
+            },),
+        )
+        .await;
+    if !matches!(execution_error, Err(error) if error.to_string().contains("not permitted")) {
+        return Err(io::Error::other("Execute did not enforce the stored scope preference").into());
+    }
+    let reset_scopes: tinyconnectors_bus::ComposioUserScopesResponse = proxy
+        .call(
+            methods::SET_USER_SCOPES,
+            (ComposioSetUserScopesRequest {
+                toolkit: "gmail".into(),
+                scopes: ComposioUserScopes::default(),
+            },),
+        )
+        .await?;
+    if !reset_scopes.scopes.write {
+        return Err(io::Error::other("scope reset did not restore write access").into());
+    }
+    let executed: tinyconnectors_bus::ComposioExecuteResponse = proxy
+        .call(
+            methods::EXECUTE,
+            (ComposioExecuteRequest {
+                tool: "GMAIL_SEND_EMAIL".into(),
+                arguments: Some(serde_json::json!({"to":"person@example.test"})),
+                connection_id: Some("conn_1".into()),
+            },),
+        )
+        .await?;
+    if !executed.successful || executed.data["sent"] != true {
+        return Err(
+            io::Error::other("Execute result was not returned from the mock backend").into(),
+        );
+    }
+    let filtered: tinyconnectors_bus::ComposioExecuteResponse = proxy
+        .call(
+            methods::FILTER_RESPONSE,
+            (FilterResponseRequest {
+                tool: "GMAIL_GET_PROFILE".into(),
+                response: tinyconnectors_bus::ComposioExecuteResponse {
+                    successful: true,
+                    data: serde_json::json!({"email":"tester@example.test"}),
+                    ..Default::default()
+                },
+                since: "2026-01-01T00:00:00Z".into(),
+            },),
+        )
+        .await?;
+    if !filtered.successful {
+        return Err(io::Error::other("FilterResponse did not preserve the fixture").into());
+    }
+    Ok(())
+}
+
+async fn verify_profile_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
+    let profile: tinyconnectors_bus::ComposioUserProfile = proxy
+        .call(
+            methods::GET_USER_PROFILE,
+            (ComposioUserProfileRequest {
+                toolkit: "gmail".into(),
+                connection_id: Some("conn_1".into()),
+            },),
+        )
+        .await?;
+    if profile.email.as_deref() != Some("tester@example.test") {
+        return Err(io::Error::other("profile action did not return its mock identity").into());
+    }
+    let refreshed: tinyconnectors_bus::ComposioRefreshIdentitiesResponse =
+        proxy.call(methods::REFRESH_ALL_IDENTITIES, ()).await?;
+    if refreshed.profiles.is_empty() {
+        return Err(io::Error::other("identity refresh did not read active connections").into());
+    }
+
+    let repos: tinyconnectors_bus::ComposioGithubReposResponse = proxy
+        .call(
+            methods::LIST_GITHUB_REPOS,
+            (ComposioListGithubReposRequest {
+                connection_id: Some("conn_1".into()),
+            },),
+        )
+        .await?;
+    if repos.connection_id != "conn_1"
+        || repos
+            .repositories
+            .first()
+            .map(|repo| repo.full_name.as_str())
+            != Some("tinyhumans/example")
+    {
+        return Err(
+            io::Error::other("GitHub repository listing did not decode the fixture").into(),
+        );
+    }
+    Ok(())
+}
+
+async fn verify_trigger_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
+    let available: tinyconnectors_bus::ComposioAvailableTriggersResponse = proxy
+        .call(
+            methods::LIST_AVAILABLE_TRIGGERS,
+            (ComposioListAvailableTriggersRequest {
+                toolkit: "gmail".into(),
+                connection_id: Some("conn_1".into()),
+            },),
+        )
+        .await?;
+    if available
+        .triggers
+        .first()
+        .map(|trigger| trigger.slug.as_str())
+        != Some("GMAIL_NEW_MESSAGE")
+    {
+        return Err(
+            io::Error::other("available trigger listing did not decode the fixture").into(),
+        );
+    }
+    let active: tinyconnectors_bus::ComposioActiveTriggersResponse = proxy
+        .call(
+            methods::LIST_TRIGGERS,
+            (ComposioListTriggersRequest { toolkit: None },),
+        )
+        .await?;
+    if active.triggers.first().map(|trigger| trigger.id.as_str()) != Some("trigger_1") {
+        return Err(io::Error::other("active trigger listing did not decode the fixture").into());
+    }
+    let created: tinyconnectors_bus::ComposioCreateTriggerResponse = proxy
+        .call(
+            methods::CREATE_TRIGGER,
+            (ComposioCreateTriggerRequest {
+                slug: "GMAIL_NEW_MESSAGE".into(),
+                connection_id: Some("conn_1".into()),
+                trigger_config: None,
+            },),
+        )
+        .await?;
+    if created.trigger_id != "trigger_new" {
+        return Err(io::Error::other("trigger creation did not return the fixture id").into());
+    }
+    let enabled: tinyconnectors_bus::ComposioEnableTriggerResponse = proxy
+        .call(
+            methods::ENABLE_TRIGGER,
+            (ComposioEnableTriggerRequest {
+                connection_id: "conn_1".into(),
+                slug: "GMAIL_NEW_MESSAGE".into(),
+                trigger_config: None,
+            },),
+        )
+        .await?;
+    if enabled.trigger_id != "trigger_new" {
+        return Err(io::Error::other("trigger enable did not return the fixture id").into());
+    }
+    let disabled: tinyconnectors_bus::ComposioDisableTriggerResponse = proxy
+        .call(
+            methods::DISABLE_TRIGGER,
+            (ComposioDisableTriggerRequest {
+                trigger_id: "trigger_new".into(),
+            },),
+        )
+        .await?;
+    if !disabled.deleted {
+        return Err(io::Error::other("trigger disable was not acknowledged").into());
+    }
+
+    let deleted: tinyconnectors_bus::ComposioDeleteResponse = proxy
+        .call(
+            methods::DELETE_CONNECTION,
+            (ComposioDeleteConnectionRequest {
+                connection_id: "conn_old".into(),
+            },),
+        )
+        .await?;
+    if !deleted.deleted {
+        return Err(io::Error::other("connection deletion was not acknowledged").into());
+    }
+    Ok(())
+}
+
+async fn verify_direct_and_routed_members(
+    proxy: &tinybus::Proxy,
+    backend_url: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let direct_credential = || ComposioDirectCredential {
+        api_key: "module-e2e-direct-key".into(),
+        entity_id: Some("test-entity".into()),
+        base_url: Some(format!("{backend_url}/api/v3")),
+        transport: None,
+    };
+    let direct_connections: tinyconnectors_bus::ComposioConnectionsResponse = proxy
+        .call(
+            methods::LIST_CONNECTIONS_DIRECT,
+            (ComposioDirectConnectionsRequest {
+                credential: direct_credential(),
+            },),
+        )
+        .await?;
+    if direct_connections
+        .connections
+        .first()
+        .map(|row| row.id.as_str())
+        != Some("conn_direct")
+    {
+        return Err(io::Error::other("stateless direct connection read failed").into());
+    }
+    let direct_tools: tinyconnectors_bus::ComposioToolsResponse = proxy
+        .call(
+            methods::LIST_TOOLS_DIRECT,
+            (ComposioDirectToolsRequest {
+                credential: direct_credential(),
+                toolkits: vec!["gmail".into()],
+                tags: Vec::new(),
+            },),
+        )
+        .await?;
+    if direct_tools
+        .tools
+        .first()
+        .map(|tool| tool.function.name.as_str())
+        != Some("GMAIL_SEND_EMAIL")
+    {
+        return Err(io::Error::other("stateless direct tool read failed").into());
+    }
+
+    let routed: tinyconnectors_bus::ComposioRoutedReadReply = proxy
+        .call_confidential(
+            methods::ROUTED_READ,
+            (tinyconnectors_bus::ComposioRoutedReadRequest {
+                route: tinyconnectors_bus::ComposioCallRoute::Proxy {
+                    base_url: backend_url.into(),
+                    auth_token: "module-e2e-routed-token".into(),
+                    timezone: None,
+                    transport: None,
+                },
+                operation: tinyconnectors_bus::ComposioReadOperation::ListConnections,
+            },),
+        )
+        .await?;
+    if !matches!(
+        routed,
+        tinyconnectors_bus::ComposioRoutedReadReply::ListConnections(ref rows)
+            if rows.connections.first().map(|row| row.id.as_str()) == Some("conn_1")
+    ) {
+        return Err(io::Error::other("confidential routed read failed").into());
+    }
+    Ok(())
+}
+
+async fn verify_archive_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
+    let history_unavailable = proxy
+        .call::<tinyconnectors_bus::ComposioTriggerHistoryResult>(
+            methods::LIST_TRIGGER_HISTORY,
+            (tinyconnectors_bus::ComposioListTriggerHistoryRequest { limit: Some(1) },),
+        )
+        .await;
+    if !matches!(history_unavailable, Err(error) if error.to_string().contains("state_dir")) {
+        return Err(
+            io::Error::other("ListTriggerHistory did not explain its missing archive").into(),
+        );
+    }
+    let state_dir = std::env::current_dir()?.join("target/module-e2e-archive");
+    let archive: tinyconnectors_bus::ArchiveHandle = proxy
+        .call(
+            methods::OPEN_ARCHIVE,
+            (tinyconnectors_bus::OpenArchiveRequest {
+                state_dir: state_dir.to_string_lossy().into_owned(),
+            },),
+        )
+        .await?;
+    let recorded: tinyconnectors_bus::ComposioTriggerHistoryEntry = proxy
+        .call(
+            methods::RECORD_TRIGGER,
+            (tinyconnectors_bus::RecordTriggerRequest {
+                handle: archive.clone(),
+                event: tinyconnectors_bus::ComposioTriggerEvent {
+                    toolkit: "gmail".into(),
+                    trigger: "GMAIL_NEW_MESSAGE".into(),
+                    payload: serde_json::json!({"subject":"fixture"}),
+                    metadata: tinyconnectors_bus::ComposioTriggerMetadata {
+                        id: "event_1".into(),
+                        uuid: "event-uuid-1".into(),
+                    },
+                },
+            },),
+        )
+        .await?;
+    if recorded.metadata_id != "event_1" {
+        return Err(io::Error::other("trigger archive did not record the event").into());
+    }
+    let archive_entries: tinyconnectors_bus::ComposioTriggerHistoryResult = proxy
+        .call(
+            methods::READ_ARCHIVE,
+            (tinyconnectors_bus::ReadArchiveRequest {
+                handle: archive.clone(),
+                limit: Some(1),
+            },),
+        )
+        .await?;
+    if archive_entries
+        .entries
+        .first()
+        .map(|entry| entry.metadata_id.as_str())
+        != Some("event_1")
+    {
+        return Err(io::Error::other("trigger archive did not return the recorded event").into());
+    }
+    let _: () = proxy
+        .call(methods::CLOSE_ARCHIVE, (archive.clone(),))
+        .await?;
+    let closed = proxy
+        .call::<tinyconnectors_bus::ComposioTriggerHistoryResult>(
+            methods::READ_ARCHIVE,
+            (tinyconnectors_bus::ReadArchiveRequest {
+                handle: archive,
+                limit: Some(1),
+            },),
+        )
+        .await;
+    if !matches!(closed, Err(error) if error.to_string().contains("unknown trigger archive lease"))
+    {
+        return Err(io::Error::other("closed archive lease remained usable").into());
+    }
+    Ok(())
+}
+
+fn verify_mock_requests(requests: &RequestLog) -> Result<(), Box<dyn std::error::Error>> {
+    let seen = requests
+        .lock()
+        .map_err(|_| io::Error::other("mock request log poisoned"))?;
+    for endpoint in [
+        "/agent-integrations/composio/toolkits",
+        "/agent-integrations/composio/connections",
+        "/agent-integrations/composio/authorize",
+        "/agent-integrations/composio/tools?",
+        "/agent-integrations/composio/execute",
+        "/agent-integrations/composio/github/repos?",
+        "/agent-integrations/composio/triggers/available?",
+        "/agent-integrations/composio/triggers",
+        "/api/v3/connected_accounts?limit=200",
+        "/api/v3/tools?",
+    ] {
+        if !seen.iter().any(|request| request.contains(endpoint)) {
+            return Err(io::Error::other(format!("loaded module did not call {endpoint}")).into());
+        }
+    }
+    Ok(())
+}
+
+fn mock_backend() -> Result<(String, RequestLog), io::Error> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let address = listener.local_addr()?;
+    let requests = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let captured = requests.clone();
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(stream) = stream else { break };
+            if serve_mock_request(stream, &captured).is_err() {
+                break;
+            }
+        }
+    });
+    Ok((format!("http://{address}"), requests))
+}
+
+fn serve_mock_request(stream: TcpStream, captured: &RequestLog) -> Result<(), io::Error> {
+    let mut reader = std::io::BufReader::new(stream.try_clone()?);
+    let mut request_head = String::new();
+    let mut content_length = 0usize;
+    loop {
+        let mut line = String::new();
+        if reader.read_line(&mut line)? == 0 || line == "\r\n" {
+            break;
+        }
+        if let Some((name, value)) = line.split_once(':')
+            && name.eq_ignore_ascii_case("content-length")
+        {
+            content_length = value.trim().parse().unwrap_or(0);
+        }
+        request_head.push_str(&line);
+    }
+    let mut body = vec![0; content_length];
+    reader.read_exact(&mut body)?;
+    let request_line = request_head.lines().next().unwrap_or_default().to_string();
+    captured
+        .lock()
+        .map_err(|_| io::Error::other("mock request log poisoned"))?
+        .push(request_line.clone());
+    let path = request_line.split_whitespace().nth(1).unwrap_or("/");
+    let direct = path.contains("/api/v3/");
+    let data = if path.contains("/api/v3/connected_accounts") {
+        serde_json::json!({"items":[{"id":"conn_direct","toolkit":"gmail","status":"ACTIVE"}]})
+    } else if path.contains("/api/v3/tools") {
+        serde_json::json!({"items":[{"slug":"GMAIL_SEND_EMAIL","name":"GMAIL_SEND_EMAIL"}]})
+    } else if path.ends_with("/toolkits") {
+        serde_json::json!({"toolkits":["gmail"]})
+    } else if path.ends_with("/connections") {
+        serde_json::json!({"connections":[{"id":"conn_1","toolkit":"gmail","status":"ACTIVE"}]})
+    } else if path.ends_with("/authorize") {
+        serde_json::json!({"connectUrl":"https://connect.example.test/oauth","connectionId":"conn_new"})
+    } else if path.contains("/tools") {
+        serde_json::json!({"tools":[{"type":"function","function":{"name":"GMAIL_SEND_EMAIL"}}]})
+    } else if path.ends_with("/execute") {
+        serde_json::json!({"successful":true,"data":{"sent":true,"email":"tester@example.test"}})
+    } else if path.contains("/github/repos") {
+        serde_json::json!({"connectionId":"conn_1","repositories":[{"owner":"tinyhumans","repo":"example","fullName":"tinyhumans/example"}]})
+    } else if path.contains("/triggers/available") {
+        serde_json::json!({"triggers":[{"slug":"GMAIL_NEW_MESSAGE","scope":"static"}]})
+    } else if path.ends_with("/triggers") && request_line.starts_with("GET ") {
+        serde_json::json!({"triggers":[{"id":"trigger_1","slug":"GMAIL_NEW_MESSAGE","toolkit":"gmail","connectionId":"conn_1"}]})
+    } else if path.ends_with("/triggers") {
+        serde_json::json!({"triggerId":"trigger_new","status":"enabled","slug":"GMAIL_NEW_MESSAGE","connectionId":"conn_1"})
+    } else if path.contains("/triggers/") || path.contains("/connections/") {
+        serde_json::json!({"deleted":true})
+    } else {
+        serde_json::json!({})
+    };
+    let response = if direct {
+        data.to_string()
+    } else {
+        serde_json::json!({"success":true,"data":data}).to_string()
+    };
+    let mut stream = stream;
+    write!(
+        stream,
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+        response.len(),
+        response
+    )?;
+    stream.flush()
 }
 
 /// Require the compiled module path supplied to this verifier.
