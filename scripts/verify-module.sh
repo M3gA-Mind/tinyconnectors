@@ -68,4 +68,4 @@ case "$(uname -s)" in
   *) echo "verify-module.sh requires a Unix runner" >&2; exit 1 ;;
 esac
 test -f "$work/modules.toml"
-cargo run --locked --release --manifest-path Cargo.toml --package tinyconnectors --example verify_module -- "$library"
+TINYCONNECTORS_TEST_MODULE="$work/$(basename "$library")" cargo run --locked --release --manifest-path Cargo.toml --package tinyconnectors --example verify_module -- "$library"

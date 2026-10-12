@@ -10,7 +10,6 @@ use std::time::Duration;
 use tinybus::Connection;
 use tinybus::broker::Broker;
 use tinybus::module::{ModuleHost, ModuleInfo};
-use tinybus::transport::memory::MemoryBus;
 use tinyconnectors::names;
 use tinyconnectors_bus::vocabulary::{
     ActionVocabularyResponse, NormalizeIdentitiesResponse, PreparedTaskFilter, VocabularyRequest,
@@ -25,21 +24,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         verify_restricted_surface(&module).await?;
         return Ok(());
     }
-    let (backend_url, requests) = mock_backend()?;
-    let bus = MemoryBus::new();
-    let broker = Broker::new();
-    let broker_task = broker.spawn(bus.clone());
-    let module_host = ModuleHost::new(broker);
-    // All verifier operations are local and must work without credentials.
-    let state_dir = std::env::current_dir()?.join("target/module-e2e-archive");
-    let info = module_host.load_file_with_config(
-        &module,
-        serde_json::json!({
-            "route": "proxy",
-            "base_url": backend_url,
-            "auth_token": "module-e2e-token",
-            "state_dir": state_dir,
-        }),
+    let (module_host, client, broker_task) = tinybus::test_support::start_bus().await?;
+    let info = tinybus::test_support::admit_module(
+        &module_host,
+        "TINYCONNECTORS_TEST_MODULE",
+        env!("CARGO_PKG_NAME"),
     )?;
 
     if info.name != env!("CARGO_PKG_NAME") {
@@ -51,8 +40,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into());
     }
 
-    verify_served_surface(&bus, &info).await?;
-    verify_connector_operations(&bus, &backend_url, &requests).await?;
+    tinybus::test_support::wait_until_serving(
+        &client,
+        names::INTERFACE,
+        Duration::from_secs(5),
+    )
+    .await?;
+    let (backend_url, requests) = mock_backend()?;
+    verify_served_surface(&client, &info).await?;
+    verify_connector_operations(&client, &backend_url, &requests).await?;
     // A cdylib owns a process-global tracing subscriber, so a second runtime
     // of the same artifact must be verified in a fresh process.
     let status = std::process::Command::new(std::env::current_exe()?)
@@ -76,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 async fn verify_restricted_surface(
     module: &std::path::Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let bus = MemoryBus::new();
+    let bus = tinybus::transport::memory::MemoryBus::new();
     let broker = Broker::new();
     let task = broker.clone().spawn(bus.clone());
     let host = ModuleHost::new(broker);
@@ -151,21 +147,9 @@ async fn verify_restricted_surface(
 /// Preparation and classification use local fixture payloads without calling
 /// any backend or requiring a signed-in user.
 async fn verify_served_surface(
-    bus: &MemoryBus,
+    client: &Connection,
     info: &ModuleInfo,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let client = Connection::connect(bus.connect().await?).await?;
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let claimed = client.list_names().await?;
-            if claimed.iter().any(|name| name.as_str() == names::INTERFACE) {
-                return tinybus::Result::Ok(());
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await??;
-
     let declared: Vec<String> = info
         .manifest
         .provides
@@ -220,7 +204,7 @@ async fn verify_served_surface(
 /// Drive the backend-facing members through the loaded cdylib and a loopback
 /// fixture. No connector service or third-party API is contacted.
 async fn verify_connector_operations(
-    bus: &MemoryBus,
+    client: &Connection,
     backend_url: &str,
     requests: &std::sync::Arc<std::sync::Mutex<Vec<String>>>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -233,7 +217,6 @@ async fn verify_connector_operations(
         ComposioUserProfileRequest, ComposioUserScopes, names::methods,
     };
 
-    let client = Connection::connect(bus.connect().await?).await?;
     let proxy = client.proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)?;
 
     // Configure also exercises a lazy-loaded, initially unconfigured host.
