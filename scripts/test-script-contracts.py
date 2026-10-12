@@ -154,13 +154,12 @@ class ScriptContractTests(unittest.TestCase):
         diagnostic = ""
         if result.returncode != 2:
             try:
-                details = subprocess.run(
+                resolution = subprocess.run(
                     [
                         shutil.which("pwsh"), "-NoProfile", "-Command",
                         '$git=(Get-Command git).Source; '
                         '$bash=& ./scripts/resolve-git-bash.ps1 -GitPath $git; '
                         '"git source: $git`nresolved Git Bash: $bash"; '
-                        '& $bash --version; "Git Bash launch exit: $LASTEXITCODE"; '
                         '"PATH bash: $((Get-Command bash -ErrorAction SilentlyContinue).Source)`nPATH: $env:PATH"',
                     ],
                     cwd=ROOT,
@@ -169,7 +168,63 @@ class ScriptContractTests(unittest.TestCase):
                     capture_output=True,
                     timeout=15,
                 )
-                diagnostic = f"diagnostic stdout: {details.stdout}\ndiagnostic stderr: {details.stderr}"
+                diagnostic_parts = [
+                    f"resolution stdout: {resolution.stdout}",
+                    f"resolution stderr: {resolution.stderr}",
+                ]
+                selected_bash = next(
+                    (line.removeprefix("resolved Git Bash: ").strip()
+                     for line in resolution.stdout.splitlines()
+                     if line.startswith("resolved Git Bash: ")),
+                    None,
+                )
+                if selected_bash:
+                    for label, environment in (
+                        ("fixture PATH", self.env()),
+                        ("PATH without fixture", dict(
+                            self.env(),
+                            PATH=os.pathsep.join(
+                                part for part in self.env()["PATH"].split(os.pathsep)
+                                if Path(part).resolve() != self.bin.resolve()
+                            ),
+                        )),
+                    ):
+                        for args in (("--version",), ("-c", "exit 2")):
+                            try:
+                                direct = subprocess.run(
+                                    [selected_bash, *args],
+                                    cwd=ROOT,
+                                    env=environment,
+                                    text=True,
+                                    capture_output=True,
+                                    timeout=10,
+                                )
+                                diagnostic_parts.append(
+                                    f"direct {args} with {label}: exit={direct.returncode}; "
+                                    f"stdout={direct.stdout!r}; stderr={direct.stderr!r}"
+                                )
+                            except subprocess.TimeoutExpired:
+                                diagnostic_parts.append(f"direct {args} with {label}: timed out")
+                    through_pwsh = subprocess.run(
+                        [
+                            shutil.which("pwsh"), "-NoProfile", "-Command",
+                            '$git=(Get-Command git).Source; '
+                            '$bash=& ./scripts/resolve-git-bash.ps1 -GitPath $git; '
+                            '& $bash --version; "version exit=$LASTEXITCODE"; '
+                            '& $bash -c "exit 2"; "exit-code probe=$LASTEXITCODE"',
+                        ],
+                        cwd=ROOT,
+                        env=self.env(),
+                        text=True,
+                        capture_output=True,
+                        timeout=15,
+                    )
+                    diagnostic_parts.extend((
+                        f"PowerShell invocation stdout: {through_pwsh.stdout}",
+                        f"PowerShell invocation stderr: {through_pwsh.stderr}",
+                        f"PowerShell diagnostic exit: {through_pwsh.returncode}",
+                    ))
+                diagnostic = "\n".join(diagnostic_parts)
             except subprocess.TimeoutExpired:
                 diagnostic = "diagnostic timed out while probing Git Bash"
         self.assertEqual(
