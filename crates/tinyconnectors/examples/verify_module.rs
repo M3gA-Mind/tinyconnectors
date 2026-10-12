@@ -40,12 +40,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .into());
     }
 
-    tinybus::test_support::wait_until_serving(
-        &client,
-        names::INTERFACE,
-        Duration::from_secs(5),
-    )
-    .await?;
+    tinybus::test_support::wait_until_serving(&client, names::INTERFACE, Duration::from_secs(5))
+        .await?;
     let (backend_url, requests) = mock_backend()?;
     verify_served_surface(&client, &info).await?;
     verify_connector_operations(&client, &backend_url, &requests).await?;
@@ -210,8 +206,8 @@ async fn verify_connector_operations(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use tinyconnectors_bus::{
         ComposioAuthorizeRequest, ComposioConfigureRequest, ComposioCreateTriggerRequest,
-        ComposioDeleteConnectionRequest, ComposioDisableTriggerRequest,
-        ComposioDirectConnectionsRequest, ComposioDirectCredential, ComposioDirectToolsRequest,
+        ComposioDeleteConnectionRequest, ComposioDirectConnectionsRequest,
+        ComposioDirectCredential, ComposioDirectToolsRequest, ComposioDisableTriggerRequest,
         ComposioEnableTriggerRequest, ComposioExecuteRequest, ComposioGetUserScopesRequest,
         ComposioListAvailableTriggersRequest, ComposioListGithubReposRequest,
         ComposioListToolsRequest, ComposioListTriggersRequest, ComposioSetUserScopesRequest,
@@ -489,6 +485,143 @@ async fn verify_connector_operations(
         return Err(io::Error::other("connection deletion was not acknowledged").into());
     }
 
+    let direct_credential = || ComposioDirectCredential {
+        api_key: "module-e2e-direct-key".into(),
+        entity_id: Some("test-entity".into()),
+        base_url: Some(format!("{backend_url}/api/v3")),
+        transport: None,
+    };
+    let direct_connections: tinyconnectors_bus::ComposioConnectionsResponse = proxy
+        .call(
+            methods::LIST_CONNECTIONS_DIRECT,
+            (ComposioDirectConnectionsRequest {
+                credential: direct_credential(),
+            },),
+        )
+        .await?;
+    if direct_connections
+        .connections
+        .first()
+        .map(|row| row.id.as_str())
+        != Some("conn_direct")
+    {
+        return Err(io::Error::other("stateless direct connection read failed").into());
+    }
+    let direct_tools: tinyconnectors_bus::ComposioToolsResponse = proxy
+        .call(
+            methods::LIST_TOOLS_DIRECT,
+            (ComposioDirectToolsRequest {
+                credential: direct_credential(),
+                toolkits: vec!["gmail".into()],
+                tags: Vec::new(),
+            },),
+        )
+        .await?;
+    if direct_tools
+        .tools
+        .first()
+        .map(|tool| tool.function.name.as_str())
+        != Some("GMAIL_SEND_EMAIL")
+    {
+        return Err(io::Error::other("stateless direct tool read failed").into());
+    }
+
+    let routed: tinyconnectors_bus::ComposioRoutedReadReply = proxy
+        .call(
+            methods::ROUTED_READ,
+            (tinyconnectors_bus::ComposioRoutedReadRequest {
+                route: tinyconnectors_bus::ComposioCallRoute::Proxy {
+                    base_url: backend_url.into(),
+                    auth_token: "module-e2e-routed-token".into(),
+                    timezone: None,
+                    transport: None,
+                },
+                operation: tinyconnectors_bus::ComposioReadOperation::ListConnections,
+            },),
+        )
+        .await?;
+    if !matches!(
+        routed,
+        tinyconnectors_bus::ComposioRoutedReadReply::ListConnections(ref rows)
+            if rows.connections.first().map(|row| row.id.as_str()) == Some("conn_1")
+    ) {
+        return Err(io::Error::other("confidential routed read failed").into());
+    }
+
+    let history_unavailable = proxy
+        .call::<tinyconnectors_bus::ComposioTriggerHistoryResult>(
+            methods::LIST_TRIGGER_HISTORY,
+            (tinyconnectors_bus::ComposioListTriggerHistoryRequest { limit: Some(1) },),
+        )
+        .await;
+    if !matches!(history_unavailable, Err(error) if error.to_string().contains("state_dir")) {
+        return Err(
+            io::Error::other("ListTriggerHistory did not explain its missing archive").into(),
+        );
+    }
+    let state_dir = std::env::current_dir()?.join("target/module-e2e-archive");
+    let archive: tinyconnectors_bus::ArchiveHandle = proxy
+        .call(
+            methods::OPEN_ARCHIVE,
+            (tinyconnectors_bus::OpenArchiveRequest {
+                state_dir: state_dir.to_string_lossy().into_owned(),
+            },),
+        )
+        .await?;
+    let recorded: tinyconnectors_bus::ComposioTriggerHistoryEntry = proxy
+        .call(
+            methods::RECORD_TRIGGER,
+            (tinyconnectors_bus::RecordTriggerRequest {
+                handle: archive.clone(),
+                event: tinyconnectors_bus::ComposioTriggerEvent {
+                    toolkit: "gmail".into(),
+                    trigger: "GMAIL_NEW_MESSAGE".into(),
+                    payload: serde_json::json!({"subject":"fixture"}),
+                    metadata: tinyconnectors_bus::ComposioTriggerMetadata {
+                        id: "event_1".into(),
+                        uuid: "event-uuid-1".into(),
+                    },
+                },
+            },),
+        )
+        .await?;
+    if recorded.metadata_id != "event_1" {
+        return Err(io::Error::other("trigger archive did not record the event").into());
+    }
+    let archive_entries: tinyconnectors_bus::ComposioTriggerHistoryResult = proxy
+        .call(
+            methods::READ_ARCHIVE,
+            (tinyconnectors_bus::ReadArchiveRequest {
+                handle: archive.clone(),
+                limit: Some(1),
+            },),
+        )
+        .await?;
+    if archive_entries
+        .entries
+        .first()
+        .map(|entry| entry.metadata_id.as_str())
+        != Some("event_1")
+    {
+        return Err(io::Error::other("trigger archive did not return the recorded event").into());
+    }
+    let _: () = proxy
+        .call(methods::CLOSE_ARCHIVE, (archive.clone(),))
+        .await?;
+    let closed = proxy
+        .call::<tinyconnectors_bus::ComposioTriggerHistoryResult>(
+            methods::READ_ARCHIVE,
+            (tinyconnectors_bus::ReadArchiveRequest {
+                handle: archive,
+                limit: Some(1),
+            },),
+        )
+        .await;
+    if !matches!(closed, Err(error) if error.to_string().contains("unknown trigger archive lease"))
+    {
+        return Err(io::Error::other("closed archive lease remained usable").into());
+    }
+
     let seen = requests.lock().unwrap();
     for endpoint in [
         "/agent-integrations/composio/toolkits",
@@ -499,6 +632,8 @@ async fn verify_connector_operations(
         "/agent-integrations/composio/github/repos?",
         "/agent-integrations/composio/triggers/available?",
         "/agent-integrations/composio/triggers",
+        "/api/v3/connected_accounts?limit=200",
+        "/api/v3/tools?",
     ] {
         if !seen.iter().any(|request| request.contains(endpoint)) {
             return Err(io::Error::other(format!("loaded module did not call {endpoint}")).into());
@@ -547,7 +682,12 @@ fn serve_mock_request(
     let request_line = request_head.lines().next().unwrap_or_default().to_string();
     captured.lock().unwrap().push(request_line.clone());
     let path = request_line.split_whitespace().nth(1).unwrap_or("/");
-    let data = if path.ends_with("/toolkits") {
+    let direct = path.contains("/api/v3/");
+    let data = if path.contains("/api/v3/connected_accounts") {
+        serde_json::json!({"items":[{"id":"conn_direct","toolkit":"gmail","status":"ACTIVE"}]})
+    } else if path.contains("/api/v3/tools") {
+        serde_json::json!({"items":[{"slug":"GMAIL_SEND_EMAIL","name":"GMAIL_SEND_EMAIL"}]})
+    } else if path.ends_with("/toolkits") {
         serde_json::json!({"toolkits":["gmail"]})
     } else if path.ends_with("/connections") {
         serde_json::json!({"connections":[{"id":"conn_1","toolkit":"gmail","status":"ACTIVE"}]})
@@ -572,8 +712,11 @@ fn serve_mock_request(
     } else {
         serde_json::json!({})
     };
-    let envelope = serde_json::json!({"success":true,"data":data});
-    let response = envelope.to_string();
+    let response = if direct {
+        data.to_string()
+    } else {
+        serde_json::json!({"success":true,"data":data}).to_string()
+    };
     let mut stream = stream;
     write!(
         stream,
