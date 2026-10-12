@@ -527,7 +527,7 @@ async fn verify_connector_operations(
     }
 
     let routed: tinyconnectors_bus::ComposioRoutedReadReply = proxy
-        .call(
+        .call_confidential(
             methods::ROUTED_READ,
             (tinyconnectors_bus::ComposioRoutedReadRequest {
                 route: tinyconnectors_bus::ComposioCallRoute::Proxy {
