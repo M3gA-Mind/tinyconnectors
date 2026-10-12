@@ -364,9 +364,13 @@ class ScriptContractTests(unittest.TestCase):
                             '"--crate","tinyconnectors","--version","0.14.2",'
                             '"--target","x86_64-unknown-linux-gnu","--host","fedora-43-x86_64",'
                             '"--extra-files-json","[]","--output-dir","target/script-contract-probe"); '
-                            'for($count=2;$count -le $progressive.Count;$count+=2){'
+                            'for($count=2;$count -le $progressive.Count;$count++){'
                             '$prefix=$progressive[0..($count-1)]; & $bash @prefix; '
-                            '"progressive argv=$count exit=$LASTEXITCODE"}',
+                            '"progressive argv=$count exit=$LASTEXITCODE"}; '
+                            '$progressive[13]="release-assets"; & $bash @progressive; '
+                            '"output path release-assets exit=$LASTEXITCODE"; '
+                            '$progressive[13]="target\\script-contract-probe"; & $bash @progressive; '
+                            '"output path backslashes exit=$LASTEXITCODE"',
                         ],
                         cwd=ROOT,
                         env=self.env(),
