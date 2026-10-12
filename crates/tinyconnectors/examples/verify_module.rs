@@ -226,11 +226,11 @@ async fn verify_connector_operations(
 ) -> Result<(), Box<dyn std::error::Error>> {
     use tinyconnectors_bus::{
         ComposioAuthorizeRequest, ComposioConfigureRequest, ComposioCreateTriggerRequest,
-        ComposioDeleteConnectionRequest, ComposioDisableTriggerRequest, ComposioEnableTriggerRequest,
-        ComposioExecuteRequest, ComposioGetUserScopesRequest, ComposioListAvailableTriggersRequest,
-        ComposioListGithubReposRequest, ComposioListToolsRequest, ComposioListTriggersRequest,
-        ComposioSetUserScopesRequest, ComposioUserProfileRequest, ComposioUserScopes,
-        names::methods,
+        ComposioDeleteConnectionRequest, ComposioDisableTriggerRequest,
+        ComposioEnableTriggerRequest, ComposioExecuteRequest, ComposioGetUserScopesRequest,
+        ComposioListAvailableTriggersRequest, ComposioListGithubReposRequest,
+        ComposioListToolsRequest, ComposioListTriggersRequest, ComposioSetUserScopesRequest,
+        ComposioUserProfileRequest, ComposioUserScopes, names::methods,
     };
 
     let client = Connection::connect(bus.connect().await?).await?;
@@ -312,7 +312,9 @@ async fn verify_connector_operations(
         )
         .await?;
     if scopes.scopes.write || persisted.scopes.write {
-        return Err(io::Error::other("user scope preference was not enforced in module state").into());
+        return Err(
+            io::Error::other("user scope preference was not enforced in module state").into(),
+        );
     }
     let execution_error = proxy
         .call::<tinyconnectors_bus::ComposioExecuteResponse>(
@@ -350,7 +352,9 @@ async fn verify_connector_operations(
         )
         .await?;
     if !executed.successful || executed.data["sent"] != true {
-        return Err(io::Error::other("Execute result was not returned from the mock backend").into());
+        return Err(
+            io::Error::other("Execute result was not returned from the mock backend").into(),
+        );
     }
 
     let profile: tinyconnectors_bus::ComposioUserProfile = proxy
@@ -379,8 +383,16 @@ async fn verify_connector_operations(
             },),
         )
         .await?;
-    if repos.connection_id != "conn_1" || repos.repositories.first().map(|repo| repo.full_name.as_str()) != Some("tinyhumans/example") {
-        return Err(io::Error::other("GitHub repository listing did not decode the fixture").into());
+    if repos.connection_id != "conn_1"
+        || repos
+            .repositories
+            .first()
+            .map(|repo| repo.full_name.as_str())
+            != Some("tinyhumans/example")
+    {
+        return Err(
+            io::Error::other("GitHub repository listing did not decode the fixture").into(),
+        );
     }
 
     let available: tinyconnectors_bus::ComposioAvailableTriggersResponse = proxy
@@ -392,11 +404,21 @@ async fn verify_connector_operations(
             },),
         )
         .await?;
-    if available.triggers.first().map(|trigger| trigger.slug.as_str()) != Some("GMAIL_NEW_MESSAGE") {
-        return Err(io::Error::other("available trigger listing did not decode the fixture").into());
+    if available
+        .triggers
+        .first()
+        .map(|trigger| trigger.slug.as_str())
+        != Some("GMAIL_NEW_MESSAGE")
+    {
+        return Err(
+            io::Error::other("available trigger listing did not decode the fixture").into(),
+        );
     }
     let active: tinyconnectors_bus::ComposioActiveTriggersResponse = proxy
-        .call(methods::LIST_TRIGGERS, (ComposioListTriggersRequest { toolkit: None },))
+        .call(
+            methods::LIST_TRIGGERS,
+            (ComposioListTriggersRequest { toolkit: None },),
+        )
         .await?;
     if active.triggers.first().map(|trigger| trigger.id.as_str()) != Some("trigger_1") {
         return Err(io::Error::other("active trigger listing did not decode the fixture").into());
