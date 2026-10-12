@@ -72,6 +72,7 @@ class ScriptContractTests(unittest.TestCase):
             env=env,
             text=True,
             capture_output=True,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 29, result.stderr)
         calls_made = [json.loads(line) for line in calls.read_text().splitlines()]
@@ -105,6 +106,7 @@ class ScriptContractTests(unittest.TestCase):
                     cwd=ROOT,
                     text=True,
                     capture_output=True,
+                    timeout=15,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertEqual(Path(result.stdout.strip()), bash)
@@ -147,21 +149,33 @@ class ScriptContractTests(unittest.TestCase):
             ),
             text=True,
             capture_output=True,
+            timeout=30,
         )
-        diagnostic = subprocess.run(
-            [
-                shutil.which("pwsh"), "-NoProfile", "-Command",
-                '"bash source: $((Get-Command bash).Source)`nPATH: $env:PATH"',
-            ],
-            cwd=ROOT,
-            env=self.env(),
-            text=True,
-            capture_output=True,
-        )
+        diagnostic = ""
+        if result.returncode != 2:
+            try:
+                details = subprocess.run(
+                    [
+                        shutil.which("pwsh"), "-NoProfile", "-Command",
+                        '$git=(Get-Command git).Source; '
+                        '$bash=& ./scripts/resolve-git-bash.ps1 -GitPath $git; '
+                        '"git source: $git`nresolved Git Bash: $bash"; '
+                        '& $bash --version; "Git Bash launch exit: $LASTEXITCODE"; '
+                        '"PATH bash: $((Get-Command bash -ErrorAction SilentlyContinue).Source)`nPATH: $env:PATH"',
+                    ],
+                    cwd=ROOT,
+                    env=self.env(),
+                    text=True,
+                    capture_output=True,
+                    timeout=15,
+                )
+                diagnostic = f"diagnostic stdout: {details.stdout}\ndiagnostic stderr: {details.stderr}"
+            except subprocess.TimeoutExpired:
+                diagnostic = "diagnostic timed out while probing Git Bash"
         self.assertEqual(
             result.returncode,
             2,
-            f"stdout: {result.stdout}\nstderr: {result.stderr}\n{diagnostic.stdout}",
+            f"stdout: {result.stdout}\nstderr: {result.stderr}\n{diagnostic}",
         )
         self.assertIn("unsupported module build image", result.stderr)
         self.assertIn(image, result.stderr, "PowerShell did not preserve the image argument")
@@ -197,6 +211,7 @@ class ScriptContractTests(unittest.TestCase):
             env=env,
             text=True,
             capture_output=True,
+            timeout=30,
         )
         self.assertEqual(result.returncode, 37, result.stderr)
         self.assertEqual(
