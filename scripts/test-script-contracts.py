@@ -179,6 +179,41 @@ class ScriptContractTests(unittest.TestCase):
                     None,
                 )
                 if selected_bash:
+                    probe_script = self.root / "minimal-bash-script.sh"
+                    probe_script.write_text("printf 'minimal script ran\\n'\n")
+                    script_probes = (
+                        ("minimal absolute script", [selected_bash, str(probe_script)]),
+                        (
+                            "minimal relative script",
+                            [selected_bash, os.path.relpath(probe_script, ROOT)],
+                        ),
+                        ("distro syntax check", [selected_bash, "-n", "scripts/test-distro.sh"]),
+                        ("distro without args", [selected_bash, "scripts/test-distro.sh"]),
+                        (
+                            "distro trace with unsupported image",
+                            [selected_bash, "-x", "scripts/test-distro.sh", "fedora:latest"],
+                        ),
+                        (
+                            "stderr and exit probe",
+                            [selected_bash, "-c", "echo sentinel >&2; exit 2"],
+                        ),
+                    )
+                    for label, command in script_probes:
+                        try:
+                            script_result = subprocess.run(
+                                command,
+                                cwd=ROOT,
+                                env=self.env(),
+                                text=True,
+                                capture_output=True,
+                                timeout=10,
+                            )
+                            diagnostic_parts.append(
+                                f"{label}: exit={script_result.returncode}; "
+                                f"stdout={script_result.stdout!r}; stderr={script_result.stderr!r}"
+                            )
+                        except subprocess.TimeoutExpired:
+                            diagnostic_parts.append(f"{label}: timed out")
                     for label, environment in (
                         ("fixture PATH", self.env()),
                         ("PATH without fixture", dict(
@@ -240,6 +275,35 @@ class ScriptContractTests(unittest.TestCase):
                                 diagnostic_parts.append(
                                     f"Python→Bash {label} image={candidate_image!r}: timed out"
                                 )
+                    source_command = 'source "$1" "${@:2}"'
+                    for candidate_image in ("fedora:latest", image):
+                        source_args = [
+                            selected_bash,
+                            "-c", source_command, "tinyconnectors-distro",
+                            "scripts/test-distro.sh", candidate_image,
+                            "--crate", "tinyconnectors",
+                            "--version", VERSION,
+                            "--target", "x86_64-unknown-linux-gnu",
+                            "--host", "fedora-43-x86_64",
+                            "--extra-files-json", "[]",
+                            "--output-dir", f"target/script-contract-{os.getpid()}",
+                        ]
+                        try:
+                            sourced_wrapper = subprocess.run(
+                                source_args,
+                                cwd=ROOT,
+                                env=self.env(),
+                                text=True,
+                                capture_output=True,
+                                timeout=10,
+                            )
+                            diagnostic_parts.append(
+                                f"Python→Bash -c source image={candidate_image!r}: "
+                                f"exit={sourced_wrapper.returncode}; stdout={sourced_wrapper.stdout!r}; "
+                                f"stderr={sourced_wrapper.stderr!r}"
+                            )
+                        except subprocess.TimeoutExpired:
+                            diagnostic_parts.append(f"Python→Bash -c source image={candidate_image!r}: timed out")
                     through_pwsh = subprocess.run(
                         [
                             shutil.which("pwsh"), "-NoProfile", "-Command",
@@ -247,6 +311,9 @@ class ScriptContractTests(unittest.TestCase):
                             '$bash=& ./scripts/resolve-git-bash.ps1 -GitPath $git; '
                             '& $bash --version; "version exit=$LASTEXITCODE"; '
                             '& $bash -c "exit 2"; "exit-code probe=$LASTEXITCODE"; '
+                            '& $bash -c "echo sentinel >&2; exit 2"; "stderr probe=$LASTEXITCODE"; '
+                            '& $bash -n scripts/test-distro.sh; "syntax probe=$LASTEXITCODE"; '
+                            '& $bash -x scripts/test-distro.sh fedora:latest; "trace probe=$LASTEXITCODE"; '
                             '$script="scripts/test-distro.sh"; '
                             '$wrapperArgs=@($script,"fedora:latest","--crate","tinyconnectors",'
                             '"--version","0.14.2","--target","x86_64-unknown-linux-gnu",'
@@ -259,7 +326,15 @@ class ScriptContractTests(unittest.TestCase):
                             '$wrapperArgs[1]="fedora:latest"; & $bash @wrapperArgs; '
                             '"absolute path unspaced image exit=$LASTEXITCODE"; '
                             '$wrapperArgs[1]="fedora image:latest"; & $bash @wrapperArgs; '
-                            '"absolute path spaced image exit=$LASTEXITCODE"',
+                            '"absolute path spaced image exit=$LASTEXITCODE"; '
+                            '$sourceCommand=''source "$1" "${@:2}"''; '
+                            '$sourceArgs=@("tinyconnectors-distro","scripts/test-distro.sh",'
+                            '"fedora:latest","--crate","tinyconnectors","--version","0.14.2",'
+                            '"--target","x86_64-unknown-linux-gnu","--host","fedora-43-x86_64",'
+                            '"--extra-files-json","[]","--output-dir","target/script-contract-probe"); '
+                            '& $bash -c $sourceCommand @sourceArgs; "source unspaced image exit=$LASTEXITCODE"; '
+                            '$sourceArgs[2]="fedora image:latest"; & $bash -c $sourceCommand @sourceArgs; '
+                            '"source spaced image exit=$LASTEXITCODE"',
                         ],
                         cwd=ROOT,
                         env=self.env(),
