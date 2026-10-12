@@ -303,6 +303,7 @@ async fn verify_catalog_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn st
     if listed.tools.first().map(|tool| tool.function.name.as_str()) != Some("GMAIL_SEND_EMAIL") {
         return Err(io::Error::other("mock backend tool listing was not returned").into());
     }
+    Ok(())
 }
 
 async fn verify_scope_and_execute(
@@ -391,6 +392,7 @@ async fn verify_scope_and_execute(
     if !filtered.successful {
         return Err(io::Error::other("FilterResponse did not preserve the fixture").into());
     }
+    Ok(())
 }
 
 async fn verify_profile_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
@@ -431,6 +433,7 @@ async fn verify_profile_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn st
             io::Error::other("GitHub repository listing did not decode the fixture").into(),
         );
     }
+    Ok(())
 }
 
 async fn verify_trigger_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
@@ -511,6 +514,7 @@ async fn verify_trigger_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn st
     if !deleted.deleted {
         return Err(io::Error::other("connection deletion was not acknowledged").into());
     }
+    Ok(())
 }
 
 async fn verify_direct_and_routed_members(
@@ -579,6 +583,7 @@ async fn verify_direct_and_routed_members(
     ) {
         return Err(io::Error::other("confidential routed read failed").into());
     }
+    Ok(())
 }
 
 async fn verify_archive_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
@@ -655,6 +660,7 @@ async fn verify_archive_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn st
     {
         return Err(io::Error::other("closed archive lease remained usable").into());
     }
+    Ok(())
 }
 
 fn verify_mock_requests(requests: &RequestLog) -> Result<(), Box<dyn std::error::Error>> {
