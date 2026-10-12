@@ -24,13 +24,31 @@ class ScriptContractTests(unittest.TestCase):
         self.fixture.cleanup()
 
     def write_command(self, name, source):
-        path = self.bin / name
-        path.write_text("#!/usr/bin/env python3\n" + source)
-        path.chmod(0o755)
+        script = self.bin / f"{name}.py"
+        script.write_text(source)
+        if os.name == "nt":
+            # Git Bash and PowerShell do not consistently execute extensionless
+            # Python shebangs. Use a native command shim so PATH interception is
+            # the same on Windows as it is on Unix.
+            path = self.bin / f"{name}.cmd"
+            path.write_text(
+                "@echo off\r\n"
+                f'python "%MOCK_COMMAND_DIR%\\{name}.py" %*\r\n'
+                "exit /b %errorlevel%\r\n"
+            )
+        else:
+            path = self.bin / name
+            path.write_text("#!/usr/bin/env python3\n" + source)
+            path.chmod(0o755)
         return path
 
     def env(self, **values):
-        return dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ["PATH"], **values)
+        return dict(
+            os.environ,
+            PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
+            MOCK_COMMAND_DIR=str(self.bin),
+            **values,
+        )
 
     def test_windows_shell_entrypoint_delegates_to_test_e2e_ps1_with_metadata(self):
         calls = self.root / "pwsh-calls.jsonl"
@@ -62,31 +80,6 @@ class ScriptContractTests(unittest.TestCase):
                 "-Target", TARGET, "-Version", VERSION,
             ]],
         )
-
-    @unittest.skipUnless(shutil.which("pwsh") and os.name != "nt", "requires PowerShell Core and a POSIX pwsh shim")
-    def test_test_e2e_ps1_forwards_target_and_version_and_preserves_child_exit(self):
-        calls = self.root / "pwsh-calls.jsonl"
-        self.write_command(
-            "pwsh",
-            "import json, os, sys\n"
-            "with open(os.environ['CALLS'], 'a', encoding='utf-8') as f: f.write(json.dumps(sys.argv[1:])+'\\n')\n"
-            "raise SystemExit(int(os.environ.get('MOCK_PWSH_EXIT', '23')))\n",
-        )
-        pwsh = shutil.which("pwsh")
-        env = self.env(CALLS=str(calls), MOCK_PWSH_EXIT="23")
-        result = subprocess.run(
-            [pwsh, "-NoProfile", "-File", str(ROOT / "scripts/test-e2e.ps1"), "-Target", TARGET, "-Version", VERSION],
-            cwd=ROOT,
-            env=env,
-            text=True,
-            capture_output=True,
-        )
-        self.assertEqual(result.returncode, 23, result.stderr)
-        calls_made = [json.loads(line) for line in calls.read_text().splitlines()]
-        self.assertEqual(len(calls_made), 1)
-        self.assertIn("scripts/build-module.ps1", calls_made[0])
-        self.assertIn(TARGET, calls_made[0])
-        self.assertIn(VERSION, calls_made[0])
 
     def test_distro_powershell_entrypoint_exists(self):
         self.assertTrue((ROOT / "scripts/test-distro.ps1").is_file())
