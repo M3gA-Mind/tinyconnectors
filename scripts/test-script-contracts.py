@@ -19,6 +19,13 @@ class ScriptContractTests(unittest.TestCase):
         self.root = Path(self.fixture.name)
         self.bin = self.root / "bin"
         self.bin.mkdir()
+        self.bash_env = self.root / "bash-env.sh"
+        self.bash_env.write_text(
+            'rustc() { python3 "$MOCK_COMMAND_DIR/rustc.py" "$@"; }\n'
+            'cargo() { python3 "$MOCK_COMMAND_DIR/cargo.py" "$@"; }\n'
+            'pwsh() { python3 "$MOCK_COMMAND_DIR/pwsh.py" "$@"; }\n'
+            'docker() { python3 "$MOCK_COMMAND_DIR/docker.py" "$@"; }\n'
+        )
 
     def tearDown(self):
         self.fixture.cleanup()
@@ -26,27 +33,22 @@ class ScriptContractTests(unittest.TestCase):
     def write_command(self, name, source):
         script = self.bin / f"{name}.py"
         script.write_text(source)
-        if os.name == "nt":
-            # Git Bash and PowerShell do not consistently execute extensionless
-            # Python shebangs. Use a native command shim so PATH interception is
-            # the same on Windows as it is on Unix.
-            path = self.bin / f"{name}.cmd"
-            path.write_text(
-                "@echo off\r\n"
-                f'python "%MOCK_COMMAND_DIR%\\{name}.py" %*\r\n'
-                "exit /b %errorlevel%\r\n"
-            )
-        else:
-            path = self.bin / name
-            path.write_text("#!/usr/bin/env python3\n" + source)
-            path.chmod(0o755)
-        return path
+        return script
 
     def env(self, **values):
+        bash_env = str(self.bash_env)
+        if os.name == "nt":
+            bash_env = subprocess.run(
+                ["bash", "-c", 'cygpath -u "$1"', "cygpath", bash_env],
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout.strip()
         return dict(
             os.environ,
             PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
             MOCK_COMMAND_DIR=str(self.bin),
+            BASH_ENV=bash_env,
             **values,
         )
 
