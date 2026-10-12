@@ -207,6 +207,7 @@ class ScriptContractTests(unittest.TestCase):
                                 diagnostic_parts.append(f"direct {args} with {label}: timed out")
                     wrapper_path = str(ROOT / "scripts/test-distro.sh")
                     for label, candidate_path in (
+                        ("repository-relative path", "scripts/test-distro.sh"),
                         ("Windows separators", wrapper_path),
                         ("forward slashes", wrapper_path.replace("\\", "/")),
                     ):
@@ -246,7 +247,7 @@ class ScriptContractTests(unittest.TestCase):
                             '$bash=& ./scripts/resolve-git-bash.ps1 -GitPath $git; '
                             '& $bash --version; "version exit=$LASTEXITCODE"; '
                             '& $bash -c "exit 2"; "exit-code probe=$LASTEXITCODE"; '
-                            '$script=(Resolve-Path "scripts/test-distro.sh").Path; '
+                            '$script="scripts/test-distro.sh"; '
                             '$wrapperArgs=@($script,"fedora:latest","--crate","tinyconnectors",'
                             '"--version","0.14.2","--target","x86_64-unknown-linux-gnu",'
                             '"--host","fedora-43-x86_64","--extra-files-json","[]",'
@@ -254,11 +255,11 @@ class ScriptContractTests(unittest.TestCase):
                             '& $bash @wrapperArgs; "wrapper unspaced image exit=$LASTEXITCODE"; '
                             '$wrapperArgs[1]="fedora image:latest"; & $bash @wrapperArgs; '
                             '"wrapper spaced image exit=$LASTEXITCODE"; '
-                            '$wrapperArgs[0]=$script.Replace("\\","/"); '
+                            '$wrapperArgs[0]=(Resolve-Path $script).Path; '
                             '$wrapperArgs[1]="fedora:latest"; & $bash @wrapperArgs; '
-                            '"forward path unspaced image exit=$LASTEXITCODE"; '
+                            '"absolute path unspaced image exit=$LASTEXITCODE"; '
                             '$wrapperArgs[1]="fedora image:latest"; & $bash @wrapperArgs; '
-                            '"forward path spaced image exit=$LASTEXITCODE"',
+                            '"absolute path spaced image exit=$LASTEXITCODE"',
                         ],
                         cwd=ROOT,
                         env=self.env(),
@@ -294,7 +295,7 @@ class ScriptContractTests(unittest.TestCase):
             "open(os.environ['RUNNER_CALLS'], 'w', encoding='utf-8').write(json.dumps(sys.argv[1:]))\n"
             "raise SystemExit(37)\n",
         )
-        wrapper = str(ROOT / "scripts/test-distro.sh")
+        wrapper = "scripts/test-distro.sh"
         image = "fedora:43@sha256:a651ddf48ea28a06ed4e1e6519f51c9f47e7a5a138722ade87369b8fbb7e5b42"
         output_dir = f"target/script-contract-{os.getpid()}"
         arguments = [
