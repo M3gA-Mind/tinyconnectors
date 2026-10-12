@@ -275,6 +275,31 @@ class ScriptContractTests(unittest.TestCase):
                                 diagnostic_parts.append(
                                     f"Python→Bash {label} image={candidate_image!r}: timed out"
                                 )
+                    progressive_args = [
+                        "scripts/test-distro.sh", "fedora:latest",
+                        "--crate", "tinyconnectors",
+                        "--version", VERSION,
+                        "--target", "x86_64-unknown-linux-gnu",
+                        "--host", "fedora-43-x86_64",
+                        "--extra-files-json", "[]",
+                        "--output-dir", f"target/script-contract-{os.getpid()}",
+                    ]
+                    for count in range(2, len(progressive_args) + 1, 2):
+                        try:
+                            progressive = subprocess.run(
+                                [selected_bash, *progressive_args[:count]],
+                                cwd=ROOT,
+                                env=self.env(),
+                                text=True,
+                                capture_output=True,
+                                timeout=10,
+                            )
+                            diagnostic_parts.append(
+                                f"Python→Bash first {count} argv entries: exit={progressive.returncode}; "
+                                f"stdout={progressive.stdout!r}; stderr={progressive.stderr!r}"
+                            )
+                        except subprocess.TimeoutExpired:
+                            diagnostic_parts.append(f"Python→Bash first {count} argv entries: timed out")
                     source_command = 'source "$1" "${@:2}"'
                     for candidate_image in ("fedora:latest", image):
                         source_args = [
@@ -334,7 +359,14 @@ class ScriptContractTests(unittest.TestCase):
                             '"--extra-files-json","[]","--output-dir","target/script-contract-probe"); '
                             '& $bash -c $sourceCommand @sourceArgs; "source unspaced image exit=$LASTEXITCODE"; '
                             '$sourceArgs[2]="fedora image:latest"; & $bash -c $sourceCommand @sourceArgs; '
-                            '"source spaced image exit=$LASTEXITCODE"',
+                            '"source spaced image exit=$LASTEXITCODE"; '
+                            '$progressive=@("scripts/test-distro.sh","fedora:latest",'
+                            '"--crate","tinyconnectors","--version","0.14.2",'
+                            '"--target","x86_64-unknown-linux-gnu","--host","fedora-43-x86_64",'
+                            '"--extra-files-json","[]","--output-dir","target/script-contract-probe"); '
+                            'for($count=2;$count -le $progressive.Count;$count+=2){'
+                            '$prefix=$progressive[0..($count-1)]; & $bash @prefix; '
+                            '"progressive argv=$count exit=$LASTEXITCODE"}',
                         ],
                         cwd=ROOT,
                         env=self.env(),
