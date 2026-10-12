@@ -87,6 +87,29 @@ class ScriptContractTests(unittest.TestCase):
         self.assertTrue((ROOT / "scripts/test-distro.ps1").is_file())
 
     @unittest.skipUnless(shutil.which("pwsh"), "requires PowerShell Core")
+    def test_git_bash_resolver_finds_install_root_from_supported_git_locations(self):
+        resolver = ROOT / "scripts/resolve-git-bash.ps1"
+        for git_location in ("cmd/git.exe", "bin/git.exe", "mingw64/bin/git.exe"):
+            with self.subTest(git_location=git_location):
+                install = self.root / git_location.replace("/", "-")
+                git = install / git_location
+                git.parent.mkdir(parents=True)
+                git.touch()
+                bash = install / "bin/bash.exe"
+                bash.parent.mkdir(parents=True, exist_ok=True)
+                bash.touch()
+                (install / "cmd/git.exe").parent.mkdir(parents=True, exist_ok=True)
+                (install / "cmd/git.exe").touch()
+                result = subprocess.run(
+                    [shutil.which("pwsh"), "-NoProfile", "-File", str(resolver), "-GitPath", str(git)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(Path(result.stdout.strip()), bash)
+
+    @unittest.skipUnless(shutil.which("pwsh"), "requires PowerShell Core")
     def test_distro_powershell_rejects_unpinned_image_before_docker(self):
         docker_called = self.root / "docker-called"
         if os.name == "nt":
