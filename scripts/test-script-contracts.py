@@ -36,18 +36,11 @@ class ScriptContractTests(unittest.TestCase):
         return script
 
     def env(self, **values):
-        bash_env = str(self.bash_env)
-        if os.name == "nt":
-            bash_env = subprocess.run(
-                ["bash", "-c", 'cygpath -u "$1"', "cygpath", bash_env],
-                check=True,
-                text=True,
-                capture_output=True,
-            ).stdout.strip()
+        bash_env = self.bash_env.relative_to(ROOT).as_posix()
         return dict(
             os.environ,
             PATH=str(self.bin) + os.pathsep + os.environ["PATH"],
-            MOCK_COMMAND_DIR=str(self.bin),
+            MOCK_COMMAND_DIR=self.bin.relative_to(ROOT).as_posix(),
             BASH_ENV=bash_env,
             **values,
         )
