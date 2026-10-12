@@ -35,7 +35,9 @@ class PackageTests(unittest.TestCase):
                 "Path(os.environ['RECORDED_MODULE_PATH']+'.exists').write_text(str(Path(module).is_file()))\n")
             cargo.chmod(0o755)
             env = dict(os.environ, HOME=str(home), PATH=str(bindir)+os.pathsep+os.environ["PATH"],
-                RECORDED_MODULE_PATH=str(fixture/"loaded-module-path"))
+                RECORDED_MODULE_PATH=str(fixture/"loaded-module-path"),
+                TINYJUICE_TEST_MODULE=str(fixture/"inherited-module"),
+                TINYCHANNELS_MODULE_ARTIFACT=str(fixture/"inherited-channels-module"))
             env.pop("CARGO_TARGET_DIR", None)
             result = subprocess.run(["bash", str(ROOT/"scripts/verify-module.sh"),
                 "--archive", str(archive)], cwd=ROOT, env=env, text=True, capture_output=True)
