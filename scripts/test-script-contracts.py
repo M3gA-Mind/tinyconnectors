@@ -300,6 +300,34 @@ class ScriptContractTests(unittest.TestCase):
                             )
                         except subprocess.TimeoutExpired:
                             diagnostic_parts.append(f"Python→Bash first {count} argv entries: timed out")
+                    for label, candidate_args, extra_env in (
+                        ("full argv with MSYS noglob", wrapper_args, {"MSYS": "noglob"}),
+                        (
+                            "full argv with nonempty extra files",
+                            [*wrapper_args[:-4], '["docs/README.md"]', *wrapper_args[-2:]],
+                            {},
+                        ),
+                        (
+                            "full argv without extra-files option",
+                            [*wrapper_args[:10], *wrapper_args[-2:]],
+                            {},
+                        ),
+                    ):
+                        try:
+                            probe = subprocess.run(
+                                [selected_bash, *candidate_args],
+                                cwd=ROOT,
+                                env=self.env(**extra_env),
+                                text=True,
+                                capture_output=True,
+                                timeout=10,
+                            )
+                            diagnostic_parts.append(
+                                f"Python→Bash {label}: exit={probe.returncode}; "
+                                f"stdout={probe.stdout!r}; stderr={probe.stderr!r}"
+                            )
+                        except subprocess.TimeoutExpired:
+                            diagnostic_parts.append(f"Python→Bash {label}: timed out")
                     source_command = 'source "$1" "${@:2}"'
                     for candidate_image in ("fedora:latest", image):
                         source_args = [
@@ -370,7 +398,17 @@ class ScriptContractTests(unittest.TestCase):
                             '$progressive[13]="release-assets"; & $bash @progressive; '
                             '"output path release-assets exit=$LASTEXITCODE"; '
                             '$progressive[13]="target\\script-contract-probe"; & $bash @progressive; '
-                            '"output path backslashes exit=$LASTEXITCODE"',
+                            '"output path backslashes exit=$LASTEXITCODE"; '
+                            '$priorMSYS=$env:MSYS; $env:MSYS=if($priorMSYS){"$priorMSYS,noglob"}else{"noglob"}; '
+                            '& $bash @wrapperArgs; "wrapper MSYS noglob exit=$LASTEXITCODE"; '
+                            '$env:MSYS=$priorMSYS; '
+                            '$noExtra=@("scripts/test-distro.sh","fedora:latest",'
+                            '"--crate","tinyconnectors","--version","0.14.2",'
+                            '"--target","x86_64-unknown-linux-gnu","--host","fedora-43-x86_64",'
+                            '"--output-dir","target/script-contract-probe"); & $bash @noExtra; '
+                            '"wrapper without extra-files option exit=$LASTEXITCODE"; '
+                            '$wrapperArgs[11]=''["docs/README.md"]''; & $bash @wrapperArgs; '
+                            '"wrapper nonempty JSON exit=$LASTEXITCODE"',
                         ],
                         cwd=ROOT,
                         env=self.env(),
