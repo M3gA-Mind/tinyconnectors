@@ -284,6 +284,9 @@ class ScriptContractTests(unittest.TestCase):
                         "--extra-files-json", "[]",
                         "--output-dir", f"target/script-contract-{os.getpid()}",
                     ]
+                    wrapper_args = progressive_args
+                    existing_msys = os.environ.get("MSYS", "")
+                    noglob_msys = f"{existing_msys},noglob" if existing_msys else "noglob"
                     for count in range(2, len(progressive_args) + 1, 2):
                         try:
                             progressive = subprocess.run(
@@ -301,10 +304,10 @@ class ScriptContractTests(unittest.TestCase):
                         except subprocess.TimeoutExpired:
                             diagnostic_parts.append(f"Python→Bash first {count} argv entries: timed out")
                     for label, candidate_args, extra_env in (
-                        ("full argv with MSYS noglob", wrapper_args, {"MSYS": "noglob"}),
+                        ("full argv with MSYS noglob", wrapper_args, {"MSYS": noglob_msys}),
                         (
                             "full argv with nonempty extra files",
-                            [*wrapper_args[:-4], '["docs/README.md"]', *wrapper_args[-2:]],
+                            [*wrapper_args[:11], '["docs/README.md"]', *wrapper_args[-2:]],
                             {},
                         ),
                         (
