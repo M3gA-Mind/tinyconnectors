@@ -104,7 +104,21 @@ class ScriptContractTests(unittest.TestCase):
             text=True,
             capture_output=True,
         )
-        self.assertEqual(result.returncode, 2, result.stdout)
+        diagnostic = subprocess.run(
+            [
+                shutil.which("pwsh"), "-NoProfile", "-Command",
+                '"bash source: $((Get-Command bash).Source)`nPATH: $env:PATH"',
+            ],
+            cwd=ROOT,
+            env=self.env(),
+            text=True,
+            capture_output=True,
+        )
+        self.assertEqual(
+            result.returncode,
+            2,
+            f"stdout: {result.stdout}\nstderr: {result.stderr}\n{diagnostic.stdout}",
+        )
         self.assertIn("unsupported module build image", result.stderr)
 
     @unittest.skipUnless(shutil.which("pwsh") and os.name != "nt", "requires POSIX PowerShell Core")
