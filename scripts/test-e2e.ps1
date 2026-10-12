@@ -1,18 +1,19 @@
+param(
+    [Parameter(Mandatory = $true)][string]$Target,
+    [Parameter(Mandatory = $true)][string]$Version
+)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $root
 
-$target = (& rustc -vV | Select-String '^host: ').ToString().Substring(6)
-if ($LASTEXITCODE -ne 0) { throw 'Could not determine the Rust host target' }
-$metadata = cargo metadata --manifest-path Cargo.toml --format-version 1 --no-deps | ConvertFrom-Json
-if ($LASTEXITCODE -ne 0) { throw 'Could not read Cargo workspace metadata' }
-$version = @($metadata.packages | Where-Object name -eq 'tinyconnectors' | Select-Object -ExpandProperty version)
-if ($version.Count -ne 1) { throw 'Cargo metadata must contain exactly one tinyconnectors package' }
+if ($Target -notmatch '^[A-Za-z0-9_-]+$') { throw "Invalid Rust target: $Target" }
+if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$') { throw "Invalid module version: $Version" }
 
-$archivePath = Join-Path 'target/module-e2e' "tinyconnectors-$($version[0])-ci.zip"
+$archivePath = Join-Path 'target/module-e2e' "tinyconnectors-$Version-ci.zip"
 & pwsh -NoProfile -File scripts/build-module.ps1 `
-    -Crate tinyconnectors -Version $version[0] -Target $target -HostKey ci `
+    -Crate tinyconnectors -Version $Version -Target $Target -HostKey ci `
     -OutputDir target/module-e2e
-if ($LASTEXITCODE -ne 0) { throw 'Failed to build the module E2E archive' }
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 & pwsh -NoProfile -File scripts/verify-module.ps1 -Archive $archivePath
-if ($LASTEXITCODE -ne 0) { throw 'Loaded module E2E verification failed' }
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+exit 0
