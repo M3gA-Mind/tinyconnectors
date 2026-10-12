@@ -31,9 +31,14 @@ class ScriptContractTests(unittest.TestCase):
         self.fixture.cleanup()
 
     def write_command(self, name, source):
-        script = self.bin / f"{name}.py"
-        script.write_text(source)
-        return script
+        if os.name == "nt":
+            script = self.bin / f"{name}.py"
+            script.write_text(source)
+            return script
+        command = self.bin / name
+        command.write_text("#!/usr/bin/env python3\n" + source)
+        command.chmod(0o755)
+        return command
 
     def env(self, **values):
         environment = dict(
@@ -81,32 +86,30 @@ class ScriptContractTests(unittest.TestCase):
     def test_distro_powershell_entrypoint_exists(self):
         self.assertTrue((ROOT / "scripts/test-distro.ps1").is_file())
 
-    @unittest.skipUnless(shutil.which("pwsh"), "requires PowerShell Core")
+    @unittest.skipUnless(shutil.which("pwsh") and os.name != "nt", "requires POSIX PowerShell Core")
     def test_distro_powershell_delegates_arguments_and_exit_code_to_pinned_wrapper(self):
         runner_calls = self.root / "runner-args.json"
-        bash_mock = self.root / "bash-mock.ps1"
-        bash_mock.write_text(
-            "function bash {\n"
-            "  [System.IO.File]::WriteAllText($env:RUNNER_CALLS, "
-            "(ConvertTo-Json -InputObject @($args) -Compress))\n"
-            "  Set-Variable -Name LASTEXITCODE -Scope 1 -Value 37\n"
-            "}\n"
-            ". $env:TEST_DISTRO_SCRIPT -Image $env:IMAGE -Crate tinyconnectors "
-            "-Version $env:MODULE_VERSION -Target x86_64-unknown-linux-gnu "
-            "-HostKey fedora-43-x86_64 -ExtraFilesJson '[]' -OutputDir $env:OUTPUT_DIR\n"
+        self.write_command(
+            "bash",
+            "import json, os, sys\n"
+            "open(os.environ['RUNNER_CALLS'], 'w', encoding='utf-8').write(json.dumps(sys.argv[1:]))\n"
+            "raise SystemExit(37)\n",
         )
         wrapper = str(ROOT / "scripts/test-distro.sh")
         image = "fedora:43@sha256:a651ddf48ea28a06ed4e1e6519f51c9f47e7a5a138722ade87369b8fbb7e5b42"
         output_dir = f"target/script-contract-{os.getpid()}"
-        env = self.env(
-            RUNNER_CALLS=str(runner_calls),
-            TEST_DISTRO_SCRIPT=str(ROOT / "scripts/test-distro.ps1"),
-            IMAGE=image,
-            MODULE_VERSION=VERSION,
-            OUTPUT_DIR=output_dir,
-        )
+        arguments = [
+            "-Image", image,
+            "-Crate", "tinyconnectors",
+            "-Version", VERSION,
+            "-Target", "x86_64-unknown-linux-gnu",
+            "-HostKey", "fedora-43-x86_64",
+            "-ExtraFilesJson", "[]",
+            "-OutputDir", output_dir,
+        ]
+        env = self.env(RUNNER_CALLS=str(runner_calls))
         result = subprocess.run(
-            [shutil.which("pwsh"), "-NoProfile", "-File", str(bash_mock)],
+            [shutil.which("pwsh"), "-NoProfile", "-File", str(ROOT / "scripts/test-distro.ps1"), *arguments],
             cwd=ROOT,
             env=env,
             text=True,
