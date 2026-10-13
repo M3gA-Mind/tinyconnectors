@@ -31,6 +31,7 @@
 //! distinguishing detail — the failing path, or the user-facing rate-limit
 //! guidance — because that is all a host will have to act on.
 
+mod contracts;
 mod restricted;
 mod routed;
 
@@ -339,6 +340,8 @@ struct ConnectorService {
     actions: Arc<ClientActions>,
     /// Where the per-toolkit scope preferences are persisted.
     prefs: Arc<dyn PrefsStore>,
+    /// Tool contracts and probe results remembered between calls.
+    contract_caches: Arc<crate::contracts::ContractCaches>,
 }
 
 impl ConnectorService {
@@ -484,6 +487,8 @@ impl ConnectorService {
             .client
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = client;
+        // A catalog fetched for the old tenant must not answer for the new one.
+        self.contract_caches.clear();
         Ok(ComposioConfigureResponse { route: name })
     }
 
@@ -666,37 +671,8 @@ impl ConnectorService {
         &self,
         request: ComposioExecuteRequest,
     ) -> TinyBusResult<ComposioExecuteResponse> {
-        // Enforced here rather than trusted from the caller: a preference a
-        // caller could opt out of is not a restriction, it is a suggestion.
-        if !self.permits(&request.tool).await? {
-            return Err(tinybus::Error::failed(format!(
-                "`{}` is not permitted: the scope preference for this toolkit does not allow it",
-                request.tool
-            )));
-        }
-        self.client()?
-            .execute(
-                &request.tool,
-                request.arguments,
-                request.connection_id.as_deref(),
-            )
+        self.execute_checked(&request.tool, request.arguments, request.connection_id.as_deref())
             .await
-            // Classified, like a refusal already is. A provider that answers
-            // "insufficient scope" and a backend that times out mean different
-            // things to whoever is looking at the screen — one is "reconnect
-            // your account", the other is "try again" — and the `[composio:
-            // error:<class>]` prefix is how a caller tells them apart.
-            //
-            // Only the `Err` path passes through here, which is transport and
-            // decode failures. A provider *refusal* arrives as a successful
-            // reply carrying `successful: false`, and its message is formatted
-            // where that is decided, so nothing is classified twice.
-            .map_err(|error| {
-                tinybus::Error::failed(crate::execute::format_provider_error(
-                    &request.tool,
-                    &error.to_string(),
-                ))
-            })
     }
 
     // The registry is in memory: there is nothing to await. `async` is the
@@ -1060,6 +1036,7 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         // persistence are better than a module that refuses to load.
         prefs: prefs_store(config_state_dir.as_deref()),
         registry: crate::providers::default_registry(),
+        contract_caches: Arc::default(),
         client,
         archive,
         archives: Arc::default(),
