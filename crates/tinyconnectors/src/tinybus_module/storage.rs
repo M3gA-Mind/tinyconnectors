@@ -2,7 +2,7 @@
 //!
 //! A cdylib has its own copy of every static in this crate, so a registry the
 //! host fills in its own process is invisible here. The module instead calls the
-//! host's `Storage` objects through its TinyBus connection
+//! host's `Storage` objects through its `TinyBus` connection
 //! (`tinystoragedrivers_busproxy::connect_storage`), the same way every other
 //! storage-using module does. The host binds the scope from the authenticated
 //! caller and enforces the grant in [`crate::state::STORAGE_NEEDS`]; nothing

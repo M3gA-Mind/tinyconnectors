@@ -91,12 +91,14 @@ use crate::triggers::TriggerArchive;
 pub(crate) enum RouteConfig {
     /// Reach Composio through the `TinyHumans` backend.
     Proxy {
-        /// Directory the module may keep state in, for the trigger archive.
-        ///
-        /// Optional: a host that never enables triggers has no reason to hand
-        /// the module a writable directory, and requiring one would make every
-        /// deployment carry a path it does not use.
+        /// Accepted for wire compatibility and ignored. The trigger archive and
+        /// preferences live in the host's storage, reached over the storage
+        /// bus; the module never writes to a directory.
         #[serde(default)]
+        #[allow(
+            dead_code,
+            reason = "parsed for wire compatibility; storage comes from the bus"
+        )]
         state_dir: Option<std::path::PathBuf>,
         /// Base URL of the connector backend, e.g. `https://api.example.com`.
         base_url: String,
@@ -116,10 +118,12 @@ pub(crate) enum RouteConfig {
     },
     /// Reach Composio directly with a user-supplied key.
     Direct {
-        /// Directory the module may keep state in. See the proxy variant —
-        /// though the direct route serves no trigger members, so this is
-        /// accepted for symmetry and goes unused.
+        /// Accepted for symmetry with the proxy variant and ignored.
         #[serde(default)]
+        #[allow(
+            dead_code,
+            reason = "parsed for wire compatibility; storage comes from the bus"
+        )]
         state_dir: Option<std::path::PathBuf>,
         /// The user's own Composio API key, sent as `x-api-key`.
         api_key: String,
@@ -207,7 +211,9 @@ impl<'de> Deserialize<'de> for ModuleConfig {
 }
 
 impl ModuleConfig {
-    /// The directory the module may keep state in, if the host named one.
+    /// The `state_dir` the host sent, which is parsed for wire compatibility and
+    /// otherwise unused: storage comes from the host's storage bus.
+    #[cfg(test)]
     fn state_dir(&self) -> Option<&std::path::Path> {
         self.route.as_ref().and_then(RouteConfig::state_dir)
     }
@@ -266,7 +272,7 @@ impl RouteConfig {
 }
 
 impl RouteConfig {
-    /// The directory the module may keep state in, if the host named one.
+    #[cfg(test)]
     fn state_dir(&self) -> Option<&std::path::Path> {
         match self {
             Self::Proxy { state_dir, .. } | Self::Direct { state_dir, .. } => state_dir.as_deref(),
