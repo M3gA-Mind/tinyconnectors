@@ -72,7 +72,7 @@ pub fn has_native_provider(toolkit: &str) -> bool {
 
 /// Static toolkit → curated catalog map.
 ///
-/// The lookup key is the lowercased prefix [`toolkit_from_slug`] returns for an
+/// The lookup key is the lowercased prefix `toolkit_from_slug` returns for an
 /// action slug — `GOOGLECALENDAR_CREATE_EVENT` → `"googlecalendar"`.
 /// Multi-segment prefixes like `MICROSOFT_TEAMS_*` return their known toolkit
 /// slug.
