@@ -128,3 +128,7 @@ impl PrefsStore for LinkedPrefsStore {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "storage_tests.rs"]
+mod tests;
