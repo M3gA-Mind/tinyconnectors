@@ -9,7 +9,10 @@ pub mod tasks;
 
 pub use profile::{ConnectedIdentity, IdentityKind, ProviderUserProfile};
 pub use scopes::{ToolScope, UserScopePref};
-pub use tasks::{GithubFetchMode, NormalizedTask, TaskContainer, TaskFetchFilter, TaskKind};
+pub use tasks::{
+    DEFAULT_TASK_FETCH_MAX, GithubFetchMode, NormalizedTask, TaskContainer, TaskFetchFilter,
+    TaskKind,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +43,51 @@ pub struct ToolkitVocabulary {
     pub native_provider: bool,
     /// Curated catalog in declaration order; absent for uncurated toolkits.
     pub actions: Option<Vec<VocabularyAction>>,
+}
+
+/// Which curated catalogs to list.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CuratedCatalogRequest {
+    /// One toolkit to list, matched case-insensitively with its known aliases.
+    /// Absent lists every curated toolkit, in canonical order.
+    #[serde(default)]
+    pub toolkit: Option<String>,
+}
+
+/// One curated action of a toolkit's catalog.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CuratedTool {
+    /// Canonical toolkit slug whose catalog holds the action.
+    pub toolkit: String,
+    /// Exact provider action slug.
+    pub slug: String,
+    /// Curated classification.
+    pub scope: ToolScope,
+}
+
+/// One toolkit whose scope-visible curated actions the caller wants.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VisibleToolsRequest {
+    /// Toolkit name, matched case-insensitively with its known aliases.
+    pub toolkit: String,
+    /// Scopes to apply. Absent applies the user's stored preference for the
+    /// toolkit, which is the default when none is stored.
+    #[serde(default)]
+    pub preference: Option<UserScopePref>,
+}
+
+/// The curated actions of a toolkit that a scope preference exposes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VisibleToolsResponse {
+    /// Canonical toolkit slug.
+    pub toolkit: String,
+    /// The preference that was applied.
+    pub preference: UserScopePref,
+    /// Whether the toolkit has a curated catalog. An uncurated toolkit lists no
+    /// tools and passes through, gated per action by its classified scope.
+    pub has_catalog: bool,
+    /// Curated actions the preference allows, in catalog order.
+    pub tools: Vec<CuratedTool>,
 }
 
 /// Compiled catalog data; independent of credentials and account state.

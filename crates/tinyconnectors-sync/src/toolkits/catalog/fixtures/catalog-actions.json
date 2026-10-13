@@ -2655,7 +2655,7 @@
       "slug": "SLACK_CREATE_CHANNEL"
     },
     {
-      "scope": "write",
+      "scope": "admin",
       "slug": "SLACK_INVITE_USERS_TO_A_SLACK_CHANNEL"
     },
     {

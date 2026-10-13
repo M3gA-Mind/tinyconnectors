@@ -1,13 +1,9 @@
-//! The curated linear catalog.
+//! Curated catalog of Linear Composio actions.
 
 use crate::scope::{CuratedTool, ToolScope};
 
-/// Actions worth offering an agent for linear.
-///
-/// Composio publishes far more than this. The long tail is edge-case
-/// administration an agent never plans for, and offering all of it makes the
-/// model's tool list worse, not better.
-pub(super) const CURATED: &[CuratedTool] = &[
+/// The curated action catalog for the `linear` toolkit.
+pub const LINEAR_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "LINEAR_LIST_LINEAR_USERS",
         scope: ToolScope::Read,

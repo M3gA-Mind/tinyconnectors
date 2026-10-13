@@ -111,6 +111,7 @@ fn service_over(transport: Arc<StubTransport>) -> ConnectorService {
         actions: Arc::new(crate::providers::ClientActions::new(Arc::clone(&client))),
         prefs: Arc::new(super::EphemeralPrefsStore::default()),
         registry: crate::providers::default_registry(),
+        contract_caches: Arc::default(),
         client,
         // No archive: these tests exercise the backend-facing members. The
         // history member's own behaviour without one is tested separately.
@@ -1185,6 +1186,7 @@ async fn a_module_loaded_without_a_route_becomes_usable_after_configure() {
         ))),
         prefs: Arc::new(super::EphemeralPrefsStore::default()),
         registry: crate::providers::default_registry(),
+        contract_caches: Arc::default(),
         client: Arc::new(std::sync::RwLock::new(None)),
         archive: None,
         archives: Arc::default(),
@@ -1260,6 +1262,7 @@ async fn a_reconfigured_route_reaches_the_action_runner_too() {
         actions: Arc::clone(&actions),
         prefs: Arc::new(super::EphemeralPrefsStore::default()),
         registry: crate::providers::default_registry(),
+        contract_caches: Arc::default(),
         client,
         archive: None,
         archives: Arc::default(),
@@ -1629,4 +1632,67 @@ async fn classic_runtime_handshake_preserves_existing_initialization_mode() {
     let mode = service.runtime_mode().await.unwrap();
     assert_eq!(mode.mode, tinyconnectors_bus::ComposioRuntimeMode::Classic);
     assert_eq!(mode.contract_version, tinyconnectors_bus::CONTRACT_VERSION);
+}
+
+#[tokio::test]
+async fn curated_catalog_is_served_without_a_route() -> tinybus::Result<()> {
+    let (_serving, proxy) = serve_via_setup(ModuleConfig::default()).await?;
+    let reply: serde_json::Value = proxy
+        .call("ListCuratedCatalog", (json!({"toolkit": "gmail"}),))
+        .await?;
+    assert_eq!(reply[0]["toolkit"], "gmail");
+    assert_eq!(reply[0]["slug"], "GMAIL_FETCH_EMAILS");
+    Ok(())
+}
+
+#[tokio::test]
+async fn visible_tools_use_the_stored_preference_unless_one_is_supplied() -> tinybus::Result<()> {
+    let (_serving, proxy) = serve_via_setup(ModuleConfig::default()).await?;
+    let slugs = |reply: &serde_json::Value| -> Vec<String> {
+        reply["tools"]
+            .as_array()
+            .map(|tools| {
+                tools
+                    .iter()
+                    .filter_map(|t| t["slug"].as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+
+    let default: serde_json::Value = proxy
+        .call("ListVisibleTools", (json!({"toolkit": "Gmail"}),))
+        .await?;
+    assert_eq!(default["toolkit"], "gmail");
+    assert_eq!(default["has_catalog"], true);
+    assert!(!slugs(&default).contains(&"GMAIL_DELETE_MESSAGE".to_owned()));
+
+    let stored: ComposioUserScopesResponse = proxy
+        .call(
+            names::methods::SET_USER_SCOPES,
+            (ComposioSetUserScopesRequest {
+                toolkit: "gmail".into(),
+                scopes: ComposioUserScopes {
+                    read: true,
+                    write: true,
+                    admin: true,
+                },
+            },),
+        )
+        .await?;
+    assert!(stored.scopes.admin);
+    let admin: serde_json::Value = proxy
+        .call("ListVisibleTools", (json!({"toolkit": "gmail"}),))
+        .await?;
+    assert!(slugs(&admin).contains(&"GMAIL_DELETE_MESSAGE".to_owned()));
+
+    let overridden: serde_json::Value = proxy
+        .call(
+            "ListVisibleTools",
+            (json!({"toolkit": "gmail", "preference": {"read": true, "write": false, "admin": false}}),),
+        )
+        .await?;
+    assert!(!slugs(&overridden).contains(&"GMAIL_DELETE_MESSAGE".to_owned()));
+    assert!(!slugs(&overridden).contains(&"GMAIL_SEND_EMAIL".to_owned()));
+    Ok(())
 }

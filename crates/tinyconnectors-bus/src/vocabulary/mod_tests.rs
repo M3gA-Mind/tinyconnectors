@@ -55,17 +55,58 @@ fn shared_provider_profile_preserves_omitted_fields_and_extras() -> serde_json::
         extras: serde_json::json!({"future": "preserved"}),
         ..Default::default()
     };
-    let wire = serde_json::json!({
+    // Older peers omit unset fields; they still decode.
+    let omitted = serde_json::json!({
         "toolkit": "gmail", "email": "alice@example.com", "extras": {"future": "preserved"}
     });
-    assert_eq!(serde_json::to_value(&profile)?, wire);
     assert_eq!(
-        serde_json::from_value::<ProviderUserProfile>(wire)?,
+        serde_json::from_value::<ProviderUserProfile>(omitted)?,
         profile
     );
+    // Encoding writes every field, matching the host's former shape.
+    let encoded = serde_json::to_value(&profile)?;
+    assert_eq!(encoded["connection_id"], serde_json::Value::Null);
+    assert_eq!(encoded["email"], "alice@example.com");
+    Ok(())
+}
+
+#[test]
+fn provider_profile_serialises_every_field_as_the_host_always_did() -> serde_json::Result<()> {
+    // Wire compatibility with the host's former `ProviderUserProfile`: unset
+    // options are written as `null`, never omitted.
     assert_eq!(
-        serde_json::to_value(ProviderUserProfile::default())?,
-        serde_json::json!({"toolkit": ""})
+        serde_json::to_string(&ProviderUserProfile::default())?,
+        r#"{"toolkit":"","connection_id":null,"display_name":null,"email":null,"username":null,"avatar_url":null,"profile_url":null,"extras":null}"#
+    );
+    Ok(())
+}
+
+#[test]
+fn normalized_task_payload_is_byte_identical_to_the_host_shape() -> serde_json::Result<()> {
+    let task = NormalizedTask {
+        external_id: "1".into(),
+        provider: "github".into(),
+        kind: TaskKind::PullRequest,
+        title: "t".into(),
+        labels: vec!["bug".into()],
+        ..Default::default()
+    };
+    assert_eq!(
+        serde_json::to_string(&task)?,
+        r#"{"externalId":"1","sourceId":"","provider":"github","kind":"pull_request","title":"t","labels":["bug"],"raw":null}"#
+    );
+    Ok(())
+}
+
+#[test]
+fn task_filter_payload_and_cap_match_the_host_shape() -> serde_json::Result<()> {
+    assert_eq!(
+        serde_json::to_string(&TaskFetchFilter::default())?,
+        r#"{"assigneeIsMe":false,"githubFetchMode":"auto","labels":[],"extra":null,"max":0}"#
+    );
+    assert_eq!(
+        TaskFetchFilter::default().effective_max(),
+        DEFAULT_TASK_FETCH_MAX
     );
     Ok(())
 }

@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use super::github_catalog::CURATED;
+use super::catalog::github::GITHUB_CURATED as CURATED;
 use super::identity::pick;
 use crate::Result;
 use crate::provider::{ConnectorProvider, ProviderContext, ProviderUserProfile};

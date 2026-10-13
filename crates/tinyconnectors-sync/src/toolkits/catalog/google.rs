@@ -1,11 +1,11 @@
 //! Curated catalogs — Google toolkits: `GoogleCalendar`, `GoogleDrive`,
 //! `GoogleDocs`, `GoogleSheets`.
 
-use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
+use crate::scope::{CuratedTool, ToolScope};
 
 // ── googlecalendar ──────────────────────────────────────────────────
 /// The curated action catalog for the `googlecalendar` toolkit.
-pub(crate) const GOOGLECALENDAR_CURATED: &[CuratedTool] = &[
+pub const GOOGLECALENDAR_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "GOOGLECALENDAR_EVENTS_LIST",
         scope: ToolScope::Read,
@@ -94,7 +94,7 @@ pub(crate) const GOOGLECALENDAR_CURATED: &[CuratedTool] = &[
 
 // ── googledrive ─────────────────────────────────────────────────────
 /// The curated action catalog for the `googledrive` toolkit.
-pub(crate) const GOOGLEDRIVE_CURATED: &[CuratedTool] = &[
+pub const GOOGLEDRIVE_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "GOOGLEDRIVE_FIND_FILE",
         scope: ToolScope::Read,
@@ -183,7 +183,7 @@ pub(crate) const GOOGLEDRIVE_CURATED: &[CuratedTool] = &[
 
 // ── googledocs ──────────────────────────────────────────────────────
 /// The curated action catalog for the `googledocs` toolkit.
-pub(crate) const GOOGLEDOCS_CURATED: &[CuratedTool] = &[
+pub const GOOGLEDOCS_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "GOOGLEDOCS_GET_DOCUMENT_BY_ID",
         scope: ToolScope::Read,
@@ -272,7 +272,7 @@ pub(crate) const GOOGLEDOCS_CURATED: &[CuratedTool] = &[
 
 // ── googlesheets ────────────────────────────────────────────────────
 /// The curated action catalog for the `googlesheets` toolkit.
-pub(crate) const GOOGLESHEETS_CURATED: &[CuratedTool] = &[
+pub const GOOGLESHEETS_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "GOOGLESHEETS_BATCH_GET",
         scope: ToolScope::Read,

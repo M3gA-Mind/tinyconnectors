@@ -1,13 +1,10 @@
-//! The curated notion catalog.
+//! Curated catalog of Notion Composio actions exposed to the agent.
 
 use crate::scope::{CuratedTool, ToolScope};
 
-/// Actions worth offering an agent for notion.
-///
-/// Composio publishes far more than this. The long tail is edge-case
-/// administration an agent never plans for, and offering all of it makes the
-/// model's tool list worse, not better.
-pub(super) const CURATED: &[CuratedTool] = &[
+/// The curated action catalog for the `notion` toolkit.
+pub const NOTION_CURATED: &[CuratedTool] = &[
+    // ── Read: search & fetch ────────────────────────────────────────
     CuratedTool {
         slug: "NOTION_SEARCH_NOTION_PAGE",
         scope: ToolScope::Read,
@@ -48,6 +45,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "NOTION_GET_PAGE_PROPERTY_ACTION",
         scope: ToolScope::Read,
     },
+    // ── Read: query & retrieve ──────────────────────────────────────
     CuratedTool {
         slug: "NOTION_QUERY_DATABASE",
         scope: ToolScope::Read,
@@ -72,6 +70,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "NOTION_RETRIEVE_DATABASE_PROPERTY",
         scope: ToolScope::Read,
     },
+    // ── Read: profile / users / files ───────────────────────────────
     CuratedTool {
         slug: "NOTION_LIST_USERS",
         scope: ToolScope::Read,
@@ -96,6 +95,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "NOTION_LIST_DATA_SOURCE_TEMPLATES",
         scope: ToolScope::Read,
     },
+    // ── Write: create ───────────────────────────────────────────────
     CuratedTool {
         slug: "NOTION_CREATE_NOTION_PAGE",
         scope: ToolScope::Write,
@@ -116,6 +116,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "NOTION_SEND_FILE_UPLOAD",
         scope: ToolScope::Write,
     },
+    // ── Write: update / append ──────────────────────────────────────
     CuratedTool {
         slug: "NOTION_UPDATE_PAGE",
         scope: ToolScope::Write,
@@ -184,6 +185,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "NOTION_MOVE_PAGE",
         scope: ToolScope::Write,
     },
+    // ── Admin: destructive ──────────────────────────────────────────
     CuratedTool {
         slug: "NOTION_DELETE_BLOCK",
         scope: ToolScope::Admin,

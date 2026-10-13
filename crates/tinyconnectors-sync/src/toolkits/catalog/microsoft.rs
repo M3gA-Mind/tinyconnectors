@@ -13,11 +13,11 @@
 //! exist on the backend simply never appear in `composio_list_tools`,
 //! so over-shooting is harmless.
 
-use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
+use crate::scope::{CuratedTool, ToolScope};
 
 // ── onedrive ────────────────────────────────────────────────────────
 /// The curated action catalog for the `one_drive` toolkit.
-pub(crate) const ONE_DRIVE_CURATED: &[CuratedTool] = &[
+pub const ONE_DRIVE_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "ONE_DRIVE_GET_FILE",
         scope: ToolScope::Read,
@@ -86,7 +86,7 @@ pub(crate) const ONE_DRIVE_CURATED: &[CuratedTool] = &[
 
 // ── excel ───────────────────────────────────────────────────────────
 /// The curated action catalog for the `excel` toolkit.
-pub(crate) const EXCEL_CURATED: &[CuratedTool] = &[
+pub const EXCEL_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "EXCEL_GET_WORKBOOK",
         scope: ToolScope::Read,

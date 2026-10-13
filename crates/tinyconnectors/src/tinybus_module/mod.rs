@@ -31,6 +31,7 @@
 //! distinguishing detail — the failing path, or the user-facing rate-limit
 //! guidance — because that is all a host will have to act on.
 
+mod contracts;
 mod restricted;
 mod routed;
 
@@ -339,6 +340,8 @@ struct ConnectorService {
     actions: Arc<ClientActions>,
     /// Where the per-toolkit scope preferences are persisted.
     prefs: Arc<dyn PrefsStore>,
+    /// Tool contracts and probe results remembered between calls.
+    contract_caches: Arc<crate::contracts::ContractCaches>,
 }
 
 impl ConnectorService {
@@ -427,6 +430,43 @@ impl ConnectorService {
         Ok(pref.allows(scope))
     }
 
+    /// Runs one action after enforcing the stored scope preference.
+    ///
+    /// Enforced here rather than trusted from the caller: a preference a
+    /// caller could opt out of is not a restriction, it is a suggestion.
+    /// Shared by `Execute` and the output probe so neither can bypass it.
+    async fn execute_checked(
+        &self,
+        tool: &str,
+        arguments: Option<serde_json::Value>,
+        connection_id: Option<&str>,
+    ) -> TinyBusResult<ComposioExecuteResponse> {
+        if !self.permits(tool).await? {
+            return Err(tinybus::Error::failed(format!(
+                "`{tool}` is not permitted: the scope preference for this toolkit does not allow it"
+            )));
+        }
+        self.client()?
+            .execute(tool, arguments, connection_id)
+            .await
+            // Classified, like a refusal already is. A provider that answers
+            // "insufficient scope" and a backend that times out mean different
+            // things to whoever is looking at the screen — one is "reconnect
+            // your account", the other is "try again" — and the `[composio:
+            // error:<class>]` prefix is how a caller tells them apart.
+            //
+            // Only the `Err` path passes through here, which is transport and
+            // decode failures. A provider *refusal* arrives as a successful
+            // reply carrying `successful: false`, and its message is formatted
+            // where that is decided, so nothing is classified twice.
+            .map_err(|error| {
+                tinybus::Error::failed(crate::execute::format_provider_error(
+                    tool,
+                    &error.to_string(),
+                ))
+            })
+    }
+
     /// The first active connection for `toolkit`.
     async fn first_active_connection(&self, toolkit: &str) -> TinyBusResult<String> {
         let wanted = toolkit.trim().to_ascii_lowercase();
@@ -484,6 +524,8 @@ impl ConnectorService {
             .client
             .write()
             .unwrap_or_else(std::sync::PoisonError::into_inner) = client;
+        // A catalog fetched for the old tenant must not answer for the new one.
+        self.contract_caches.clear();
         Ok(ComposioConfigureResponse { route: name })
     }
 
@@ -666,37 +708,12 @@ impl ConnectorService {
         &self,
         request: ComposioExecuteRequest,
     ) -> TinyBusResult<ComposioExecuteResponse> {
-        // Enforced here rather than trusted from the caller: a preference a
-        // caller could opt out of is not a restriction, it is a suggestion.
-        if !self.permits(&request.tool).await? {
-            return Err(tinybus::Error::failed(format!(
-                "`{}` is not permitted: the scope preference for this toolkit does not allow it",
-                request.tool
-            )));
-        }
-        self.client()?
-            .execute(
-                &request.tool,
-                request.arguments,
-                request.connection_id.as_deref(),
-            )
-            .await
-            // Classified, like a refusal already is. A provider that answers
-            // "insufficient scope" and a backend that times out mean different
-            // things to whoever is looking at the screen — one is "reconnect
-            // your account", the other is "try again" — and the `[composio:
-            // error:<class>]` prefix is how a caller tells them apart.
-            //
-            // Only the `Err` path passes through here, which is transport and
-            // decode failures. A provider *refusal* arrives as a successful
-            // reply carrying `successful: false`, and its message is formatted
-            // where that is decided, so nothing is classified twice.
-            .map_err(|error| {
-                tinybus::Error::failed(crate::execute::format_provider_error(
-                    &request.tool,
-                    &error.to_string(),
-                ))
-            })
+        self.execute_checked(
+            &request.tool,
+            request.arguments,
+            request.connection_id.as_deref(),
+        )
+        .await
     }
 
     // The registry is in memory: there is nothing to await. `async` is the
@@ -900,6 +917,36 @@ impl ConnectorService {
         Ok(crate::vocabulary_impl::get_vocabulary(request))
     }
 
+    /// Lists the curated action catalog without credentials or a backend call.
+    #[allow(clippy::unused_async, reason = "required by the interface dispatcher")]
+    #[allow(unknown_lints, clippy::unused_async_trait_impl)]
+    async fn list_curated_catalog(
+        &self,
+        request: tinyconnectors_bus::vocabulary::CuratedCatalogRequest,
+    ) -> TinyBusResult<Vec<tinyconnectors_bus::vocabulary::CuratedTool>> {
+        Ok(crate::vocabulary_impl::list_curated_catalog(request))
+    }
+
+    /// Lists the curated actions a scope preference exposes for one toolkit.
+    ///
+    /// Without a preference in the request, the user's stored one applies, so
+    /// the answer matches what `ListTools` and `Execute` enforce.
+    async fn list_visible_tools(
+        &self,
+        request: tinyconnectors_bus::vocabulary::VisibleToolsRequest,
+    ) -> TinyBusResult<tinyconnectors_bus::vocabulary::VisibleToolsResponse> {
+        let toolkit = request.toolkit.trim().to_ascii_lowercase();
+        let preference = match request.preference {
+            Some(preference) => preference,
+            None => UserScopePref::load(self.prefs.as_ref(), &toolkit)
+                .await
+                .map_err(|error| tinybus::Error::failed(error.to_string()))?,
+        };
+        Ok(crate::vocabulary_impl::list_visible_tools(
+            &toolkit, preference,
+        ))
+    }
+
     /// Evaluates display metadata; Execute still checks persisted preferences.
     #[allow(clippy::unused_async, reason = "required by the interface dispatcher")]
     #[allow(unknown_lints, clippy::unused_async_trait_impl)]
@@ -928,6 +975,55 @@ impl ConnectorService {
         request: tinyconnectors_bus::vocabulary::TaskFetchFilter,
     ) -> TinyBusResult<tinyconnectors_bus::vocabulary::PreparedTaskFilter> {
         Ok(crate::vocabulary_impl::prepare_task_filter(request))
+    }
+
+    /// Returns one action's live tool contract, probe overlay included.
+    async fn get_tool_contract(
+        &self,
+        request: tinyconnectors_bus::composio::ComposioGetToolContractRequest,
+    ) -> TinyBusResult<tinyconnectors_bus::composio::ComposioGetToolContractResponse> {
+        Ok(
+            tinyconnectors_bus::composio::ComposioGetToolContractResponse {
+                contract: self.contract_with_probe(&request.slug).await?,
+            },
+        )
+    }
+
+    /// Returns every live tool contract of one toolkit, probe overlay included.
+    async fn list_tool_contracts(
+        &self,
+        request: tinyconnectors_bus::composio::ComposioListToolContractsRequest,
+    ) -> TinyBusResult<tinyconnectors_bus::composio::ComposioListToolContractsResponse> {
+        let (toolkit, contracts) = self.toolkit_contracts(&request.toolkit).await?;
+        Ok(
+            tinyconnectors_bus::composio::ComposioListToolContractsResponse {
+                toolkit,
+                contracts: contracts
+                    .into_iter()
+                    .map(|contract| self.contract_caches.apply_probe(contract))
+                    .collect(),
+            },
+        )
+    }
+
+    /// Runs one confirmed read action and reports the real output shape.
+    async fn probe_tool_output(
+        &self,
+        request: tinyconnectors_bus::composio::ComposioProbeToolOutputRequest,
+    ) -> TinyBusResult<tinyconnectors_bus::composio::ComposioProbedOutputSample> {
+        self.probe_output(&request.slug, request.args).await
+    }
+
+    /// Assembles the connected-integration overview for one route.
+    async fn list_connected_integrations(
+        &self,
+        request: tinyconnectors_bus::composio::ComposioListConnectedIntegrationsRequest,
+    ) -> TinyBusResult<tinyconnectors_bus::composio::ComposioConnectedIntegrationsResponse> {
+        Ok(
+            tinyconnectors_bus::composio::ComposioConnectedIntegrationsResponse {
+                integrations: self.connected_integrations(request.mode).await?,
+            },
+        )
     }
 
     #[allow(
@@ -1030,6 +1126,7 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         // persistence are better than a module that refuses to load.
         prefs: prefs_store(config_state_dir.as_deref()),
         registry: crate::providers::default_registry(),
+        contract_caches: Arc::default(),
         client,
         archive,
         archives: Arc::default(),
@@ -1118,9 +1215,15 @@ export_module! {
         "ListToolsDirect",
         "RoutedRead",
         "GetVocabulary",
+        "ListCuratedCatalog",
+        "ListVisibleTools",
         "EvaluateActions",
         "NormalizeIdentities",
         "PrepareTaskFilter",
+        "GetToolContract",
+        "ListToolContracts",
+        "ProbeToolOutput",
+        "ListConnectedIntegrations",
         "RuntimeMode",
 
     ],
@@ -1150,3 +1253,7 @@ impl std::fmt::Debug for RouteConfig {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "contracts_tests.rs"]
+mod contracts_test;

@@ -10,13 +10,13 @@ pub(crate) mod scopes;
 mod tasks;
 
 use profile::IdentityMetadata;
-use tasks::TaskLimit;
 use tinyconnectors_bus::vocabulary::{
-    ActionVocabularyRequest, ActionVocabularyResponse, IdentityValueResponse,
-    NormalizeIdentitiesRequest, NormalizeIdentitiesResponse, PreparedTaskFilter, TaskFetchFilter,
-    ToolkitVocabulary, UnknownScopeProfile, VocabularyAction, VocabularyRequest,
-    VocabularyResponse,
+    ActionVocabularyRequest, ActionVocabularyResponse, CuratedCatalogRequest, CuratedTool,
+    IdentityValueResponse, NormalizeIdentitiesRequest, NormalizeIdentitiesResponse,
+    PreparedTaskFilter, TaskFetchFilter, ToolkitVocabulary, UnknownScopeProfile, UserScopePref,
+    VisibleToolsResponse, VocabularyAction, VocabularyRequest, VocabularyResponse,
 };
+use tinyconnectors_sync::toolkits::catalog::CURATED_TOOLKITS;
 
 pub(crate) fn get_vocabulary(request: VocabularyRequest) -> VocabularyResponse {
     VocabularyResponse {
@@ -45,6 +45,47 @@ pub(crate) fn get_vocabulary(request: VocabularyRequest) -> VocabularyResponse {
             .into_iter()
             .map(str::to_owned)
             .collect(),
+    }
+}
+
+pub(crate) fn list_curated_catalog(request: CuratedCatalogRequest) -> Vec<CuratedTool> {
+    let toolkits: Vec<String> = match request.toolkit {
+        Some(toolkit) => vec![toolkit.trim().to_ascii_lowercase()],
+        None => CURATED_TOOLKITS.iter().map(|t| (*t).to_owned()).collect(),
+    };
+    toolkits
+        .into_iter()
+        .flat_map(|toolkit| {
+            catalogs::catalog_for_toolkit(&toolkit)
+                .unwrap_or_default()
+                .iter()
+                .map(|action| CuratedTool {
+                    toolkit: toolkit.clone(),
+                    slug: action.slug.into(),
+                    scope: action.scope,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+pub(crate) fn list_visible_tools(toolkit: &str, preference: UserScopePref) -> VisibleToolsResponse {
+    let catalog = catalogs::catalog_for_toolkit(toolkit);
+    let tools = catalog
+        .unwrap_or_default()
+        .iter()
+        .filter(|action| preference.allows(action.scope))
+        .map(|action| CuratedTool {
+            toolkit: toolkit.to_owned(),
+            slug: action.slug.into(),
+            scope: action.scope,
+        })
+        .collect();
+    VisibleToolsResponse {
+        toolkit: toolkit.to_owned(),
+        preference,
+        has_catalog: catalog.is_some(),
+        tools,
     }
 }
 

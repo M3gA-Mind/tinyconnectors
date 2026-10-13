@@ -2,14 +2,7 @@
 
 pub(crate) use tinyconnectors_bus::vocabulary::{ToolScope, UserScopePref};
 
-/// One static curated catalog entry.
-#[derive(Debug, Clone, Copy)]
-pub(crate) struct CuratedTool {
-    /// The Composio action slug, e.g. `"GMAIL_SEND_EMAIL"`.
-    pub slug: &'static str,
-    /// How invasive the action is, for preference gating.
-    pub scope: ToolScope,
-}
+pub(crate) use tinyconnectors_sync::CuratedTool;
 
 /// Heuristic fallback for gating a tool that is not in any provider's curated
 /// list.

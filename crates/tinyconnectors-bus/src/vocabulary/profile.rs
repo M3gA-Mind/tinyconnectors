@@ -12,29 +12,29 @@ pub struct ProviderUserProfile {
     /// Toolkit the profile is for.
     pub toolkit: String,
     /// Connection the profile was read through.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub connection_id: Option<String>,
     /// Human name, when the provider reports one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub display_name: Option<String>,
     /// Account email.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub email: Option<String>,
     /// Login or handle.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub username: Option<String>,
     /// Avatar image URL.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub avatar_url: Option<String>,
     /// Link to the account on the provider.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
     pub profile_url: Option<String>,
     /// Anything toolkit-specific.
     ///
     /// Here so a new toolkit with an interesting field does not require
     /// widening this shape — and every consumer of it — to carry something one
     /// provider reports.
-    #[serde(default, skip_serializing_if = "serde_json::Value::is_null")]
+    #[serde(default)]
     pub extras: serde_json::Value,
 }
 

@@ -79,6 +79,8 @@
 //! ```
 
 pub mod client;
+#[cfg(feature = "module")]
+mod contracts;
 mod error;
 pub mod execute;
 pub mod oauth;

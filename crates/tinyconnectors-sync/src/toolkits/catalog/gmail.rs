@@ -4,10 +4,10 @@
 //! the cases the agent actually plans for (read, compose, manage) and
 //! hides the long tail of edge-case admin endpoints.
 
-use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
+use crate::scope::{CuratedTool, ToolScope};
 
 /// The curated action catalog for the `gmail` toolkit.
-pub(crate) const GMAIL_CURATED: &[CuratedTool] = &[
+pub const GMAIL_CURATED: &[CuratedTool] = &[
     // ── Read: messages & threads ────────────────────────────────────
     CuratedTool {
         slug: "GMAIL_FETCH_EMAILS",
