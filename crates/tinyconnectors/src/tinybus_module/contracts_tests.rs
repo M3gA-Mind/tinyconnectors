@@ -12,7 +12,7 @@ use tinyconnectors_bus::composio::{
     ComposioConnectedIntegrationsMode, ComposioConnectedIntegrationsResponse,
 };
 
-use super::{ConnectorService, EphemeralPrefsStore};
+use super::{ConnectorService, EphemeralPrefsStore, ModuleConfig};
 use crate::client::test_support::{Reply, json as ok, server};
 use crate::client::{ComposioClient, DirectRoute, HttpTransport, ProxyRoute, Route};
 
@@ -122,11 +122,14 @@ async fn an_unpublished_action_is_none_and_a_fetch_failure_is_an_error() {
 
 #[tokio::test]
 async fn reconfiguring_forgets_contracts_fetched_for_the_old_tenant() {
-    let (service, seen) = proxy_service(|_| ok(GITHUB_TOOLS));
+    let (service, _) = proxy_service(|_| ok(GITHUB_TOOLS));
     service.toolkit_contracts("github").await.unwrap();
-    service.contract_caches.clear();
-    service.toolkit_contracts("github").await.unwrap();
-    assert_eq!(count(&seen, "/tools"), 2);
+    assert!(service.contract_caches.catalog("github").is_some());
+    service
+        .configure(tinyconnectors_bus::ComposioConfigureRequest::None)
+        .await
+        .unwrap();
+    assert!(service.contract_caches.catalog("github").is_none());
 }
 
 #[tokio::test]
@@ -237,15 +240,12 @@ async fn a_probe_reports_a_provider_refusal_with_its_detail() {
 async fn a_probe_obeys_the_stored_scope_preference() {
     use tinyconnectors_sync::ScopePrefStore;
     let (service, seen) = proxy_service(connected_github);
-    tinyconnectors_sync::UserScopePref::store(
-        service.prefs.as_ref(),
-        "github",
-        &tinyconnectors_sync::UserScopePref {
-            read: false,
-            write: false,
-            admin: false,
-        },
-    )
+    tinyconnectors_sync::UserScopePref {
+        read: false,
+        write: false,
+        admin: false,
+    }
+    .save(service.prefs.as_ref(), "github")
     .await
     .unwrap();
     let error = service
@@ -418,4 +418,71 @@ async fn a_mode_that_disagrees_with_the_live_route_is_refused() {
             .await
             .is_err()
     );
+}
+
+async fn unconfigured_proxy() -> tinybus::Result<(tinybus::Connection, tinybus::Proxy)> {
+    use tinybus::broker::Broker;
+    use tinybus::transport::memory::MemoryBus;
+    use tinyconnectors_bus::names;
+
+    let bus = MemoryBus::new();
+    Broker::new().spawn(bus.clone());
+    let serving = tinybus::Connection::connect(bus.connect().await?).await?;
+    super::setup(serving.clone(), ModuleConfig::default()).await?;
+    let client = tinybus::Connection::connect(bus.connect().await?).await?;
+    let proxy = client.proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)?;
+    Ok((serving, proxy))
+}
+
+#[tokio::test]
+async fn the_new_members_are_served_over_the_bus_by_their_contract_names() -> tinybus::Result<()> {
+    use tinyconnectors_bus::composio::{
+        ComposioGetToolContractRequest, ComposioGetToolContractResponse,
+        ComposioListConnectedIntegrationsRequest, ComposioListToolContractsRequest,
+        ComposioProbeToolOutputRequest,
+    };
+    use tinyconnectors_bus::names::methods;
+
+    let (_serving, proxy) = unconfigured_proxy().await?;
+
+    // A slug with no toolkit needs no route: the answer is "no such contract".
+    let none: ComposioGetToolContractResponse = proxy
+        .call(
+            methods::GET_TOOL_CONTRACT,
+            (ComposioGetToolContractRequest { slug: String::new() },),
+        )
+        .await?;
+    assert!(none.contract.is_none());
+
+    // Everything that needs the backend says what is missing.
+    let listing = proxy
+        .call::<serde_json::Value>(
+            methods::LIST_TOOL_CONTRACTS,
+            (ComposioListToolContractsRequest { toolkit: "github".into() },),
+        )
+        .await;
+    assert!(listing.unwrap_err().to_string().contains("without a connector route"));
+
+    let overview = proxy
+        .call::<serde_json::Value>(
+            methods::LIST_CONNECTED_INTEGRATIONS,
+            (ComposioListConnectedIntegrationsRequest {
+                mode: ComposioConnectedIntegrationsMode::Backend,
+            },),
+        )
+        .await;
+    assert!(overview.unwrap_err().to_string().contains("without a connector route"));
+
+    // A probe refuses on scope before it needs a route at all.
+    let probe = proxy
+        .call::<serde_json::Value>(
+            methods::PROBE_TOOL_OUTPUT,
+            (ComposioProbeToolOutputRequest {
+                slug: "GITHUB_CREATE_AN_ISSUE".into(),
+                args: json!({}),
+            },),
+        )
+        .await;
+    assert!(probe.unwrap_err().to_string().contains("probe refuses"));
+    Ok(())
 }
