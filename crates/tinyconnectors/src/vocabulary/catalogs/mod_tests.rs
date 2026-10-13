@@ -4,41 +4,6 @@ use super::*;
 
 // Tests for the surrounding module.
 
-/// Every toolkit with a curated catalog, in display order.
-const CAPABILITY_TOOLKITS: &[&str] = &[
-    "gmail",
-    "notion",
-    "slack",
-    "clickup",
-    "github",
-    "discord",
-    "googlecalendar",
-    "googledrive",
-    "googledocs",
-    "googlesheets",
-    "outlook",
-    "microsoft_teams",
-    "linear",
-    "jira",
-    "trello",
-    "asana",
-    "dropbox",
-    "twitter",
-    "spotify",
-    "telegram",
-    "whatsapp",
-    "shopify",
-    "stripe",
-    "hubspot",
-    "salesforce",
-    "airtable",
-    "figma",
-    "youtube",
-    "one_drive",
-    "excel",
-    "todoist",
-];
-
 #[test]
 fn curated_scope_for_reads_the_catalogs_entry_not_the_heuristic() {
     // Pick a real curated read action and assert the catalog's own verdict.

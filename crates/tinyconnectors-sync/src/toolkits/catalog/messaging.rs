@@ -63,8 +63,11 @@ pub const SLACK_CURATED: &[CuratedTool] = &[
         scope: ToolScope::Write,
     },
     CuratedTool {
+        // Adding someone to a channel hands them its whole history, a change
+        // to who can see what however friendly the verb sounds, so it is
+        // `Admin` like `SLACK_INVITE_USER_TO_WORKSPACE`.
         slug: "SLACK_INVITE_USERS_TO_A_SLACK_CHANNEL",
-        scope: ToolScope::Write,
+        scope: ToolScope::Admin,
     },
     CuratedTool {
         slug: "SLACK_ADD_REACTION_TO_AN_ITEM",
