@@ -950,7 +950,11 @@ impl ConnectorService {
         &self,
         request: tinyconnectors_bus::vocabulary::VocabularyRequest,
     ) -> TinyBusResult<tinyconnectors_bus::vocabulary::VocabularyResponse> {
-        Ok(crate::vocabulary_impl::get_vocabulary(request))
+        let mut vocabulary = crate::vocabulary_impl::get_vocabulary(request);
+        vocabulary
+            .agent_ready_toolkits
+            .retain(|toolkit| self.offered.permits(toolkit));
+        Ok(vocabulary)
     }
 
     /// Lists the curated action catalog without credentials or a backend call.
