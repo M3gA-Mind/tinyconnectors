@@ -935,24 +935,8 @@ async fn creates_enables_and_disables_a_trigger() -> tinybus::Result<()> {
     Ok(())
 }
 
-/// Register fresh in-memory storage under `dir`, as a host would for a user.
-fn register_for(dir: &TempDir) -> tinystoragedrivers_core::ScopedStorage {
-    use tinystoragedrivers_core::StorageBackend;
-    let storage = tinystoragedrivers_core::MemoryStorage::new()
-        .for_scope(&tinystoragedrivers_core::Scope::new("user").expect("scope"))
-        .expect("scoped");
-    crate::state::register_storage(
-        dir.0.to_string_lossy(),
-        crate::state::ModuleStorage {
-            documents: storage.documents().clone(),
-            streams: storage.streams().clone(),
-        },
-    );
-    storage
-}
-
 #[tokio::test]
-async fn trigger_history_without_a_state_dir_explains_itself() -> tinybus::Result<()> {
+async fn trigger_history_without_served_storage_explains_itself() -> tinybus::Result<()> {
     // Rather than an empty list, which reads as "no trigger ever fired".
     let transport = StubTransport::replying(json!({}));
     let (_serving, _client, proxy, _bus) = proxy_to(service_over(transport)).await?;
@@ -967,7 +951,7 @@ async fn trigger_history_without_a_state_dir_explains_itself() -> tinybus::Resul
     let Err(error) = result else {
         return Err(tinybus::Error::failed("history answered with no archive"));
     };
-    assert!(error.to_string().contains("state_dir"));
+    assert!(error.to_string().contains("does not serve storage"));
     Ok(())
 }
 
@@ -1033,56 +1017,75 @@ async fn the_ephemeral_prefs_store_round_trips() {
 
 // ── setup ────────────────────────────────────────────────────────────
 
-/// A scratch directory that removes itself.
-pub(super) struct TempDir(pub(super) std::path::PathBuf);
-
-impl TempDir {
-    pub(super) fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "tinyconnectors-module-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        let _ = std::fs::remove_dir_all(&path);
-        std::fs::create_dir_all(&path).expect("scratch directory");
-        Self(path)
-    }
-}
-
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_dir_all(&self.0);
-    }
-}
-
 /// Stand the module up the way the loader does: through `setup`.
 async fn serve_via_setup(config: ModuleConfig) -> tinybus::Result<(Connection, tinybus::Proxy)> {
     let bus = MemoryBus::new();
     Broker::new().spawn(bus.clone());
+    let (serving, proxy) = setup_on(&bus, config).await?;
+    Ok((serving, proxy))
+}
 
+async fn setup_on(
+    bus: &MemoryBus,
+    config: ModuleConfig,
+) -> tinybus::Result<(Connection, tinybus::Proxy)> {
     let serving = Connection::connect(bus.connect().await?).await?;
     super::setup(serving.clone(), config).await?;
 
     let client = Connection::connect(bus.connect().await?).await?;
     let proxy = client.proxy(names::INTERFACE, names::OBJECT_PATH, names::INTERFACE)?;
-    // The client connection is returned so the caller holds it; the serving one
-    // owns the bus name and must outlive the proxy.
+    // The serving connection owns the bus name and must outlive the proxy.
     Ok((serving, proxy))
+}
+
+/// A host serving the storage bus from an in-memory backend, scoped as the
+/// broker-authenticated module caller would be.
+struct StorageHost {
+    /// The scope the host binds the module to, for seeding and inspection.
+    scoped: tinystoragedrivers_core::ScopedStorage,
+    _host: Connection,
+    _served: tinystoragedrivers_busproxy::ServedStorage,
+}
+
+async fn serve_storage(bus: &MemoryBus) -> tinybus::Result<StorageHost> {
+    use tinystoragedrivers_core::{MemoryStorage, Scope, StorageBackend};
+    let scoped = MemoryStorage::new()
+        .for_scope(&Scope::new("user").expect("scope"))
+        .expect("scoped");
+    let bound = scoped.clone();
+    let endpoint = tinystoragedrivers_busproxy::PerCallerEndpoint::new(move |_sender| {
+        Some(tinystoragedrivers_client::StorageServer::new(bound.clone()))
+    });
+    let host = Connection::connect(bus.connect().await?).await?;
+    let served = tinystoragedrivers_busproxy::serve(&host, Arc::new(endpoint)).await?;
+    Ok(StorageHost {
+        scoped,
+        _host: host,
+        _served: served,
+    })
+}
+
+/// The module and a storage host on one bus.
+async fn serve_with_storage(
+    config: ModuleConfig,
+) -> tinybus::Result<(Connection, tinybus::Proxy, StorageHost)> {
+    let bus = MemoryBus::new();
+    Broker::new().spawn(bus.clone());
+    let storage = serve_storage(&bus).await?;
+    let (serving, proxy) = setup_on(&bus, config).await?;
+    Ok((serving, proxy, storage))
 }
 
 #[tokio::test]
 async fn setup_serves_the_interface_over_the_bus() -> tinybus::Result<()> {
-    let dir = TempDir::new("setup");
-    register_for(&dir);
     let config: ModuleConfig = serde_json::from_value(json!({
         "route": "proxy",
         "base_url": "https://api.example.invalid",
         "auth_token": "t0ken",
-        "state_dir": dir.0,
     }))
     .expect("parses");
 
-    let (_serving, proxy) = serve_via_setup(config).await?;
+    let (_serving, proxy, _storage) = serve_with_storage(config).await?;
 
     // A member that needs no network proves the whole path stood up: config
     // parsed, archive opened, route built, object served, name claimed.
@@ -1109,15 +1112,13 @@ async fn setup_on_the_direct_route_serves_too() -> tinybus::Result<()> {
 }
 
 #[tokio::test]
-async fn setup_with_unregistered_storage_serves_without_history() -> tinybus::Result<()> {
-    // No storage under the `state_dir` key: the module still loads (profiles and
+async fn setup_without_served_storage_serves_without_history() -> tinybus::Result<()> {
+    // No host serving storage: the module still loads (profiles and
     // capabilities need none) and history reports that it is unavailable.
-    let dir = TempDir::new("unregistered-state");
     let config: ModuleConfig = serde_json::from_value(json!({
         "route": "proxy",
         "base_url": "https://api.example.invalid",
         "auth_token": "t0ken",
-        "state_dir": dir.0,
     }))
     .expect("parses");
 
@@ -1128,7 +1129,8 @@ async fn setup_with_unregistered_storage_serves_without_history() -> tinybus::Re
             (ComposioListTriggerHistoryRequest { limit: Some(5) },),
         )
         .await;
-    assert!(result.is_err());
+    let error = result.expect_err("no storage host, no history");
+    assert!(error.to_string().contains("does not serve storage"));
     Ok(())
 }
 
@@ -1147,18 +1149,18 @@ async fn setup_refuses_a_base_url_that_would_leak_the_credential() -> tinybus::R
 
 #[tokio::test]
 async fn trigger_history_reads_the_archive_the_host_gave_it() -> tinybus::Result<()> {
-    let dir = TempDir::new("history");
-    let storage = register_for(&dir);
     let config: ModuleConfig = serde_json::from_value(json!({
         "route": "proxy",
         "base_url": "https://api.example.invalid",
         "auth_token": "t0ken",
-        "state_dir": dir.0,
     }))
     .expect("parses");
+    let bus = MemoryBus::new();
+    Broker::new().spawn(bus.clone());
+    let storage = serve_storage(&bus).await?;
 
     // A delivery recorded through the same archive the module opened.
-    let archive = crate::triggers::TriggerArchive::new(storage.streams().clone());
+    let archive = crate::triggers::TriggerArchive::new(storage.scoped.streams().clone());
     archive
         .record(
             "gmail",
@@ -1170,7 +1172,7 @@ async fn trigger_history_reads_the_archive_the_host_gave_it() -> tinybus::Result
         .await
         .expect("records");
 
-    let (_serving, proxy) = serve_via_setup(config).await?;
+    let (_serving, proxy) = setup_on(&bus, config).await?;
     let reply: ComposioTriggerHistoryResult = proxy
         .call(
             names::methods::LIST_TRIGGER_HISTORY,
@@ -1184,46 +1186,72 @@ async fn trigger_history_reads_the_archive_the_host_gave_it() -> tinybus::Result
 }
 
 #[tokio::test]
-async fn a_named_state_dir_persists_the_scope_preference() {
+async fn scope_preferences_persist_in_the_hosts_documents_across_instances() -> tinybus::Result<()> {
     // The difference between the two stores, observable: a preference written
-    // through one module instance is read back by the next.
-    let dir = TempDir::new("persist");
-    let storage = register_for(&dir);
-    let module_storage = crate::state::resolve_storage(&dir.0.to_string_lossy());
-    let store = super::prefs_store(module_storage.as_ref());
-    tinyconnectors_sync::UserScopePref {
-        read: true,
-        write: false,
-        admin: false,
-    }
-    .save(store.as_ref(), "gmail")
-    .await
-    .expect("saves");
+    // through one module instance lands in the host's `composio-user-scopes`
+    // collection and is read back by the next instance.
+    let bus = MemoryBus::new();
+    Broker::new().spawn(bus.clone());
+    let storage = serve_storage(&bus).await?;
+    let (first, proxy) = setup_on(&bus, ModuleConfig::default()).await?;
+    let saved: ComposioUserScopesResponse = proxy
+        .call(
+            names::methods::SET_USER_SCOPES,
+            (ComposioSetUserScopesRequest {
+                toolkit: "gmail".into(),
+                scopes: ComposioUserScopes {
+                    read: true,
+                    write: false,
+                    admin: false,
+                },
+            },),
+        )
+        .await?;
+    assert!(!saved.scopes.write);
+    let stored = storage
+        .scoped
+        .documents()
+        .get(tinyconnectors_sync::PREFS_NAMESPACE, "gmail")
+        .await
+        .expect("reads")
+        .expect("the preference is a document on the host");
+    assert_eq!(stored.doc["value"]["write"], false);
 
-    drop(storage);
-    let reopened = super::prefs_store(module_storage.as_ref());
-    let pref = tinyconnectors_sync::UserScopePref::load(reopened.as_ref(), "gmail")
+    drop(first);
+    let bus2 = MemoryBus::new();
+    Broker::new().spawn(bus2.clone());
+    drop(proxy);
+    // A second instance over the same documents sees the choice.
+    let link_store = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
+    drop(link_store);
+    let pref = crate::state::DocumentPrefsStore::new(storage.scoped.documents().clone());
+    let reread = tinyconnectors_sync::UserScopePref::load(&pref, "gmail")
         .await
         .expect("loads");
-    assert!(!pref.write, "the choice survived the module restart");
+    assert!(!reread.write, "the choice survived the module restart");
+    Ok(())
 }
 
 #[tokio::test]
-async fn an_unnamed_state_dir_keeps_nothing_between_instances() {
-    // Documented, not accidental: a host that wants preferences to stick should
-    // name one.
-    let store = super::prefs_store(None);
+async fn without_served_storage_preferences_stay_in_this_instance() {
+    // Documented, not accidental: with no host storage the choice lives only as
+    // long as the module.
+    let store = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
     tinyconnectors_sync::UserScopePref {
         read: true,
         write: false,
         admin: false,
     }
-    .save(store.as_ref(), "gmail")
+    .save(&store, "gmail")
     .await
     .expect("saves");
+    let kept = tinyconnectors_sync::UserScopePref::load(&store, "gmail")
+        .await
+        .expect("loads");
+    assert!(!kept.write, "kept in memory for the life of the instance");
 
-    let fresh = super::prefs_store(None);
-    let pref = tinyconnectors_sync::UserScopePref::load(fresh.as_ref(), "gmail")
+    let fresh = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
+    let pref = tinyconnectors_sync::UserScopePref::load(&fresh, "gmail")
         .await
         .expect("loads");
     assert!(pref.write, "a new instance starts from the default");
