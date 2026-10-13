@@ -165,12 +165,18 @@ fn connected_github(head: &str) -> Reply {
 async fn a_probe_reports_the_real_shape_and_overlays_later_contracts() {
     let (service, seen) = proxy_service(connected_github);
     let sample = service
-        .probe_output("GITHUB_LIST_REPOSITORY_ISSUES", json!({"owner": "o", "repo": "r"}))
+        .probe_output(
+            "GITHUB_LIST_REPOSITORY_ISSUES",
+            json!({"owner": "o", "repo": "r"}),
+        )
         .await
         .unwrap();
     assert_eq!(sample.primary_array_path.as_deref(), Some("data.issues"));
     assert!(sample.output_fields.contains(&"issues".to_string()));
-    assert_eq!(sample.sample["data"]["total"], 1, "the caller gets the raw sample");
+    assert_eq!(
+        sample.sample["data"]["total"], 1,
+        "the caller gets the raw sample"
+    );
     assert_eq!(count(&seen, "/execute"), 1);
 
     // The contract now reflects the observation, which the schema never had.
@@ -193,12 +199,11 @@ async fn a_probe_reports_the_real_shape_and_overlays_later_contracts() {
 #[tokio::test]
 async fn a_probe_refuses_anything_that_is_not_a_confirmed_read() {
     let (service, seen) = proxy_service(connected_github);
-    for slug in [
-        "GITHUB_CREATE_AN_ISSUE",
-        "GITHUB_SOMETHING_UNCURATED",
-        "",
-    ] {
-        assert!(service.probe_output(slug, json!(null)).await.is_err(), "{slug}");
+    for slug in ["GITHUB_CREATE_AN_ISSUE", "GITHUB_SOMETHING_UNCURATED", ""] {
+        assert!(
+            service.probe_output(slug, json!(null)).await.is_err(),
+            "{slug}"
+        );
     }
     assert_eq!(count(&seen, "/execute"), 0, "nothing was ever executed");
 }
@@ -216,7 +221,10 @@ async fn a_probe_refuses_a_toolkit_with_no_active_connection() {
         .probe_output("GITHUB_LIST_REPOSITORY_ISSUES", json!(null))
         .await
         .unwrap_err();
-    assert!(error.to_string().contains("no active connection"), "{error}");
+    assert!(
+        error.to_string().contains("no active connection"),
+        "{error}"
+    );
     assert_eq!(count(&seen, "/execute"), 0);
 }
 
@@ -285,11 +293,18 @@ async fn the_backend_overview_follows_the_catalog_connections_and_preferences() 
         .unwrap();
 
     let slugs: Vec<_> = overview.iter().map(|i| i.toolkit.as_str()).collect();
-    assert_eq!(slugs, ["github", "gmail"], "the disabled slack entry is dropped");
+    assert_eq!(
+        slugs,
+        ["github", "gmail"],
+        "the disabled slack entry is dropped"
+    );
     let gmail = &overview[1];
     assert!(gmail.connected);
     assert_eq!(gmail.description, "Mail from the backend");
-    assert_eq!(gmail.connections[0].label.as_deref(), Some("me@example.com"));
+    assert_eq!(
+        gmail.connections[0].label.as_deref(),
+        Some("me@example.com")
+    );
     assert_eq!(gmail.tools.len(), 1);
     assert_eq!(gmail.gated_tools[0].name, "GMAIL_DELETE_MESSAGE");
     assert_eq!(overview[0].non_active_status.as_deref(), Some("EXPIRED"));
@@ -306,7 +321,10 @@ async fn the_backend_overview_follows_the_catalog_connections_and_preferences() 
         integrations: overview,
     })
     .unwrap();
-    assert_eq!(wire["integrations"][1]["gated_tools"][0]["required_scope"], "admin");
+    assert_eq!(
+        wire["integrations"][1]["gated_tools"][0]["required_scope"],
+        "admin"
+    );
 }
 
 #[tokio::test]
@@ -408,8 +426,14 @@ async fn a_mode_that_disagrees_with_the_live_route_is_refused() {
         .connected_integrations(ComposioConnectedIntegrationsMode::Direct)
         .await
         .unwrap_err();
-    assert!(error.to_string().contains("configured for `proxy`"), "{error}");
-    assert!(seen.lock().unwrap().is_empty(), "no request left the module");
+    assert!(
+        error.to_string().contains("configured for `proxy`"),
+        "{error}"
+    );
+    assert!(
+        seen.lock().unwrap().is_empty(),
+        "no request left the module"
+    );
 
     let (direct, _) = direct_service(direct_overview);
     assert!(
@@ -449,7 +473,9 @@ async fn the_new_members_are_served_over_the_bus_by_their_contract_names() -> ti
     let none: ComposioGetToolContractResponse = proxy
         .call(
             methods::GET_TOOL_CONTRACT,
-            (ComposioGetToolContractRequest { slug: String::new() },),
+            (ComposioGetToolContractRequest {
+                slug: String::new(),
+            },),
         )
         .await?;
     assert!(none.contract.is_none());
@@ -458,10 +484,17 @@ async fn the_new_members_are_served_over_the_bus_by_their_contract_names() -> ti
     let listing = proxy
         .call::<serde_json::Value>(
             methods::LIST_TOOL_CONTRACTS,
-            (ComposioListToolContractsRequest { toolkit: "github".into() },),
+            (ComposioListToolContractsRequest {
+                toolkit: "github".into(),
+            },),
         )
         .await;
-    assert!(listing.unwrap_err().to_string().contains("without a connector route"));
+    assert!(
+        listing
+            .unwrap_err()
+            .to_string()
+            .contains("without a connector route")
+    );
 
     let overview = proxy
         .call::<serde_json::Value>(
@@ -471,7 +504,12 @@ async fn the_new_members_are_served_over_the_bus_by_their_contract_names() -> ti
             },),
         )
         .await;
-    assert!(overview.unwrap_err().to_string().contains("without a connector route"));
+    assert!(
+        overview
+            .unwrap_err()
+            .to_string()
+            .contains("without a connector route")
+    );
 
     // A probe refuses on scope before it needs a route at all.
     let probe = proxy

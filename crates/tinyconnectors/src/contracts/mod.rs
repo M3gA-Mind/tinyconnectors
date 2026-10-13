@@ -145,7 +145,8 @@ impl ContractCaches {
             sample: Value::Null,
             ..sample.clone()
         };
-        self.probes.insert(slug.trim().to_ascii_uppercase(), redacted);
+        self.probes
+            .insert(slug.trim().to_ascii_uppercase(), redacted);
     }
 
     pub(crate) fn probe(&self, slug: &str) -> Option<ComposioProbedOutputSample> {

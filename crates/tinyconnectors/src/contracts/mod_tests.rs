@@ -106,7 +106,10 @@ fn a_probe_wins_over_the_schema_even_when_it_found_no_array() {
     let caches = ContractCaches::default();
     caches.remember_probe("github_list_x", &sample(None, &[]));
     let merged = caches.apply_probe(contract("GITHUB_LIST_X"));
-    assert_eq!(merged.primary_array_path, None, "a disproved path is dropped");
+    assert_eq!(
+        merged.primary_array_path, None,
+        "a disproved path is dropped"
+    );
     assert_eq!(
         merged.output_fields,
         ["schema_field"],
@@ -131,9 +134,9 @@ fn a_contract_with_no_probe_passes_through_unchanged() {
 
 #[test]
 fn the_probe_cache_never_keeps_the_raw_sample() {
-    let caches = ContractCaches::default();
-    caches.remember_probe("GITHUB_LIST_X", &sample(Some("data.issues"), &["issues"]));
-    let cached = caches.probe("GITHUB_LIST_X").unwrap();
+    let store = ContractCaches::default();
+    store.remember_probe("GITHUB_LIST_X", &sample(Some("data.issues"), &["issues"]));
+    let cached = store.probe("GITHUB_LIST_X").unwrap();
     assert_eq!(cached.sample, json!(null));
     assert_eq!(cached.primary_array_path.as_deref(), Some("data.issues"));
 }
@@ -163,7 +166,10 @@ fn the_fetch_lock_is_shared_per_toolkit() {
     let caches = ContractCaches::default();
     let first = caches.fetch_lock("gmail");
     assert!(std::sync::Arc::ptr_eq(&first, &caches.fetch_lock("gmail")));
-    assert!(!std::sync::Arc::ptr_eq(&first, &caches.fetch_lock("github")));
+    assert!(!std::sync::Arc::ptr_eq(
+        &first,
+        &caches.fetch_lock("github")
+    ));
 }
 
 #[test]

@@ -3,9 +3,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::{
-    ComposioConnectedIntegration, ComposioConnectedIntegrationsMode,
-    ComposioGatedIntegrationTool, ComposioGetToolContractRequest,
-    ComposioListConnectedIntegrationsRequest, ComposioProbeToolOutputRequest, ComposioToolContract,
+    ComposioConnectedIntegration, ComposioConnectedIntegrationsMode, ComposioGatedIntegrationTool,
+    ComposioGetToolContractRequest, ComposioListConnectedIntegrationsRequest,
+    ComposioProbeToolOutputRequest, ComposioToolContract,
 };
 use crate::vocabulary::ToolScope;
 use serde_json::json;
@@ -44,7 +44,10 @@ fn the_mode_is_spelled_in_lowercase_on_the_wire() {
     let request = ComposioListConnectedIntegrationsRequest {
         mode: ComposioConnectedIntegrationsMode::Direct,
     };
-    assert_eq!(serde_json::to_value(request).unwrap(), json!({"mode": "direct"}));
+    assert_eq!(
+        serde_json::to_value(request).unwrap(),
+        json!({"mode": "direct"})
+    );
     assert!(
         serde_json::from_value::<ComposioListConnectedIntegrationsRequest>(
             json!({"mode": "Backend"})

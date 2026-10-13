@@ -5,7 +5,9 @@
 use std::collections::HashMap;
 
 use serde_json::json;
-use tinyconnectors_bus::composio::{ComposioConnection, ComposioToolSchema, ComposioToolkitCatalogEntry};
+use tinyconnectors_bus::composio::{
+    ComposioConnection, ComposioToolSchema, ComposioToolkitCatalogEntry,
+};
 use tinyconnectors_bus::vocabulary::{ToolScope, UserScopePref};
 
 use super::*;
@@ -18,11 +20,17 @@ fn connection(id: &str, toolkit: &str, status: &str, created: Option<&str>) -> C
 }
 
 fn tool(name: &str) -> ComposioToolSchema {
-    serde_json::from_value(json!({"function": {"name": name, "description": "d", "parameters": {"type": "object"}}}))
-        .unwrap()
+    serde_json::from_value(
+        json!({"function": {"name": name, "description": "d", "parameters": {"type": "object"}}}),
+    )
+    .unwrap()
 }
 
-fn entry(slug: &str, enabled: Option<bool>, description: Option<&str>) -> ComposioToolkitCatalogEntry {
+fn entry(
+    slug: &str,
+    enabled: Option<bool>,
+    description: Option<&str>,
+) -> ComposioToolkitCatalogEntry {
     ComposioToolkitCatalogEntry {
         slug: slug.into(),
         name: String::new(),
@@ -64,7 +72,7 @@ fn the_catalog_defines_the_connectable_set_and_drops_disabled_entries() {
 #[test]
 fn without_a_catalog_the_flat_toolkit_array_is_used() {
     assert_eq!(
-        connectable_toolkit_slugs(&[" Gmail".into(), "".into(), "Notion".into()], &[]),
+        connectable_toolkit_slugs(&[" Gmail".into(), String::new(), "Notion".into()], &[]),
         ["gmail", "notion"]
     );
 }
@@ -138,7 +146,10 @@ fn a_hidden_curated_action_is_gated_with_its_scope_and_an_uncurated_one_is_dropp
     let out = run(
         &["gmail"],
         &[connection("c1", "gmail", "ACTIVE", None)],
-        &[tool("GMAIL_DELETE_MESSAGE"), tool("GMAIL_NOT_IN_THE_CATALOG")],
+        &[
+            tool("GMAIL_DELETE_MESSAGE"),
+            tool("GMAIL_NOT_IN_THE_CATALOG"),
+        ],
         &HashMap::new(),
     );
     assert!(out[0].tools.is_empty());
@@ -176,11 +187,22 @@ fn connections_are_oldest_first_and_the_oldest_is_the_default() {
     let mut older = connection("old", "gmail", "ACTIVE", Some("2026-01-01"));
     older.account_email = Some("me@example.com".into());
     let out = run(&["gmail"], &[newer, older], &[], &HashMap::new());
-    let ids: Vec<_> = out[0].connections.iter().map(|c| c.connection_id.as_str()).collect();
+    let ids: Vec<_> = out[0]
+        .connections
+        .iter()
+        .map(|c| c.connection_id.as_str())
+        .collect();
     assert_eq!(ids, ["old", "new"]);
     assert!(out[0].connections[0].is_default && !out[0].connections[1].is_default);
-    assert_eq!(out[0].connections[0].label.as_deref(), Some("me@example.com"));
-    assert_eq!(out[0].connections[1].label.as_deref(), Some("team"), "a blank email is skipped");
+    assert_eq!(
+        out[0].connections[0].label.as_deref(),
+        Some("me@example.com")
+    );
+    assert_eq!(
+        out[0].connections[1].label.as_deref(),
+        Some("team"),
+        "a blank email is skipped"
+    );
 }
 
 #[test]

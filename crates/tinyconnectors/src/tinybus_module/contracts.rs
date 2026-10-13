@@ -200,47 +200,50 @@ impl ConnectorService {
         }
 
         let mut descriptions = HashMap::new();
-        let (allowlist, connections, tools): (Vec<String>, Vec<ComposioConnection>, Vec<ComposioToolSchema>) =
-            match mode {
-                ComposioConnectedIntegrationsMode::Backend => {
-                    let toolkits = client.list_toolkits().await.map_err(|error| {
-                        tracing::warn!(%error, "[connectors] overview: list_toolkits failed");
+        let (allowlist, connections, tools): (
+            Vec<String>,
+            Vec<ComposioConnection>,
+            Vec<ComposioToolSchema>,
+        ) = match mode {
+            ComposioConnectedIntegrationsMode::Backend => {
+                let toolkits = client.list_toolkits().await.map_err(|error| {
+                    tracing::warn!(%error, "[connectors] overview: list_toolkits failed");
+                    to_bus_error(&error)
+                })?;
+                descriptions = overview::catalog_descriptions(&toolkits.catalog);
+                let allowlist =
+                    overview::connectable_toolkit_slugs(&toolkits.toolkits, &toolkits.catalog);
+                if allowlist.is_empty() {
+                    tracing::debug!("[connectors] overview: backend allowlist is empty");
+                    return Ok(Vec::new());
+                }
+                let connections = client
+                    .list_connections()
+                    .await
+                    .map_err(|error| {
+                        tracing::warn!(%error, "[connectors] overview: list_connections failed");
                         to_bus_error(&error)
-                    })?;
-                    descriptions = overview::catalog_descriptions(&toolkits.catalog);
-                    let allowlist =
-                        overview::connectable_toolkit_slugs(&toolkits.toolkits, &toolkits.catalog);
-                    if allowlist.is_empty() {
-                        tracing::debug!("[connectors] overview: backend allowlist is empty");
-                        return Ok(Vec::new());
-                    }
-                    let connections = client
-                        .list_connections()
+                    })?
+                    .connections;
+                let connected = overview::active_toolkits(&connections);
+                let tools = if connected.is_empty() {
+                    Vec::new()
+                } else {
+                    client
+                        .list_tools(&connected, &[])
                         .await
                         .map_err(|error| {
-                            tracing::warn!(%error, "[connectors] overview: list_connections failed");
+                            tracing::warn!(%error, "[connectors] overview: list_tools failed");
                             to_bus_error(&error)
                         })?
-                        .connections;
-                    let connected = overview::active_toolkits(&connections);
-                    let tools = if connected.is_empty() {
-                        Vec::new()
-                    } else {
-                        client
-                            .list_tools(&connected, &[])
-                            .await
-                            .map_err(|error| {
-                                tracing::warn!(%error, "[connectors] overview: list_tools failed");
-                                to_bus_error(&error)
-                            })?
-                            .tools
-                    };
-                    (allowlist, connections, tools)
-                }
-                ComposioConnectedIntegrationsMode::Direct => {
-                    // No central allowlist: the user's active connections are
-                    // the universe of toolkits.
-                    let connections = client
+                        .tools
+                };
+                (allowlist, connections, tools)
+            }
+            ComposioConnectedIntegrationsMode::Direct => {
+                // No central allowlist: the user's active connections are
+                // the universe of toolkits.
+                let connections = client
                         .list_connections()
                         .await
                         .map_err(|error| {
@@ -248,21 +251,23 @@ impl ConnectorService {
                             to_bus_error(&error)
                         })?
                         .connections;
-                    let allowlist = overview::active_toolkits(&connections);
-                    if allowlist.is_empty() {
-                        tracing::info!("[connectors] overview: direct tenant has no active connections");
-                        return Ok(Vec::new());
-                    }
-                    let tools = match client.list_tools(&allowlist, &[]).await {
-                        Ok(listing) => listing.tools,
-                        Err(error) => {
-                            tracing::info!(%error, "[connectors] overview: direct list_tools failed; continuing without tools");
-                            Vec::new()
-                        }
-                    };
-                    (allowlist, connections, tools)
+                let allowlist = overview::active_toolkits(&connections);
+                if allowlist.is_empty() {
+                    tracing::info!(
+                        "[connectors] overview: direct tenant has no active connections"
+                    );
+                    return Ok(Vec::new());
                 }
-            };
+                let tools = match client.list_tools(&allowlist, &[]).await {
+                    Ok(listing) => listing.tools,
+                    Err(error) => {
+                        tracing::info!(%error, "[connectors] overview: direct list_tools failed; continuing without tools");
+                        Vec::new()
+                    }
+                };
+                (allowlist, connections, tools)
+            }
+        };
 
         let mut preferences = HashMap::new();
         for toolkit in overview::active_toolkits(&connections) {

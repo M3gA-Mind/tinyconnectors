@@ -708,8 +708,12 @@ impl ConnectorService {
         &self,
         request: ComposioExecuteRequest,
     ) -> TinyBusResult<ComposioExecuteResponse> {
-        self.execute_checked(&request.tool, request.arguments, request.connection_id.as_deref())
-            .await
+        self.execute_checked(
+            &request.tool,
+            request.arguments,
+            request.connection_id.as_deref(),
+        )
+        .await
     }
 
     // The registry is in memory: there is nothing to await. `async` is the
@@ -978,9 +982,11 @@ impl ConnectorService {
         &self,
         request: tinyconnectors_bus::composio::ComposioGetToolContractRequest,
     ) -> TinyBusResult<tinyconnectors_bus::composio::ComposioGetToolContractResponse> {
-        Ok(tinyconnectors_bus::composio::ComposioGetToolContractResponse {
-            contract: self.contract_with_probe(&request.slug).await?,
-        })
+        Ok(
+            tinyconnectors_bus::composio::ComposioGetToolContractResponse {
+                contract: self.contract_with_probe(&request.slug).await?,
+            },
+        )
     }
 
     /// Returns every live tool contract of one toolkit, probe overlay included.
@@ -989,13 +995,15 @@ impl ConnectorService {
         request: tinyconnectors_bus::composio::ComposioListToolContractsRequest,
     ) -> TinyBusResult<tinyconnectors_bus::composio::ComposioListToolContractsResponse> {
         let (toolkit, contracts) = self.toolkit_contracts(&request.toolkit).await?;
-        Ok(tinyconnectors_bus::composio::ComposioListToolContractsResponse {
-            toolkit,
-            contracts: contracts
-                .into_iter()
-                .map(|contract| self.contract_caches.apply_probe(contract))
-                .collect(),
-        })
+        Ok(
+            tinyconnectors_bus::composio::ComposioListToolContractsResponse {
+                toolkit,
+                contracts: contracts
+                    .into_iter()
+                    .map(|contract| self.contract_caches.apply_probe(contract))
+                    .collect(),
+            },
+        )
     }
 
     /// Runs one confirmed read action and reports the real output shape.
@@ -1011,9 +1019,11 @@ impl ConnectorService {
         &self,
         request: tinyconnectors_bus::composio::ComposioListConnectedIntegrationsRequest,
     ) -> TinyBusResult<tinyconnectors_bus::composio::ComposioConnectedIntegrationsResponse> {
-        Ok(tinyconnectors_bus::composio::ComposioConnectedIntegrationsResponse {
-            integrations: self.connected_integrations(request.mode).await?,
-        })
+        Ok(
+            tinyconnectors_bus::composio::ComposioConnectedIntegrationsResponse {
+                integrations: self.connected_integrations(request.mode).await?,
+            },
+        )
     }
 
     #[allow(
