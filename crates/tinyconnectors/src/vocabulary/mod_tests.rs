@@ -1,5 +1,7 @@
 //! Compatibility tests for the compiled connector vocabulary.
 
+#![allow(clippy::expect_used)]
+
 use super::*;
 
 #[test]
