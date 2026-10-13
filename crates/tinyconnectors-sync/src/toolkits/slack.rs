@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 
 use super::identity::pick;
-use super::slack_catalog::CURATED;
+use super::catalog::messaging::SLACK_CURATED as CURATED;
 use crate::Result;
 use crate::provider::{ConnectorProvider, ProviderContext, ProviderUserProfile};
 use crate::scope::CuratedTool;
