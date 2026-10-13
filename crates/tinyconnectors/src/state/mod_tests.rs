@@ -42,10 +42,7 @@ async fn a_document_without_the_value_field_is_an_error_not_unset() {
         )
         .await
         .unwrap();
-    assert!(matches!(
-        store.get("gmail").await,
-        Err(Error::Store { .. })
-    ));
+    assert!(matches!(store.get("gmail").await, Err(Error::Store { .. })));
 }
 
 #[tokio::test]
