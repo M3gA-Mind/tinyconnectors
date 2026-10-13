@@ -4,8 +4,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use tinystoragedrivers_core::{DocumentStore, Precondition, StorageError};
 use tinyconnectors_sync::{Error as SyncError, PREFS_NAMESPACE, PrefsStore, Result as SyncResult};
+use tinystoragedrivers_core::{DocumentStore, Precondition, StorageError};
 
 /// Key inside the stored document holding the preference value.
 ///

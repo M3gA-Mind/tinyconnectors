@@ -115,7 +115,10 @@ async fn a_corrupt_record_does_not_hide_the_rest() {
         .await
         .expect("records");
     streams
-        .append(&archive.current_day_file(), json!({ "received_at_ms": "oops" }))
+        .append(
+            &archive.current_day_file(),
+            json!({ "received_at_ms": "oops" }),
+        )
         .await
         .expect("appends junk");
     archive
@@ -173,7 +176,11 @@ async fn writes_land_in_the_current_day_stream() {
 
     let name = archive.current_day_file();
     assert!(name.starts_with("triggers/"));
-    assert_eq!(streams.len(&name).await.unwrap(), 1, "one record per delivery");
+    assert_eq!(
+        streams.len(&name).await.unwrap(),
+        1,
+        "one record per delivery"
+    );
 }
 
 #[tokio::test]

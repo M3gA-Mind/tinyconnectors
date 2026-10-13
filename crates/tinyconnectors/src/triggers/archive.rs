@@ -96,26 +96,19 @@ impl TriggerArchive {
     /// # Errors
     ///
     /// Returns [`Error::Archive`] when the archive cannot be listed or read.
-    pub async fn list_recent(
-        &self,
-        limit: Option<usize>,
-    ) -> Result<ComposioTriggerHistoryResult> {
+    pub async fn list_recent(&self, limit: Option<usize>) -> Result<ComposioTriggerHistoryResult> {
         let limit = limit.unwrap_or(DEFAULT_HISTORY_LIMIT).max(1);
         let failed = |stream: &str, message: String| Error::Archive {
             path: stream.to_string(),
             message,
         };
 
-        let mut day_streams = self
-            .streams
-            .streams(STREAM_PREFIX)
-            .await
-            .map_err(|error| {
-                failed(
-                    STREAM_PREFIX,
-                    format!("could not list the archive: {error}"),
-                )
-            })?;
+        let mut day_streams = self.streams.streams(STREAM_PREFIX).await.map_err(|error| {
+            failed(
+                STREAM_PREFIX,
+                format!("could not list the archive: {error}"),
+            )
+        })?;
         // Newest day first: the name ends in a sortable ISO date.
         day_streams.sort_unstable_by(|left, right| right.cmp(left));
 
