@@ -81,11 +81,12 @@ module gets a credential:
 
 `config.composio.mode` and the keychain lookup in
 `security::credentials::get_composio_api_key` stay in OpenHuman. They stop
-constructing a client and start choosing a blob. `state_dir` is a storage
-registry key, not a filesystem path: the host registers a `ModuleStorage`
-under that key with `register_storage` before `Configure`, and the module keeps
-its scope-preference store and the trigger archive in that storage. Without a
-registration, history is unavailable and preferences are ephemeral. Until the preference migration in section 6
+constructing a client and start choosing a blob. `state_dir` is accepted and
+ignored: the module keeps its scope-preference store and the trigger archive in
+the host's storage, reached over the storage bus
+(`tinystoragedrivers-busproxy::connect_storage`), with the scope bound by the
+host from the authenticated caller and the grant in `STORAGE_NEEDS`. Without
+served storage, history is unavailable and preferences are ephemeral. Until the preference migration in section 6
 lands, the host still owns the user's actual preference.
 
 The blob is also optional. A module loaded without one still answers the
@@ -118,9 +119,8 @@ member would answer 401 — which a user reads as a broken account rather than a
 being signed out. It also keeps a credential from outliving the session that
 supplied it, which matters on a shared machine.
 
-`state_dir` is deliberately absent from the request. The trigger archive is
-opened once at load, and letting a later call move it would strand history that
-is already written.
+`state_dir` is deliberately absent from the request. Storage is bound by the
+host, not named by the module, so there is nothing for a later call to move.
 
 ## 3. Replacing the calls
 

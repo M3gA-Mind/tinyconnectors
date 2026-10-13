@@ -14,13 +14,15 @@ classification and archive appends execute inside the module. A structured
 provider error carries the stable class identifier and existing product message;
 it can contain provider detail and must never be sent to telemetry.
 
-`OpenArchive` receives a host-validated storage key (the host must first call
-`register_storage` for it) and returns an opaque
-lease. `RecordTrigger` and `ReadArchive` use that lease; `CloseArchive` releases
+`OpenArchive` returns an opaque lease on the caller's trigger streams (its
+`state_dir` is ignored; the host binds the scope). `RecordTrigger` and `ReadArchive` use that lease; `CloseArchive` releases
 it without deleting data. Leases are bounded, unknown/closed handles fail, and
 module shutdown drops the table. Hosts close the old user's lease when switching
 identity. Existing load-time `ListTriggerHistory` remains compatible. Records
-live in the registered tinystoragedrivers stream and document stores; existing
+live in the host's tinystoragedrivers stream and document stores, reached over
+the storage bus (`tinystoragedrivers-busproxy::connect_storage`); the grant the
+host must give is `tinyconnectors::state::STORAGE_NEEDS` (collection
+`composio-user-scopes`, stream prefix `triggers/`); existing
 arities are unchanged.
 
 The dynamic verifier exercises preparation and filtering with local payloads.

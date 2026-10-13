@@ -53,10 +53,12 @@ pub struct FilterResponseRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ArchiveHandle(pub String);
-/// Open an archive beneath a host-validated state directory.
+/// Open a trigger archive lease on the caller's storage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OpenArchiveRequest {
-    /// Validated state directory; the module preserves the existing triggers subdirectory.
+    /// Ignored since the module reads and writes through the host storage bus,
+    /// which binds the scope from the authenticated caller. Kept for wire
+    /// compatibility.
     pub state_dir: String,
 }
 /// Delivery to append to an explicitly owned archive.
