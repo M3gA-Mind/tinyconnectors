@@ -1304,7 +1304,7 @@ dependencies = [
 
 [[package]]
 name = "tinyconnectors"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1328,7 +1328,7 @@ dependencies = [
 
 [[package]]
 name = "tinyconnectors-bus"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -1336,7 +1336,7 @@ dependencies = [
 
 [[package]]
 name = "tinyconnectors-sync"
-version = "0.19.0"
+version = "0.19.1"
 dependencies = [
  "async-trait",
  "serde",
@@ -1348,8 +1348,8 @@ dependencies = [
 
 [[package]]
 name = "tinystoragedrivers-bus"
-version = "0.7.0"
-source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.7.0#6d1a1029de402f5937113fcc56e4023e0dc61c94"
+version = "0.8.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.8.0#f4b73d358f2e7b2ae9993f8e696401b1d2639858"
 dependencies = [
  "serde",
  "serde_json",
@@ -1358,8 +1358,8 @@ dependencies = [
 
 [[package]]
 name = "tinystoragedrivers-busproxy"
-version = "0.7.0"
-source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.7.0#6d1a1029de402f5937113fcc56e4023e0dc61c94"
+version = "0.8.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.8.0#f4b73d358f2e7b2ae9993f8e696401b1d2639858"
 dependencies = [
  "async-trait",
  "serde",
@@ -1373,8 +1373,8 @@ dependencies = [
 
 [[package]]
 name = "tinystoragedrivers-client"
-version = "0.7.0"
-source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.7.0#6d1a1029de402f5937113fcc56e4023e0dc61c94"
+version = "0.8.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.8.0#f4b73d358f2e7b2ae9993f8e696401b1d2639858"
 dependencies = [
  "async-trait",
  "serde",
@@ -1387,8 +1387,8 @@ dependencies = [
 
 [[package]]
 name = "tinystoragedrivers-core"
-version = "0.7.0"
-source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.7.0#6d1a1029de402f5937113fcc56e4023e0dc61c94"
+version = "0.8.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.8.0#f4b73d358f2e7b2ae9993f8e696401b1d2639858"
 dependencies = [
  "async-trait",
  "serde",
@@ -1399,8 +1399,8 @@ dependencies = [
 
 [[package]]
 name = "tinystoragedrivers-secrets"
-version = "0.7.0"
-source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.7.0#6d1a1029de402f5937113fcc56e4023e0dc61c94"
+version = "0.8.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.8.0#f4b73d358f2e7b2ae9993f8e696401b1d2639858"
 dependencies = [
  "async-trait",
  "atomicwrites",
