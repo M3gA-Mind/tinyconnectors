@@ -42,6 +42,26 @@ pub struct ToolkitVocabulary {
     pub actions: Option<Vec<VocabularyAction>>,
 }
 
+/// Which curated catalogs to list.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CuratedCatalogRequest {
+    /// One toolkit to list, matched case-insensitively with its known aliases.
+    /// Absent lists every curated toolkit, in canonical order.
+    #[serde(default)]
+    pub toolkit: Option<String>,
+}
+
+/// One curated action of a toolkit's catalog.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct CuratedTool {
+    /// Canonical toolkit slug whose catalog holds the action.
+    pub toolkit: String,
+    /// Exact provider action slug.
+    pub slug: String,
+    /// Curated classification.
+    pub scope: ToolScope,
+}
+
 /// Compiled catalog data; independent of credentials and account state.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VocabularyResponse {

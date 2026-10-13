@@ -1122,6 +1122,7 @@ export_module! {
         "NormalizeIdentities",
         "PrepareTaskFilter",
         "RuntimeMode",
+        "ListCuratedCatalog",
 
     ],
     signals = [],

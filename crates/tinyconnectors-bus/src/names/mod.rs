@@ -44,6 +44,12 @@ pub mod methods {
     pub const PREPARE_TASK_FILTER: &str = "PrepareTaskFilter";
     /// Return the live immutable initialization mode and contract version.
     pub const RUNTIME_MODE: &str = "RuntimeMode";
+    /// Lists the curated action catalog, optionally for one toolkit.
+    ///
+    /// Takes a `CuratedCatalogRequest` and returns `Vec<CuratedTool>` in
+    /// catalog order. Answered from compiled tables: no credentials, no
+    /// backend call.
+    pub const LIST_CURATED_CATALOG: &str = "ListCuratedCatalog";
 
     /// Lists the toolkits the backend allowlist currently enables.
     ///
@@ -271,6 +277,7 @@ pub const METHODS: &[&str] = &[
     methods::NORMALIZE_IDENTITIES,
     methods::PREPARE_TASK_FILTER,
     methods::RUNTIME_MODE,
+    methods::LIST_CURATED_CATALOG,
 ];
 
 #[cfg(test)]
