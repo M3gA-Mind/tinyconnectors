@@ -156,6 +156,8 @@ pub(crate) struct ModuleConfig {
     /// How to reach Composio, when the host has said.
     route: Option<RouteConfig>,
     runtime_mode: tinyconnectors_bus::ComposioRuntimeMode,
+    /// The toolkits the host offers its agent. Applied to listings only.
+    offered: tinyconnectors_bus::vocabulary::OfferedToolkits,
 }
 
 impl<'de> Deserialize<'de> for ModuleConfig {
@@ -178,6 +180,13 @@ impl<'de> Deserialize<'de> for ModuleConfig {
             .transpose()
             .map_err(serde::de::Error::custom)?
             .unwrap_or_default();
+        let offered = value
+            .get("offered_toolkits")
+            .cloned()
+            .map(serde_json::from_value::<tinyconnectors_bus::vocabulary::OfferedToolkits>)
+            .transpose()
+            .map_err(serde::de::Error::custom)?
+            .unwrap_or_default();
         let route = if value.get("route").is_none_or(serde_json::Value::is_null) {
             None
         } else {
@@ -193,6 +202,7 @@ impl<'de> Deserialize<'de> for ModuleConfig {
         Ok(Self {
             route,
             runtime_mode,
+            offered,
         })
     }
 }
@@ -342,6 +352,8 @@ struct ConnectorService {
     prefs: Arc<dyn PrefsStore>,
     /// Tool contracts and probe results remembered between calls.
     contract_caches: Arc<crate::contracts::ContractCaches>,
+    /// Which toolkits listings offer; fixed at load.
+    offered: tinyconnectors_bus::vocabulary::OfferedToolkits,
 }
 
 impl ConnectorService {
@@ -428,6 +440,21 @@ impl ConnectorService {
             .unwrap_or_else(|| classify_unknown(action));
 
         Ok(pref.allows(scope))
+    }
+
+    /// Whether a listing offers `action` under the stored scope preference.
+    ///
+    /// Stricter than [`Self::permits`] in one way: a toolkit with a curated
+    /// catalog offers only the actions in it, so the agent never sees an action
+    /// the catalog does not vouch for. Execution keeps the preference-only rule.
+    async fn listed(&self, action: &str) -> TinyBusResult<bool> {
+        let Some(toolkit) = tinyconnectors_sync::toolkit_from_slug(action) else {
+            return Ok(true);
+        };
+        let pref = UserScopePref::load(self.prefs.as_ref(), &toolkit)
+            .await
+            .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+        Ok(crate::vocabulary_impl::catalogs::is_action_visible_with_pref(action, pref))
     }
 
     /// Runs one action after enforcing the stored scope preference.
@@ -530,10 +557,18 @@ impl ConnectorService {
     }
 
     async fn list_toolkits(&self) -> TinyBusResult<ComposioToolkitsResponse> {
-        self.client()?
+        let mut response = self
+            .client()?
             .list_toolkits()
             .await
-            .map_err(|error| to_bus_error(&error))
+            .map_err(|error| to_bus_error(&error))?;
+        response
+            .toolkits
+            .retain(|toolkit| self.offered.permits(toolkit));
+        response
+            .catalog
+            .retain(|entry| self.offered.permits(&entry.slug));
+        Ok(response)
     }
 
     async fn list_connections(&self) -> TinyBusResult<ComposioConnectionsResponse> {
@@ -581,10 +616,15 @@ impl ConnectorService {
             .await
             .map_err(|error| to_bus_error(&error))?;
 
+        response.tools.retain(|tool| {
+            tinyconnectors_sync::toolkit_from_slug(&tool.function.name)
+                .is_none_or(|toolkit| self.offered.permits(&toolkit))
+        });
+
         if request.apply_user_scopes {
             let mut allowed = Vec::with_capacity(response.tools.len());
             for tool in response.tools {
-                if self.permits(&tool.function.name).await? {
+                if self.listed(&tool.function.name).await? {
                     allowed.push(tool);
                 }
             }
@@ -727,9 +767,9 @@ impl ConnectorService {
     #[allow(clippy::unused_async)]
     #[allow(unknown_lints, clippy::unused_async_trait_impl)] // the bus trait method is async; this body has nothing to await
     async fn list_agent_ready_toolkits(&self) -> TinyBusResult<ComposioAgentReadyToolkitsResponse> {
-        Ok(ComposioAgentReadyToolkitsResponse {
-            toolkits: self.registry.agent_ready_toolkits(),
-        })
+        let mut toolkits = self.registry.agent_ready_toolkits();
+        toolkits.retain(|toolkit| self.offered.permits(toolkit));
+        Ok(ComposioAgentReadyToolkitsResponse { toolkits })
     }
 
     async fn get_user_profile(
@@ -910,7 +950,11 @@ impl ConnectorService {
         &self,
         request: tinyconnectors_bus::vocabulary::VocabularyRequest,
     ) -> TinyBusResult<tinyconnectors_bus::vocabulary::VocabularyResponse> {
-        Ok(crate::vocabulary_impl::get_vocabulary(request))
+        let mut vocabulary = crate::vocabulary_impl::get_vocabulary(request);
+        vocabulary
+            .agent_ready_toolkits
+            .retain(|toolkit| self.offered.permits(toolkit));
+        Ok(vocabulary)
     }
 
     /// Lists the curated action catalog without credentials or a backend call.
@@ -1115,6 +1159,7 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         .as_ref()
         .map(|storage| TriggerArchive::new(storage.streams.clone()));
 
+    let offered = config.offered.clone();
     let route = config.into_route().map_err(|error| to_bus_error(&error))?;
     tracing::info!(
         route = route.as_ref().map_or("none", |route| route.name()),
@@ -1134,6 +1179,7 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         prefs: prefs_store(storage.as_ref()),
         registry: crate::providers::default_registry(),
         contract_caches: Arc::default(),
+        offered,
         client,
         archive,
         archives: Arc::default(),

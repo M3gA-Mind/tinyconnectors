@@ -26,6 +26,7 @@ fn service_on(route: Arc<dyn Route>) -> ConnectorService {
         client,
         archive: None,
         archives: Arc::default(),
+        offered: tinyconnectors_bus::vocabulary::OfferedToolkits::default(),
     }
 }
 

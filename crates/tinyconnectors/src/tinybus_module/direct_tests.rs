@@ -23,6 +23,7 @@ fn unrouted_service() -> ConnectorService {
         client,
         archive: None,
         archives: Arc::default(),
+        offered: tinyconnectors_bus::vocabulary::OfferedToolkits::default(),
     }
 }
 
