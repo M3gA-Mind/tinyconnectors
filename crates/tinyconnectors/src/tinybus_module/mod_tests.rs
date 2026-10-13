@@ -117,6 +117,7 @@ fn service_over(transport: Arc<StubTransport>) -> ConnectorService {
         // history member's own behaviour without one is tested separately.
         archive: None,
         archives: Arc::default(),
+        offered: tinyconnectors_bus::vocabulary::OfferedToolkits::default(),
     }
 }
 
@@ -1752,5 +1753,73 @@ async fn visible_tools_use_the_stored_preference_unless_one_is_supplied() -> tin
         .await?;
     assert!(!slugs(&overridden).contains(&"GMAIL_DELETE_MESSAGE".to_owned()));
     assert!(!slugs(&overridden).contains(&"GMAIL_SEND_EMAIL".to_owned()));
+    Ok(())
+}
+
+fn offering(allow: &[&str], deny: &[&str]) -> tinyconnectors_bus::vocabulary::OfferedToolkits {
+    tinyconnectors_bus::vocabulary::OfferedToolkits {
+        allow: allow.iter().map(|s| (*s).to_owned()).collect(),
+        deny: deny.iter().map(|s| (*s).to_owned()).collect(),
+    }
+}
+
+#[tokio::test]
+async fn listings_omit_toolkits_the_host_does_not_offer() -> tinybus::Result<()> {
+    let transport = StubTransport::replying(json!({
+        "tools": [
+            { "function": { "name": "GMAIL_FETCH_EMAILS" } },
+            { "function": { "name": "SLACK_SEND_MESSAGE_TO_CHANNEL" } }
+        ],
+        "toolkits": ["gmail", "slack"]
+    }));
+    let mut service = service_over(transport);
+    service.offered = offering(&[], &["slack"]);
+    let (_serving, _client, proxy, _bus) = proxy_to(service).await?;
+
+    let tools: ComposioToolsResponse = proxy
+        .call(
+            names::methods::LIST_TOOLS,
+            (ComposioListToolsRequest::default(),),
+        )
+        .await?;
+    let offered: Vec<_> = tools
+        .tools
+        .iter()
+        .map(|t| t.function.name.as_str())
+        .collect();
+    assert_eq!(offered, ["GMAIL_FETCH_EMAILS"]);
+
+    let toolkits: ComposioToolkitsResponse = proxy.call_bare(names::methods::LIST_TOOLKITS).await?;
+    assert_eq!(toolkits.toolkits, ["gmail"]);
+
+    let ready: ComposioAgentReadyToolkitsResponse = proxy
+        .call_bare(names::methods::LIST_AGENT_READY_TOOLKITS)
+        .await?;
+    assert!(ready.toolkits.contains(&"gmail".to_owned()));
+    assert!(!ready.toolkits.contains(&"slack".to_owned()));
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_allow_list_offers_only_the_toolkits_it_names() -> tinybus::Result<()> {
+    let transport = StubTransport::replying(json!({}));
+    let mut service = service_over(transport);
+    service.offered = offering(&["gmail"], &[]);
+    let (_serving, _client, proxy, _bus) = proxy_to(service).await?;
+    let ready: ComposioAgentReadyToolkitsResponse = proxy
+        .call_bare(names::methods::LIST_AGENT_READY_TOOLKITS)
+        .await?;
+    assert_eq!(ready.toolkits, ["gmail"]);
+    Ok(())
+}
+
+#[test]
+fn the_load_configuration_reads_the_offered_toolkits() -> serde_json::Result<()> {
+    let config: ModuleConfig = serde_json::from_value(
+        json!({ "offered_toolkits": { "allow": ["gmail"], "deny": ["slack"] } }),
+    )?;
+    assert_eq!(config.offered, offering(&["gmail"], &["slack"]));
+    let bare: ModuleConfig = serde_json::from_value(json!({}))?;
+    assert!(bare.offered.is_unrestricted());
     Ok(())
 }
