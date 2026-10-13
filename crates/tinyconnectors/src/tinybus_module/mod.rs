@@ -557,10 +557,18 @@ impl ConnectorService {
     }
 
     async fn list_toolkits(&self) -> TinyBusResult<ComposioToolkitsResponse> {
-        self.client()?
+        let mut response = self
+            .client()?
             .list_toolkits()
             .await
-            .map_err(|error| to_bus_error(&error))
+            .map_err(|error| to_bus_error(&error))?;
+        response
+            .toolkits
+            .retain(|toolkit| self.offered.permits(toolkit));
+        response
+            .catalog
+            .retain(|entry| self.offered.permits(&entry.slug));
+        Ok(response)
     }
 
     async fn list_connections(&self) -> TinyBusResult<ComposioConnectionsResponse> {
@@ -607,6 +615,11 @@ impl ConnectorService {
             .list_tools(&request.toolkits, &request.tags)
             .await
             .map_err(|error| to_bus_error(&error))?;
+
+        response.tools.retain(|tool| {
+            tinyconnectors_sync::toolkit_from_slug(&tool.function.name)
+                .is_none_or(|toolkit| self.offered.permits(&toolkit))
+        });
 
         if request.apply_user_scopes {
             let mut allowed = Vec::with_capacity(response.tools.len());
@@ -754,9 +767,9 @@ impl ConnectorService {
     #[allow(clippy::unused_async)]
     #[allow(unknown_lints, clippy::unused_async_trait_impl)] // the bus trait method is async; this body has nothing to await
     async fn list_agent_ready_toolkits(&self) -> TinyBusResult<ComposioAgentReadyToolkitsResponse> {
-        Ok(ComposioAgentReadyToolkitsResponse {
-            toolkits: self.registry.agent_ready_toolkits(),
-        })
+        let mut toolkits = self.registry.agent_ready_toolkits();
+        toolkits.retain(|toolkit| self.offered.permits(toolkit));
+        Ok(ComposioAgentReadyToolkitsResponse { toolkits })
     }
 
     async fn get_user_profile(
@@ -1142,6 +1155,7 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         .as_ref()
         .map(|storage| TriggerArchive::new(storage.streams.clone()));
 
+    let offered = config.offered.clone();
     let route = config.into_route().map_err(|error| to_bus_error(&error))?;
     tracing::info!(
         route = route.as_ref().map_or("none", |route| route.name()),
@@ -1161,7 +1175,7 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         prefs: prefs_store(storage.as_ref()),
         registry: crate::providers::default_registry(),
         contract_caches: Arc::default(),
-        offered: config.offered.clone(),
+        offered,
         client,
         archive,
         archives: Arc::default(),
