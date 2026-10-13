@@ -111,6 +111,7 @@ fn service_over(transport: Arc<StubTransport>) -> ConnectorService {
         actions: Arc::new(crate::providers::ClientActions::new(Arc::clone(&client))),
         prefs: Arc::new(super::EphemeralPrefsStore::default()),
         registry: crate::providers::default_registry(),
+        contract_caches: Arc::default(),
         client,
         // No archive: these tests exercise the backend-facing members. The
         // history member's own behaviour without one is tested separately.
@@ -1185,6 +1186,7 @@ async fn a_module_loaded_without_a_route_becomes_usable_after_configure() {
         ))),
         prefs: Arc::new(super::EphemeralPrefsStore::default()),
         registry: crate::providers::default_registry(),
+        contract_caches: Arc::default(),
         client: Arc::new(std::sync::RwLock::new(None)),
         archive: None,
         archives: Arc::default(),
@@ -1260,6 +1262,7 @@ async fn a_reconfigured_route_reaches_the_action_runner_too() {
         actions: Arc::clone(&actions),
         prefs: Arc::new(super::EphemeralPrefsStore::default()),
         registry: crate::providers::default_registry(),
+        contract_caches: Arc::default(),
         client,
         archive: None,
         archives: Arc::default(),
