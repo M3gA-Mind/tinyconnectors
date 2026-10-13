@@ -81,10 +81,10 @@ percent-encoding = "2"
 # Civil dates for the trigger archive, which rotates at a calendar boundary
 # rather than after a fixed number of elapsed seconds. No default features.
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
-# Safe advisory file locking for the trigger archive's appends. `unsafe` is
-# forbidden workspace-wide, so the `flock` call has to come from a crate that
-# encapsulates it rather than from a hand-rolled `extern "C"` block.
-fs4 = { version = "1", default-features = false, features = ["sync"] }
+# The storage ports (documents, streams) the scope preferences and the trigger
+# archive are written through. Ports only: no driver crate, no database client.
+# A tag so a host that vendors tinystoragedrivers once can `[patch]` it.
+tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v0.7.0" }
 
 # Lints apply to every member that opts in with `[lints] workspace = true`, and
 # to every target of that member. CI runs clippy with `-D warnings`, so anything
