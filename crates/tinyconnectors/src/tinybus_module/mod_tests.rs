@@ -1507,6 +1507,8 @@ async fn bus_archive_leases_separate_users_and_preserve_daily_history() -> tinyb
     };
     let first = TempDir::new("archive-first");
     let second = TempDir::new("archive-second");
+    register_for(&first);
+    register_for(&second);
     let (_serving, proxy) = serve_via_setup(ModuleConfig::default()).await?;
     let open = |dir: &TempDir| OpenArchiveRequest {
         state_dir: dir.0.to_string_lossy().into_owned(),
