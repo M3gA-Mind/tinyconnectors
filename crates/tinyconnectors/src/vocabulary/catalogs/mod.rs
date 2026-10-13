@@ -1,93 +1,17 @@
-//! The curated Composio tool catalogs, and the lookups over them.
+//! Scope-aware lookups over the curated Composio catalogs.
 //!
-//! Composio publishes 60+ actions per toolkit; most are noise for an agent's
-//! planning loop. Each toolkit gets a hand-curated `&'static [CuratedTool]`
-//! slice that pares the surface down to a useful subset and tags every action
-//! with a [`ToolScope`], so per-user scope preferences can gate execution.
-//!
-//! The host is their only reader: it filters the agent's visible tool list,
-//! renders the `gated_tools` unlock hints, and decides which connected
-//! toolkits get the "agent-ready" badge.
-
-pub(crate) mod business;
-pub(crate) mod clickup;
-pub(crate) mod descriptions;
-pub(crate) mod github;
-pub(crate) mod gmail;
-pub(crate) mod google;
-pub(crate) mod linear;
-pub(crate) mod messaging;
-pub(crate) mod microsoft;
-pub(crate) mod notion;
-pub(crate) mod productivity;
-pub(crate) mod social_media;
+//! The tables themselves, the toolkit-to-catalog map and the capability
+//! descriptions live in `tinyconnectors_sync::toolkits::catalog`, where the
+//! providers read them too; this module adds the scope-preference gating the
+//! vocabulary members need.
 
 use super::scopes::{
     CuratedTool, ToolScope, UserScopePref, classify_unknown, find_curated, toolkit_from_slug,
 };
 
-pub(crate) use descriptions::toolkit_description;
-
-/// Toolkits with a native identity provider (profile facets).
-pub(crate) const NATIVE_PROVIDERS: &[&str] =
-    &["gmail", "notion", "slack", "clickup", "github", "linear"];
-
-/// Does `toolkit` have a native identity provider?
-#[must_use]
-pub(crate) fn has_native_provider(toolkit: &str) -> bool {
-    NATIVE_PROVIDERS.contains(&toolkit)
-}
-
-/// Static toolkit → curated catalog map.
-///
-/// The lookup key is the lowercased prefix [`toolkit_from_slug`] returns for an
-/// action slug — `GOOGLECALENDAR_CREATE_EVENT` → `"googlecalendar"`.
-/// Multi-segment prefixes like `MICROSOFT_TEAMS_*` return their known toolkit
-/// slug.
-#[must_use]
-pub(crate) fn catalog_for_toolkit(toolkit: &str) -> Option<&'static [CuratedTool]> {
-    match toolkit.trim().to_ascii_lowercase().as_str() {
-        // Toolkits with a native provider. Each provider's `curated_tools()`
-        // returns this same slice.
-        "gmail" => Some(gmail::GMAIL_CURATED),
-        "notion" => Some(notion::NOTION_CURATED),
-        "github" => Some(github::GITHUB_CURATED),
-        "linear" => Some(linear::LINEAR_CURATED),
-        "clickup" => Some(clickup::CLICKUP_CURATED),
-        "slack" => Some(messaging::SLACK_CURATED),
-        // Catalog-only toolkits.
-        "discord" => Some(messaging::DISCORD_CURATED),
-        "googlecalendar" | "google_calendar" => Some(google::GOOGLECALENDAR_CURATED),
-        "googledrive" | "google_drive" => Some(google::GOOGLEDRIVE_CURATED),
-        "googledocs" | "google_docs" => Some(google::GOOGLEDOCS_CURATED),
-        "googlesheets" | "google_sheets" => Some(google::GOOGLESHEETS_CURATED),
-        "outlook" => Some(productivity::OUTLOOK_CURATED),
-        // The legacy "microsoft" alias stays while `toolkit_from_slug` returns
-        // the precise "microsoft_teams" slug for Teams actions.
-        "microsoft" | "microsoft_teams" => Some(messaging::MICROSOFT_TEAMS_CURATED),
-        "jira" => Some(productivity::JIRA_CURATED),
-        "trello" => Some(productivity::TRELLO_CURATED),
-        "asana" => Some(productivity::ASANA_CURATED),
-        "dropbox" => Some(productivity::DROPBOX_CURATED),
-        "twitter" => Some(social_media::TWITTER_CURATED),
-        "spotify" => Some(social_media::SPOTIFY_CURATED),
-        "telegram" => Some(messaging::TELEGRAM_CURATED),
-        "whatsapp" => Some(messaging::WHATSAPP_CURATED),
-        "shopify" => Some(business::SHOPIFY_CURATED),
-        "stripe" => Some(business::STRIPE_CURATED),
-        "hubspot" => Some(business::HUBSPOT_CURATED),
-        "salesforce" => Some(business::SALESFORCE_CURATED),
-        "airtable" => Some(business::AIRTABLE_CURATED),
-        "figma" => Some(business::FIGMA_CURATED),
-        "youtube" => Some(social_media::YOUTUBE_CURATED),
-        // The multi-segment prefix extracts to "one_drive"; retain "one" as
-        // a legacy alias alongside the canonical UI/backend spellings.
-        "one" | "one_drive" | "onedrive" => Some(microsoft::ONE_DRIVE_CURATED),
-        "excel" => Some(microsoft::EXCEL_CURATED),
-        "todoist" => Some(productivity::TODOIST_CURATED),
-        _ => None,
-    }
-}
+pub(crate) use tinyconnectors_sync::toolkits::catalog::{
+    catalog_for_toolkit, has_native_provider, toolkit_description,
+};
 
 /// Should this action slug appear in the agent's tool surface, given an
 /// already-loaded user scope preference?
