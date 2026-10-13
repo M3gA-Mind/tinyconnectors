@@ -50,6 +50,13 @@ pub mod methods {
     /// catalog order. Answered from compiled tables: no credentials, no
     /// backend call.
     pub const LIST_CURATED_CATALOG: &str = "ListCuratedCatalog";
+    /// Lists the curated actions of one toolkit that a scope preference exposes.
+    ///
+    /// Takes a `VisibleToolsRequest` and returns a `VisibleToolsResponse`. The
+    /// preference is the request's when it carries one, otherwise the user's
+    /// stored preference for the toolkit (the default when none is stored).
+    /// Added in contract 1.18.
+    pub const LIST_VISIBLE_TOOLS: &str = "ListVisibleTools";
 
     /// Lists the toolkits the backend allowlist currently enables.
     ///
@@ -274,6 +281,7 @@ pub const METHODS: &[&str] = &[
     methods::ROUTED_READ,
     methods::GET_VOCABULARY,
     methods::LIST_CURATED_CATALOG,
+    methods::LIST_VISIBLE_TOOLS,
     methods::EVALUATE_ACTIONS,
     methods::NORMALIZE_IDENTITIES,
     methods::PREPARE_TASK_FILTER,

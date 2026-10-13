@@ -62,6 +62,31 @@ pub struct CuratedTool {
     pub scope: ToolScope,
 }
 
+/// One toolkit whose scope-visible curated actions the caller wants.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VisibleToolsRequest {
+    /// Toolkit name, matched case-insensitively with its known aliases.
+    pub toolkit: String,
+    /// Scopes to apply. Absent applies the user's stored preference for the
+    /// toolkit, which is the default when none is stored.
+    #[serde(default)]
+    pub preference: Option<UserScopePref>,
+}
+
+/// The curated actions of a toolkit that a scope preference exposes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VisibleToolsResponse {
+    /// Canonical toolkit slug.
+    pub toolkit: String,
+    /// The preference that was applied.
+    pub preference: UserScopePref,
+    /// Whether the toolkit has a curated catalog. An uncurated toolkit lists no
+    /// tools and passes through, gated per action by its classified scope.
+    pub has_catalog: bool,
+    /// Curated actions the preference allows, in catalog order.
+    pub tools: Vec<CuratedTool>,
+}
+
 /// Compiled catalog data; independent of credentials and account state.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VocabularyResponse {

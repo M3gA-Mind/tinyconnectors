@@ -910,6 +910,26 @@ impl ConnectorService {
         Ok(crate::vocabulary_impl::list_curated_catalog(request))
     }
 
+    /// Lists the curated actions a scope preference exposes for one toolkit.
+    ///
+    /// Without a preference in the request, the user's stored one applies, so
+    /// the answer matches what `ListTools` and `Execute` enforce.
+    async fn list_visible_tools(
+        &self,
+        request: tinyconnectors_bus::vocabulary::VisibleToolsRequest,
+    ) -> TinyBusResult<tinyconnectors_bus::vocabulary::VisibleToolsResponse> {
+        let toolkit = request.toolkit.trim().to_ascii_lowercase();
+        let preference = match request.preference {
+            Some(preference) => preference,
+            None => UserScopePref::load(self.prefs.as_ref(), &toolkit)
+                .await
+                .map_err(|error| tinybus::Error::failed(error.to_string()))?,
+        };
+        Ok(crate::vocabulary_impl::list_visible_tools(
+            &toolkit, preference,
+        ))
+    }
+
     /// Evaluates display metadata; Execute still checks persisted preferences.
     #[allow(clippy::unused_async, reason = "required by the interface dispatcher")]
     #[allow(unknown_lints, clippy::unused_async_trait_impl)]
@@ -1129,6 +1149,7 @@ export_module! {
         "RoutedRead",
         "GetVocabulary",
         "ListCuratedCatalog",
+        "ListVisibleTools",
         "EvaluateActions",
         "NormalizeIdentities",
         "PrepareTaskFilter",

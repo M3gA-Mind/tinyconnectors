@@ -70,6 +70,26 @@ pub(crate) fn list_curated_catalog(request: CuratedCatalogRequest) -> Vec<Curate
         .collect()
 }
 
+pub(crate) fn list_visible_tools(toolkit: &str, preference: UserScopePref) -> VisibleToolsResponse {
+    let catalog = catalogs::catalog_for_toolkit(toolkit);
+    let tools = catalog
+        .unwrap_or_default()
+        .iter()
+        .filter(|action| preference.allows(action.scope))
+        .map(|action| CuratedTool {
+            toolkit: toolkit.to_owned(),
+            slug: action.slug.into(),
+            scope: action.scope,
+        })
+        .collect();
+    VisibleToolsResponse {
+        toolkit: toolkit.to_owned(),
+        preference,
+        has_catalog: catalog.is_some(),
+        tools,
+    }
+}
+
 pub(crate) fn evaluate_actions(
     requests: Vec<ActionVocabularyRequest>,
 ) -> Vec<ActionVocabularyResponse> {

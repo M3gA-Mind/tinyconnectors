@@ -58,6 +58,7 @@ fn the_method_table_holds_the_declared_members() {
             methods::ROUTED_READ,
             methods::GET_VOCABULARY,
             methods::LIST_CURATED_CATALOG,
+            methods::LIST_VISIBLE_TOOLS,
             methods::EVALUATE_ACTIONS,
             methods::NORMALIZE_IDENTITIES,
             methods::PREPARE_TASK_FILTER,
