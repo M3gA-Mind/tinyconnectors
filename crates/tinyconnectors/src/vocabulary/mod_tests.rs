@@ -70,17 +70,17 @@ fn unknown_scope_profiles_are_explicit_and_curated_actions_take_precedence() {
         query("GMAIL_UNCURATED_ACTION", UnknownScopeProfile::LeadingVerb),
         query("INVALID", UnknownScopeProfile::LeadingVerb),
     ]);
-    assert_eq!(response[0].scope, ToolScope::Write);
+    assert_eq!(response[0].scope, tinyconnectors_bus::vocabulary::ToolScope::Write);
     assert!(!response[0].visible);
-    assert_eq!(response[1].scope, ToolScope::Read);
+    assert_eq!(response[1].scope, tinyconnectors_bus::vocabulary::ToolScope::Read);
     assert!(response[1].visible);
     for value in &response[2..4] {
-        assert_eq!(value.curated_scope, Some(ToolScope::Read));
+        assert_eq!(value.curated_scope, Some(tinyconnectors_bus::vocabulary::ToolScope::Read));
         assert!(value.visible);
     }
-    assert_eq!(response[4].scope, ToolScope::Admin);
-    assert_eq!(response[5].scope, ToolScope::Write);
-    assert_eq!(response[6].scope, ToolScope::Read);
+    assert_eq!(response[4].scope, tinyconnectors_bus::vocabulary::ToolScope::Admin);
+    assert_eq!(response[5].scope, tinyconnectors_bus::vocabulary::ToolScope::Write);
+    assert_eq!(response[6].scope, tinyconnectors_bus::vocabulary::ToolScope::Read);
     assert!(!response[7].visible);
     assert!(response[8].visible);
 }
@@ -317,8 +317,8 @@ fn visible_tools_follow_the_scope_preference() {
     let default = list_visible_tools("gmail", UserScopePref::default());
     assert!(default.has_catalog);
     assert!(!default.tools.is_empty());
-    assert!(default.tools.iter().all(|t| t.scope != ToolScope::Admin));
-    assert!(default.tools.iter().any(|t| t.scope == ToolScope::Write));
+    assert!(default.tools.iter().all(|t| t.scope != tinyconnectors_bus::vocabulary::ToolScope::Admin));
+    assert!(default.tools.iter().any(|t| t.scope == tinyconnectors_bus::vocabulary::ToolScope::Write));
 
     let read_only = list_visible_tools(
         "gmail",
@@ -328,7 +328,7 @@ fn visible_tools_follow_the_scope_preference() {
             admin: false,
         },
     );
-    assert!(read_only.tools.iter().all(|t| t.scope == ToolScope::Read));
+    assert!(read_only.tools.iter().all(|t| t.scope == tinyconnectors_bus::vocabulary::ToolScope::Read));
     assert!(read_only.tools.len() < default.tools.len());
 
     let everything = list_visible_tools(
