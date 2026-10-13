@@ -38,6 +38,39 @@ pub struct ProviderUserProfile {
     pub extras: serde_json::Value,
 }
 
+impl From<crate::composio::ComposioUserProfile> for ProviderUserProfile {
+    /// The member reply's profile as the host's identity shape: the same fields,
+    /// moved. Replaces a serde round-trip between the two shapes, which could
+    /// only fail once they drifted apart.
+    fn from(profile: crate::composio::ComposioUserProfile) -> Self {
+        Self {
+            toolkit: profile.toolkit,
+            connection_id: profile.connection_id,
+            display_name: profile.display_name,
+            email: profile.email,
+            username: profile.username,
+            avatar_url: profile.avatar_url,
+            profile_url: profile.profile_url,
+            extras: profile.extras,
+        }
+    }
+}
+
+impl From<ProviderUserProfile> for crate::composio::ComposioUserProfile {
+    fn from(profile: ProviderUserProfile) -> Self {
+        Self {
+            toolkit: profile.toolkit,
+            connection_id: profile.connection_id,
+            display_name: profile.display_name,
+            email: profile.email,
+            username: profile.username,
+            avatar_url: profile.avatar_url,
+            profile_url: profile.profile_url,
+            extras: profile.extras,
+        }
+    }
+}
+
 /// Durable identifier dimension.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

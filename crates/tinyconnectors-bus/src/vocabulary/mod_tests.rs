@@ -110,3 +110,23 @@ fn task_filter_payload_and_cap_match_the_host_shape() -> serde_json::Result<()> 
     );
     Ok(())
 }
+
+#[test]
+fn a_member_profile_converts_to_the_host_identity_shape_without_serde() {
+    let reply = crate::composio::ComposioUserProfile {
+        toolkit: "slack".into(),
+        connection_id: Some("c1".into()),
+        display_name: Some("Ada".into()),
+        email: None,
+        username: Some("ada".into()),
+        avatar_url: None,
+        profile_url: Some("https://example.test/ada".into()),
+        extras: serde_json::json!({"team": "t1"}),
+    };
+    let identity = ProviderUserProfile::from(reply.clone());
+    assert_eq!(identity.toolkit, "slack");
+    assert_eq!(identity.connection_id.as_deref(), Some("c1"));
+    assert_eq!(identity.extras["team"], "t1");
+    let back = crate::composio::ComposioUserProfile::from(identity);
+    assert_eq!(serde_json::to_value(back).unwrap(), serde_json::to_value(reply).unwrap());
+}
