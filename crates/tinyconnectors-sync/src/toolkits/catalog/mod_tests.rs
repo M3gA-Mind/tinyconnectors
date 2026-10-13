@@ -1,5 +1,7 @@
 //! Compatibility tests for the compiled connector vocabulary.
 
+#![allow(clippy::expect_used, clippy::unwrap_used, clippy::panic)]
+
 use super::*;
 
 // Tests for the surrounding module.
