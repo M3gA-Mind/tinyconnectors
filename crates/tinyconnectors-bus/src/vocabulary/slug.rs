@@ -1,13 +1,11 @@
-//! Synchronous slug helpers for the Composio action slugs the host's hot
-//! paths (tool visibility, flow gates, approval hooks) must classify without
-//! awaiting the connector module.
+//! Synchronous, text-only helpers for Composio action slugs.
 //!
-//! The types they return ([`ToolScope`], [`CuratedTool`], [`UserScopePref`])
-//! are the connector contract's (`tinyconnectors_bus::vocabulary`); the
-//! curated catalogs and the stored preference are the module's, read through
-//! [`super::curated`] and `ops::scope_prefs`. What remains here is text-only
-//! slug parsing that the contract does not yet serve synchronously
-//! (`EvaluateActions` answers the same questions, asynchronously).
+//! A host's hot paths (tool visibility, flow gates, approval hooks) must
+//! classify a slug without awaiting the connector module, so the parsing lives
+//! in the contract crate: one owner, no I/O, and no tables beyond the handful
+//! of toolkit prefixes below. The curated catalogs and the stored preference
+//! are the module's (`ListCuratedCatalog`, `GetUserScopes`); `EvaluateActions`
+//! answers the same questions asynchronously and uses these helpers.
 
 use super::{CuratedTool, ToolScope};
 
@@ -135,5 +133,6 @@ pub fn action_slug_matches(candidate: &str, requested: &str) -> bool {
 }
 
 #[cfg(test)]
+#[doc = "Tests for the slug helpers."]
 #[path = "slug_tests.rs"]
 mod tests;

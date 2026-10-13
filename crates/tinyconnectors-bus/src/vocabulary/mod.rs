@@ -5,10 +5,16 @@
 
 pub mod profile;
 pub mod scopes;
+pub mod slug;
+pub mod task_sources;
 pub mod tasks;
 
 pub use profile::{ConnectedIdentity, IdentityKind, ProviderUserProfile};
 pub use scopes::{ToolScope, UserScopePref};
+pub use slug::{
+    action_slug_matches, canonical_action_slug, classify_unknown, find_curated, toolkit_from_slug,
+};
+pub use task_sources::{FetchReason, FilterSpec, ProviderSlug, SourceTarget};
 pub use tasks::{
     DEFAULT_TASK_FETCH_MAX, GithubFetchMode, NormalizedTask, TaskContainer, TaskFetchFilter,
     TaskKind,
