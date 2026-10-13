@@ -128,5 +128,8 @@ fn a_member_profile_converts_to_the_host_identity_shape_without_serde() {
     assert_eq!(identity.connection_id.as_deref(), Some("c1"));
     assert_eq!(identity.extras["team"], "t1");
     let back = crate::composio::ComposioUserProfile::from(identity);
-    assert_eq!(serde_json::to_value(back).unwrap(), serde_json::to_value(reply).unwrap());
+    assert_eq!(
+        serde_json::to_value(back).unwrap(),
+        serde_json::to_value(reply).unwrap()
+    );
 }

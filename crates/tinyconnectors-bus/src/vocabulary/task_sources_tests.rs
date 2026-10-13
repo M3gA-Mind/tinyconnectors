@@ -100,7 +100,10 @@ fn notion_filter_maps_board_and_status() {
     };
     let filter = spec.to_fetch_filter(5);
     assert_eq!(filter.database_id.as_deref(), Some("board-xyz"));
-    assert!(filter.assignee_is_me, "assigned_to_me maps to assignee_is_me");
+    assert!(
+        filter.assignee_is_me,
+        "assigned_to_me maps to assignee_is_me"
+    );
     assert_eq!(filter.status.as_deref(), Some("Todo"));
     assert_eq!(filter.max, 5);
 }

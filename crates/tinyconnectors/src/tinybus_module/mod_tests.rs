@@ -437,7 +437,11 @@ async fn a_listing_offers_only_curated_actions_of_a_curated_toolkit() -> tinybus
             (ComposioListToolsRequest::default(),),
         )
         .await?;
-    let offered: Vec<_> = reply.tools.iter().map(|t| t.function.name.as_str()).collect();
+    let offered: Vec<_> = reply
+        .tools
+        .iter()
+        .map(|t| t.function.name.as_str())
+        .collect();
     assert_eq!(offered, ["SLACK_SEND_MESSAGE_TO_CHANNEL"]);
     Ok(())
 }
