@@ -60,6 +60,10 @@ percent-encoding = { workspace = true }
 # The storage ports the preferences (documents) and trigger archive (streams)
 # are written through.
 tinystoragedrivers-core = { workspace = true }
+# The module's connection to the host's storage bus (`connect_storage`). Tied to
+# the `module` feature because it needs the TinyBus `Connection` that feature
+# provides.
+tinystoragedrivers-busproxy = { workspace = true, optional = true }
 # Daily rotation of the trigger archive needs a civil date.
 chrono = { workspace = true }
 
@@ -74,6 +78,10 @@ async-trait = { workspace = true }
 tokio = { workspace = true, features = ["test-util"] }
 # Shared loader and readiness helpers for the release-artifact E2E verifier.
 tinybus = { workspace = true, features = ["test-support"] }
+# The loopback storage host the module tests connect to: `serve` over a
+# `StorageServer` bound to an in-memory backend.
+tinystoragedrivers-busproxy = { workspace = true }
+tinystoragedrivers-client = { workspace = true }
 
 # The bundled examples drive the loaded module through TinyBus.
 [[example]]
@@ -89,7 +97,7 @@ required-features = ["module"]
 # `default-features = false`.
 default = ["module"]
 # The TinyBus module adapter and its ABI exports (`src/tinybus_module/`).
-module = ["dep:tinybus", "dep:tinybus-module"]
+module = ["dep:tinybus", "dep:tinybus-module", "dep:tinystoragedrivers-busproxy"]
 linked = ["static-link"]
 # Link the TinyBus module into a host binary with Rust-addressable entry points.
 static-link = ["module"]
