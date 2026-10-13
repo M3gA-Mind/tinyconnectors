@@ -69,7 +69,7 @@ use tinyconnectors_sync::{
 };
 
 use crate::providers::ClientActions;
-use crate::state::FilePrefsStore;
+use crate::state::{DocumentPrefsStore, ModuleStorage, resolve_storage};
 use crate::triggers::TriggerArchive;
 
 /// How to reach Composio, when the host has said.
@@ -618,29 +618,24 @@ impl ConnectorService {
         request: tinyconnectors_bus::RecordTriggerRequest,
     ) -> TinyBusResult<ComposioTriggerHistoryEntry> {
         let archive = self.archives.get(&request.handle)?;
-        tokio::task::spawn_blocking(move || {
-            let event = request.event;
-            archive.record(
+        let event = request.event;
+        archive
+            .record(
                 &event.toolkit,
                 &event.trigger,
                 &event.metadata.id,
                 &event.metadata.uuid,
                 &event.payload,
             )
-        })
-        .await
-        .map_err(|_| tinybus::Error::failed("trigger archive worker failed"))?
-        .map_err(|_| tinybus::Error::failed("trigger archive write failed"))
+            .await
+            .map_err(|_| tinybus::Error::failed("trigger archive write failed"))
     }
 
     async fn open_archive(
         &self,
         request: tinyconnectors_bus::OpenArchiveRequest,
     ) -> TinyBusResult<tinyconnectors_bus::ArchiveHandle> {
-        let archives = self.archives.clone();
-        tokio::task::spawn_blocking(move || archives.open(&request.state_dir))
-            .await
-            .map_err(|_| tinybus::Error::failed("trigger archive worker failed"))?
+        self.archives.open(&request.state_dir)
     }
 
     async fn read_archive(
@@ -648,9 +643,9 @@ impl ConnectorService {
         request: tinyconnectors_bus::ReadArchiveRequest,
     ) -> TinyBusResult<ComposioTriggerHistoryResult> {
         let archive = self.archives.get(&request.handle)?;
-        tokio::task::spawn_blocking(move || archive.list_recent(request.limit))
+        archive
+            .list_recent(request.limit)
             .await
-            .map_err(|_| tinybus::Error::failed("trigger archive worker failed"))?
             .map_err(|_| tinybus::Error::failed("trigger archive read failed"))
     }
 
@@ -843,17 +838,14 @@ impl ConnectorService {
             .as_ref()
             .ok_or_else(|| {
                 tinybus::Error::failed(
-                    "trigger history is unavailable: the module was loaded without a `state_dir`",
+                    "trigger history is unavailable: the module was loaded without registered storage for its `state_dir`",
                 )
             })?
             .clone();
 
-        // Reading the archive is synchronous file I/O, and the module owns a
-        // one-worker runtime: doing it inline would stall every other member
-        // for the duration of the read.
-        tokio::task::spawn_blocking(move || archive.list_recent(request.limit))
+        archive
+            .list_recent(request.limit)
             .await
-            .map_err(|error| tinybus::Error::failed(format!("history read failed: {error}")))?
             .map_err(|error| to_bus_error(&error))
     }
 
@@ -943,9 +935,9 @@ impl ConnectorService {
 }
 
 /// The preference store for a host that named a directory, or an ephemeral one.
-fn prefs_store(state_dir: Option<&std::path::Path>) -> Arc<dyn PrefsStore> {
-    match state_dir {
-        Some(dir) => Arc::new(FilePrefsStore::new(dir)),
+fn prefs_store(storage: Option<&ModuleStorage>) -> Arc<dyn PrefsStore> {
+    match storage {
+        Some(storage) => Arc::new(DocumentPrefsStore::new(storage.documents.clone())),
         None => Arc::new(EphemeralPrefsStore::default()),
     }
 }
@@ -1006,11 +998,22 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
     // Opened before the route so a bad state directory fails at load rather
     // than on the first trigger, weeks later.
     let config_state_dir = config.state_dir().map(std::path::Path::to_path_buf);
-    let archive = config_state_dir
+    // `state_dir` names the storage the host registered for this module
+    // (`register_storage`); the module writes through its ports and never to
+    // the directory itself.
+    let storage = config_state_dir
         .as_deref()
-        .map(TriggerArchive::open)
-        .transpose()
-        .map_err(|error| to_bus_error(&error))?;
+        .and_then(|dir| dir.to_str())
+        .and_then(resolve_storage);
+    if config_state_dir.is_some() && storage.is_none() {
+        tracing::warn!(
+            "[connectors] no storage registered for the configured `state_dir`; \
+             preferences are in-memory and trigger history is unavailable"
+        );
+    }
+    let archive = storage
+        .as_ref()
+        .map(|storage| TriggerArchive::new(storage.streams.clone()));
 
     let route = config.into_route().map_err(|error| to_bus_error(&error))?;
     tracing::info!(
@@ -1028,7 +1031,7 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         // A host that named no state directory gets an in-memory store: profile
         // and capability members need none, and scope preferences without
         // persistence are better than a module that refuses to load.
-        prefs: prefs_store(config_state_dir.as_deref()),
+        prefs: prefs_store(storage.as_ref()),
         registry: crate::providers::default_registry(),
         client,
         archive,
