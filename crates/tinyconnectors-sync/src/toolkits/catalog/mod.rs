@@ -28,6 +28,42 @@ pub use descriptions::toolkit_description;
 /// Toolkits with a native identity provider (profile facets).
 pub const NATIVE_PROVIDERS: &[&str] = &["gmail", "notion", "slack", "clickup", "github", "linear"];
 
+/// Every toolkit with a curated catalog, once each under its canonical slug and
+/// in display order. Aliases accepted by [`catalog_for_toolkit`] are not listed.
+pub const CURATED_TOOLKITS: &[&str] = &[
+    "gmail",
+    "notion",
+    "slack",
+    "clickup",
+    "github",
+    "discord",
+    "googlecalendar",
+    "googledrive",
+    "googledocs",
+    "googlesheets",
+    "outlook",
+    "microsoft_teams",
+    "linear",
+    "jira",
+    "trello",
+    "asana",
+    "dropbox",
+    "twitter",
+    "spotify",
+    "telegram",
+    "whatsapp",
+    "shopify",
+    "stripe",
+    "hubspot",
+    "salesforce",
+    "airtable",
+    "figma",
+    "youtube",
+    "one_drive",
+    "excel",
+    "todoist",
+];
+
 /// Does `toolkit` have a native identity provider?
 #[must_use]
 pub fn has_native_provider(toolkit: &str) -> bool {

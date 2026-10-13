@@ -900,6 +900,16 @@ impl ConnectorService {
         Ok(crate::vocabulary_impl::get_vocabulary(request))
     }
 
+    /// Lists the curated action catalog without credentials or a backend call.
+    #[allow(clippy::unused_async, reason = "required by the interface dispatcher")]
+    #[allow(unknown_lints, clippy::unused_async_trait_impl)]
+    async fn list_curated_catalog(
+        &self,
+        request: tinyconnectors_bus::vocabulary::CuratedCatalogRequest,
+    ) -> TinyBusResult<Vec<tinyconnectors_bus::vocabulary::CuratedTool>> {
+        Ok(crate::vocabulary_impl::list_curated_catalog(request))
+    }
+
     /// Evaluates display metadata; Execute still checks persisted preferences.
     #[allow(clippy::unused_async, reason = "required by the interface dispatcher")]
     #[allow(unknown_lints, clippy::unused_async_trait_impl)]

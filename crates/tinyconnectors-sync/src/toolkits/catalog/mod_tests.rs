@@ -40,6 +40,72 @@ const CAPABILITY_TOOLKITS: &[&str] = &[
 ];
 
 #[test]
+fn curated_toolkits_are_canonical_and_cover_every_distinct_catalog() {
+    let mut distinct: Vec<*const CuratedTool> = Vec::new();
+    for toolkit in CURATED_TOOLKITS {
+        let catalog = catalog_for_toolkit(toolkit).expect("listed toolkit has a catalog");
+        distinct.push(catalog.as_ptr());
+    }
+    let listed = distinct.len();
+    distinct.sort_unstable();
+    distinct.dedup();
+    assert_eq!(listed, distinct.len(), "a catalog is listed under two slugs");
+    // Every alias the lookup accepts resolves to a listed catalog.
+    for alias in [
+        "google_calendar",
+        "google_drive",
+        "google_docs",
+        "google_sheets",
+        "microsoft",
+        "one",
+        "onedrive",
+    ] {
+        let catalog = catalog_for_toolkit(alias).expect("alias resolves");
+        assert!(distinct.contains(&catalog.as_ptr()), "{alias} is unlisted");
+    }
+}
+
+#[test]
+fn slack_channel_invite_is_admin() {
+    // Adding someone to a channel exposes its history; the heuristic reads
+    // INVITE as a plain read, so the curated scope must not be Write.
+    let slack = catalog_for_toolkit("slack").expect("slack catalog");
+    let invite = slack
+        .iter()
+        .find(|t| t.slug == "SLACK_INVITE_USERS_TO_A_SLACK_CHANNEL")
+        .expect("invite is curated");
+    assert_eq!(invite.scope, crate::scope::ToolScope::Admin);
+}
+
+#[test]
+fn catalogs_match_the_recorded_fixtures() {
+    // The fixtures were captured from the host tables before the move; they
+    // pin every slug, scope and description in catalog order.
+    let golden: std::collections::BTreeMap<String, serde_json::Value> =
+        serde_json::from_str(include_str!("fixtures/catalog-actions.json")).expect("fixture");
+    for (toolkit, expected) in &golden {
+        let actual: Vec<serde_json::Value> = catalog_for_toolkit(toolkit)
+            .map(|c| {
+                c.iter()
+                    .map(|t| serde_json::json!({"slug": t.slug, "scope": t.scope}))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let expected = if expected.is_null() {
+            Vec::new()
+        } else {
+            expected.as_array().expect("array").clone()
+        };
+        assert_eq!(actual, expected, "catalog changed for {toolkit}");
+    }
+    let descriptions: std::collections::BTreeMap<String, String> =
+        serde_json::from_str(include_str!("fixtures/descriptions.json")).expect("fixture");
+    for (toolkit, expected) in &descriptions {
+        assert_eq!(toolkit_description(toolkit), expected, "description of {toolkit}");
+    }
+}
+
+#[test]
 fn catalog_for_toolkit_resolves_every_capability_toolkit() {
     // Every toolkit the capability surface reports on must have a catalog —
     // that is what `curated_tools: true` in the matrix claims about it.

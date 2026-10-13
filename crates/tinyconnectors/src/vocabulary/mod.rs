@@ -11,7 +11,9 @@ mod tasks;
 
 use profile::IdentityMetadata;
 use tasks::TaskLimit;
+use tinyconnectors_sync::toolkits::catalog::CURATED_TOOLKITS;
 use tinyconnectors_bus::vocabulary::{
+    CuratedCatalogRequest, CuratedTool,
     ActionVocabularyRequest, ActionVocabularyResponse, IdentityValueResponse,
     NormalizeIdentitiesRequest, NormalizeIdentitiesResponse, PreparedTaskFilter, TaskFetchFilter,
     ToolkitVocabulary, UnknownScopeProfile, VocabularyAction, VocabularyRequest,
@@ -46,6 +48,27 @@ pub(crate) fn get_vocabulary(request: VocabularyRequest) -> VocabularyResponse {
             .map(str::to_owned)
             .collect(),
     }
+}
+
+pub(crate) fn list_curated_catalog(request: CuratedCatalogRequest) -> Vec<CuratedTool> {
+    let toolkits: Vec<String> = match request.toolkit {
+        Some(toolkit) => vec![toolkit.trim().to_ascii_lowercase()],
+        None => CURATED_TOOLKITS.iter().map(|t| (*t).to_owned()).collect(),
+    };
+    toolkits
+        .into_iter()
+        .flat_map(|toolkit| {
+            catalogs::catalog_for_toolkit(&toolkit)
+                .unwrap_or_default()
+                .iter()
+                .map(|action| CuratedTool {
+                    toolkit: toolkit.clone(),
+                    slug: action.slug.into(),
+                    scope: action.scope,
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
 }
 
 pub(crate) fn evaluate_actions(
