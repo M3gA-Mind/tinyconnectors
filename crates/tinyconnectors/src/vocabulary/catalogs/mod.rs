@@ -5,9 +5,7 @@
 //! providers read them too; this module adds the scope-preference gating the
 //! vocabulary members need.
 
-use super::scopes::{
-    CuratedTool, ToolScope, UserScopePref, classify_unknown, find_curated, toolkit_from_slug,
-};
+use super::scopes::{ToolScope, UserScopePref, classify_unknown, find_curated, toolkit_from_slug};
 
 pub(crate) use tinyconnectors_sync::toolkits::catalog::{
     catalog_for_toolkit, has_native_provider, toolkit_description,

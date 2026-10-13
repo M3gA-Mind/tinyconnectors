@@ -273,11 +273,11 @@ pub const METHODS: &[&str] = &[
     methods::LIST_TOOLS_DIRECT,
     methods::ROUTED_READ,
     methods::GET_VOCABULARY,
+    methods::LIST_CURATED_CATALOG,
     methods::EVALUATE_ACTIONS,
     methods::NORMALIZE_IDENTITIES,
     methods::PREPARE_TASK_FILTER,
     methods::RUNTIME_MODE,
-    methods::LIST_CURATED_CATALOG,
 ];
 
 #[cfg(test)]

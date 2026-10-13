@@ -6,6 +6,7 @@
 /// Used by the prompt renderer to tell the orchestrator what each connected
 /// integration can do. Covers the most common toolkits; unknown slugs get
 /// a generic fallback so newly connected services still appear.
+#[must_use]
 pub fn toolkit_description(slug: &str) -> &'static str {
     match slug {
         "gmail" => {

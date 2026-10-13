@@ -1128,11 +1128,11 @@ export_module! {
         "ListToolsDirect",
         "RoutedRead",
         "GetVocabulary",
+        "ListCuratedCatalog",
         "EvaluateActions",
         "NormalizeIdentities",
         "PrepareTaskFilter",
         "RuntimeMode",
-        "ListCuratedCatalog",
 
     ],
     signals = [],
