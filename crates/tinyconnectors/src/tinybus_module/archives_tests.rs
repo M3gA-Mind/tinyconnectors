@@ -1,40 +1,26 @@
-//! Archive leases are bounded, explicit and reject unavailable resources.
+//! Archive leases are bounded and explicit; unknown or closed handles fail.
 #![allow(clippy::expect_used)]
 use super::*;
 
-fn register(key: &str) {
+fn streams() -> Arc<dyn StreamStore> {
     use tinystoragedrivers_core::StorageBackend;
-    let storage = tinystoragedrivers_core::MemoryStorage::new()
+    tinystoragedrivers_core::MemoryStorage::new()
         .for_scope(&tinystoragedrivers_core::Scope::new("lease").expect("scope"))
-        .expect("scoped");
-    crate::state::register_storage(
-        key,
-        crate::state::ModuleStorage {
-            documents: storage.documents().clone(),
-            streams: storage.streams().clone(),
-        },
-    );
+        .expect("scoped")
+        .streams()
+        .clone()
 }
 
 #[test]
-fn lease_limit_releases_capacity_and_unregistered_storage_is_refused() -> tinybus::Result<()> {
-    let key = "archives-lease-capacity";
-    register(key);
+fn lease_limit_releases_capacity() -> tinybus::Result<()> {
     let archives = Archives::default();
     let mut handles = Vec::new();
     for _ in 0..MAX_ARCHIVES {
-        handles.push(archives.open(key)?);
+        handles.push(archives.open(streams())?);
     }
-    assert!(archives.open(key).is_err());
+    assert!(archives.open(streams()).is_err());
     archives.close(&handles[0])?;
-    assert!(archives.open(key).is_ok());
-    let unavailable = Archives::default();
-    let error = unavailable
-        .open("archives-never-registered")
-        .err()
-        .ok_or_else(|| tinybus::Error::failed("expected fault"))?;
-    assert!(!error.to_string().contains("archives-never-registered"));
-    crate::state::unregister_storage(key);
+    assert!(archives.open(streams()).is_ok());
     Ok(())
 }
 
@@ -48,7 +34,7 @@ fn poisoned_archive_state_fails_all_operations_without_panicking() {
         std::panic::resume_unwind(Box::new("fixture poison"));
     });
     let handle = ArchiveHandle("unknown".into());
-    assert!(archives.open("unused").is_err());
+    assert!(archives.open(streams()).is_err());
     assert!(archives.get(&handle).is_err());
     assert!(archives.close(&handle).is_err());
 }

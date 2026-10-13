@@ -593,13 +593,14 @@ async fn verify_archive_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn st
             (tinyconnectors_bus::ComposioListTriggerHistoryRequest { limit: Some(1) },),
         )
         .await;
-    if !matches!(history_unavailable, Err(error) if error.to_string().contains("state_dir")) {
+    if !matches!(history_unavailable, Err(error) if error.to_string().contains("does not serve storage"))
+    {
         return Err(
             io::Error::other("ListTriggerHistory did not explain its missing archive").into(),
         );
     }
-    // The loaded module writes through storage ports a host registers; this
-    // verifier registers none, so opening a lease must be refused rather than
+    // The loaded module writes through the host storage bus; this
+    // verifier serves none, so opening a lease must be refused rather than
     // silently writing somewhere the host never chose.
     let state_dir = std::env::current_dir()?.join("target/module-e2e-archive");
     let refused = proxy
@@ -611,7 +612,7 @@ async fn verify_archive_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn st
         )
         .await;
     if !matches!(refused, Err(error) if error.to_string().contains("storage unavailable")) {
-        return Err(io::Error::other("OpenArchive did not refuse unregistered storage").into());
+        return Err(io::Error::other("OpenArchive did not refuse missing host storage").into());
     }
     Ok(())
 }

@@ -23,6 +23,7 @@
 
 mod archive;
 
+pub(crate) use archive::STREAM_PREFIX;
 pub use archive::{DEFAULT_HISTORY_LIMIT, TriggerArchive};
 
 #[cfg(test)]

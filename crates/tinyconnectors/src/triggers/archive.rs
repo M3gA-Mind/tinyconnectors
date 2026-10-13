@@ -11,7 +11,7 @@ use crate::{ComposioTriggerHistoryEntry, ComposioTriggerHistoryResult, Error, Re
 pub const DEFAULT_HISTORY_LIMIT: usize = 50;
 
 /// Prefix of every day's stream. The full name is `triggers/<YYYY-MM-DD>`.
-const STREAM_PREFIX: &str = "triggers/";
+pub(crate) const STREAM_PREFIX: &str = "triggers/";
 
 /// A daily-rotated record of webhook deliveries, one stream per UTC day.
 #[derive(Debug, Clone)]

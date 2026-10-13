@@ -1,15 +1,16 @@
 //! Module-owned trigger archive leases; closing never deletes persisted data.
 use crate::triggers::TriggerArchive;
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tinyconnectors_bus::ArchiveHandle;
+use tinystoragedrivers_core::StreamStore;
 
 #[derive(Debug, Default)]
 pub(super) struct Archives(Mutex<HashMap<ArchiveHandle, TriggerArchive>>);
 const MAX_ARCHIVES: usize = 64;
 
 impl Archives {
-    pub(super) fn open(&self, state_dir: &str) -> tinybus::Result<ArchiveHandle> {
+    pub(super) fn open(&self, streams: Arc<dyn StreamStore>) -> tinybus::Result<ArchiveHandle> {
         let mut leases = self
             .0
             .lock()
@@ -23,9 +24,7 @@ impl Archives {
         getrandom::fill(&mut entropy)
             .map_err(|_| tinybus::Error::failed("trigger archive entropy unavailable"))?;
         let handle = ArchiveHandle(format!("{:032x}", u128::from_le_bytes(entropy)));
-        let storage = crate::state::resolve_storage(state_dir)
-            .ok_or_else(|| tinybus::Error::failed("trigger archive storage unavailable"))?;
-        let archive = TriggerArchive::new(storage.streams);
+        let archive = TriggerArchive::new(streams);
         leases.insert(handle.clone(), archive);
         Ok(handle)
     }

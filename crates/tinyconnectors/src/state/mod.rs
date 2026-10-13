@@ -14,10 +14,10 @@
 //! the ports only and never chooses a backend.
 
 mod document_store;
-mod registry;
+mod needs;
 
 pub use document_store::DocumentPrefsStore;
-pub use registry::{ModuleStorage, register_storage, resolve_storage, unregister_storage};
+pub use needs::{STORAGE_NEEDS, StorageNeeds};
 
 #[cfg(test)]
 #[path = "mod_tests.rs"]
