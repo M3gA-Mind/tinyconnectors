@@ -1,6 +1,6 @@
 //! The storage a module instance is given, looked up by the host's key.
 //!
-//! A TinyBus module is configured with JSON, which cannot carry a trait
+//! A `TinyBus` module is configured with JSON, which cannot carry a trait
 //! object. A host that links the crate registers the ports it owns under a key
 //! (the module configuration's `state_dir`, kept as the key for wire
 //! compatibility, and an archive lease's `state_dir`), and the module resolves

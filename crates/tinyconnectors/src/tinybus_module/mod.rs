@@ -631,6 +631,10 @@ impl ConnectorService {
             .map_err(|_| tinybus::Error::failed("trigger archive write failed"))
     }
 
+    #[allow(
+        clippy::unused_async,
+        reason = "TinyBus interface signatures are async; leasing resolves registered storage synchronously"
+    )]
     async fn open_archive(
         &self,
         request: tinyconnectors_bus::OpenArchiveRequest,

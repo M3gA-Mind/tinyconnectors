@@ -1,4 +1,5 @@
 //! Archive leases are bounded, explicit and reject unavailable resources.
+#![allow(clippy::expect_used)]
 use super::*;
 
 fn register(key: &str) {
