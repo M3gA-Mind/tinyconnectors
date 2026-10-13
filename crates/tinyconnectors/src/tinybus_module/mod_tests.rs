@@ -419,6 +419,30 @@ async fn hides_an_action_the_scope_preference_forbids() -> tinybus::Result<()> {
 }
 
 #[tokio::test]
+async fn a_listing_offers_only_curated_actions_of_a_curated_toolkit() -> tinybus::Result<()> {
+    // Slack has a curated catalog: an action it does not list is not offered,
+    // and the channel invite is `Admin`, so the default preference hides it
+    // (documented in the catalog; pinned here so a "move" cannot flip it).
+    let transport = StubTransport::replying(json!({
+        "tools": [
+            { "function": { "name": "SLACK_SEND_MESSAGE_TO_CHANNEL" } },
+            { "function": { "name": "SLACK_NOT_IN_THE_CATALOG" } },
+            { "function": { "name": "SLACK_INVITE_USERS_TO_A_SLACK_CHANNEL" } }
+        ]
+    }));
+    let (_serving, _client, proxy, _bus) = proxy_to(service_over(transport)).await?;
+    let reply: ComposioToolsResponse = proxy
+        .call(
+            names::methods::LIST_TOOLS,
+            (ComposioListToolsRequest::default(),),
+        )
+        .await?;
+    let offered: Vec<_> = reply.tools.iter().map(|t| t.function.name.as_str()).collect();
+    assert_eq!(offered, ["SLACK_SEND_MESSAGE_TO_CHANNEL"]);
+    Ok(())
+}
+
+#[tokio::test]
 async fn shows_the_whole_catalog_when_the_caller_asks_for_it() -> tinybus::Result<()> {
     // A settings screen rendering the choices is not an agent about to act.
     let transport = StubTransport::replying(json!({

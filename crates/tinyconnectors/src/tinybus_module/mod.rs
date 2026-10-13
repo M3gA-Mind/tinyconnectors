@@ -430,6 +430,21 @@ impl ConnectorService {
         Ok(pref.allows(scope))
     }
 
+    /// Whether a listing offers `action` under the stored scope preference.
+    ///
+    /// Stricter than [`Self::permits`] in one way: a toolkit with a curated
+    /// catalog offers only the actions in it, so the agent never sees an action
+    /// the catalog does not vouch for. Execution keeps the preference-only rule.
+    async fn listed(&self, action: &str) -> TinyBusResult<bool> {
+        let Some(toolkit) = tinyconnectors_sync::toolkit_from_slug(action) else {
+            return Ok(true);
+        };
+        let pref = UserScopePref::load(self.prefs.as_ref(), &toolkit)
+            .await
+            .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+        Ok(crate::vocabulary_impl::catalogs::is_action_visible_with_pref(action, pref))
+    }
+
     /// Runs one action after enforcing the stored scope preference.
     ///
     /// Enforced here rather than trusted from the caller: a preference a
@@ -584,7 +599,7 @@ impl ConnectorService {
         if request.apply_user_scopes {
             let mut allowed = Vec::with_capacity(response.tools.len());
             for tool in response.tools {
-                if self.permits(&tool.function.name).await? {
+                if self.listed(&tool.function.name).await? {
                     allowed.push(tool);
                 }
             }
