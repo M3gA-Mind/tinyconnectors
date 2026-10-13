@@ -1243,3 +1243,7 @@ impl std::fmt::Debug for RouteConfig {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "contracts_tests.rs"]
+mod contracts_test;
