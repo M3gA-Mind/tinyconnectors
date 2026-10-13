@@ -56,4 +56,3 @@ fn is_action_visible_gates_on_the_curated_scope() {
     // A slug with no toolkit prefix is not ours to gate.
     assert!(is_action_visible_with_pref("nonsense", read_only));
 }
-

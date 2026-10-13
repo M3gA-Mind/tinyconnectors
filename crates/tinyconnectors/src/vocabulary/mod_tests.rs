@@ -16,7 +16,9 @@ fn task_preparation_preserves_provider_extras() {
 #[test]
 fn every_extracted_catalog_alias_preserves_action_order_and_scope() -> serde_json::Result<()> {
     let golden: std::collections::BTreeMap<String, serde_json::Value> =
-        serde_json::from_str(include_str!("catalogs/fixtures/catalog-actions.json"))?;
+        serde_json::from_str(include_str!(
+            "../../../tinyconnectors-sync/src/toolkits/catalog/fixtures/catalog-actions.json"
+        ))?;
     let request = VocabularyRequest {
         toolkits: golden.keys().cloned().collect(),
     };
@@ -111,8 +113,9 @@ fn unknown_toolkits_retain_fallback_descriptions_without_a_catalog() {
 
 #[test]
 fn toolkit_descriptions_preserve_the_extracted_prompt_vocabulary() -> serde_json::Result<()> {
-    let golden: std::collections::BTreeMap<String, String> =
-        serde_json::from_str(include_str!("catalogs/fixtures/descriptions.json"))?;
+    let golden: std::collections::BTreeMap<String, String> = serde_json::from_str(include_str!(
+        "../../../tinyconnectors-sync/src/toolkits/catalog/fixtures/descriptions.json"
+    ))?;
     let response = get_vocabulary(VocabularyRequest {
         toolkits: golden.keys().cloned().collect(),
     });
@@ -143,7 +146,9 @@ fn identity_metadata_is_computed_by_the_module() {
 #[test]
 fn every_curated_catalog_is_reported_ready() -> serde_json::Result<()> {
     let golden: std::collections::BTreeMap<String, serde_json::Value> =
-        serde_json::from_str(include_str!("catalogs/fixtures/catalog-actions.json"))?;
+        serde_json::from_str(include_str!(
+            "../../../tinyconnectors-sync/src/toolkits/catalog/fixtures/catalog-actions.json"
+        ))?;
     let catalogs = get_vocabulary(VocabularyRequest {
         toolkits: golden.keys().cloned().collect(),
     });
@@ -259,4 +264,48 @@ fn phones_without_digits_have_no_canonical_identity() {
     for value in response.values {
         assert_eq!(value.value, None);
     }
+}
+
+#[test]
+fn curated_catalog_lists_one_toolkit_in_catalog_order() {
+    let listed = list_curated_catalog(CuratedCatalogRequest {
+        toolkit: Some(" Gmail ".into()),
+    });
+    let vocab = get_vocabulary(VocabularyRequest {
+        toolkits: vec!["gmail".into()],
+    });
+    let expected = vocab.toolkits[0].actions.clone().expect("gmail is curated");
+    assert_eq!(listed.len(), expected.len());
+    for (tool, action) in listed.iter().zip(&expected) {
+        assert_eq!(tool.toolkit, "gmail");
+        assert_eq!(tool.slug, action.slug);
+        assert_eq!(tool.scope, action.scope);
+    }
+}
+
+#[test]
+fn curated_catalog_without_a_toolkit_lists_every_curated_toolkit_once() {
+    let listed = list_curated_catalog(CuratedCatalogRequest::default());
+    for toolkit in CURATED_TOOLKITS {
+        assert!(
+            listed.iter().any(|t| t.toolkit == *toolkit),
+            "{toolkit} missing from the full listing"
+        );
+    }
+    let mut keys: Vec<(&str, &str)> = listed
+        .iter()
+        .map(|t| (t.toolkit.as_str(), t.slug.as_str()))
+        .collect();
+    let before = keys.len();
+    keys.sort_unstable();
+    keys.dedup();
+    assert_eq!(before, keys.len());
+}
+
+#[test]
+fn curated_catalog_for_an_uncurated_toolkit_is_empty() {
+    let listed = list_curated_catalog(CuratedCatalogRequest {
+        toolkit: Some("definitely-not-a-toolkit".into()),
+    });
+    assert!(listed.is_empty());
 }

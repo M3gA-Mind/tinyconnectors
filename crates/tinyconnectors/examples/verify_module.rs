@@ -791,9 +791,10 @@ async fn verify_vocabulary(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::er
 }
 
 async fn verify_catalogs(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
-    let golden: std::collections::BTreeMap<String, serde_json::Value> = serde_json::from_str(
-        include_str!("../../tinyconnectors-sync/src/toolkits/catalog/fixtures/catalog-actions.json"),
-    )?;
+    let golden: std::collections::BTreeMap<String, serde_json::Value> =
+        serde_json::from_str(include_str!(
+            "../../tinyconnectors-sync/src/toolkits/catalog/fixtures/catalog-actions.json"
+        ))?;
     let reply: VocabularyResponse = proxy
         .call(
             names::methods::GET_VOCABULARY,

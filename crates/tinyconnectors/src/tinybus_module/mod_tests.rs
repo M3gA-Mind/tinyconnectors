@@ -1630,3 +1630,14 @@ async fn classic_runtime_handshake_preserves_existing_initialization_mode() {
     assert_eq!(mode.mode, tinyconnectors_bus::ComposioRuntimeMode::Classic);
     assert_eq!(mode.contract_version, tinyconnectors_bus::CONTRACT_VERSION);
 }
+
+#[tokio::test]
+async fn curated_catalog_is_served_without_a_route() -> tinybus::Result<()> {
+    let (_serving, proxy) = serve_via_setup(ModuleConfig::default()).await?;
+    let reply: serde_json::Value = proxy
+        .call("ListCuratedCatalog", (json!({"toolkit": "gmail"}),))
+        .await?;
+    assert_eq!(reply[0]["toolkit"], "gmail");
+    assert_eq!(reply[0]["slug"], "GMAIL_FETCH_EMAILS");
+    Ok(())
+}

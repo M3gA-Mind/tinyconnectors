@@ -11,14 +11,13 @@ mod tasks;
 
 use profile::IdentityMetadata;
 use tasks::TaskLimit;
-use tinyconnectors_sync::toolkits::catalog::CURATED_TOOLKITS;
 use tinyconnectors_bus::vocabulary::{
-    CuratedCatalogRequest, CuratedTool,
-    ActionVocabularyRequest, ActionVocabularyResponse, IdentityValueResponse,
-    NormalizeIdentitiesRequest, NormalizeIdentitiesResponse, PreparedTaskFilter, TaskFetchFilter,
-    ToolkitVocabulary, UnknownScopeProfile, VocabularyAction, VocabularyRequest,
-    VocabularyResponse,
+    ActionVocabularyRequest, ActionVocabularyResponse, CuratedCatalogRequest, CuratedTool,
+    IdentityValueResponse, NormalizeIdentitiesRequest, NormalizeIdentitiesResponse,
+    PreparedTaskFilter, TaskFetchFilter, ToolkitVocabulary, UnknownScopeProfile, VocabularyAction,
+    VocabularyRequest, VocabularyResponse,
 };
+use tinyconnectors_sync::toolkits::catalog::CURATED_TOOLKITS;
 
 pub(crate) fn get_vocabulary(request: VocabularyRequest) -> VocabularyResponse {
     VocabularyResponse {

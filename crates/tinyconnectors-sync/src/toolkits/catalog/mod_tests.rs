@@ -49,7 +49,11 @@ fn curated_toolkits_are_canonical_and_cover_every_distinct_catalog() {
     let listed = distinct.len();
     distinct.sort_unstable();
     distinct.dedup();
-    assert_eq!(listed, distinct.len(), "a catalog is listed under two slugs");
+    assert_eq!(
+        listed,
+        distinct.len(),
+        "a catalog is listed under two slugs"
+    );
     // Every alias the lookup accepts resolves to a listed catalog.
     for alias in [
         "google_calendar",
@@ -101,7 +105,11 @@ fn catalogs_match_the_recorded_fixtures() {
     let descriptions: std::collections::BTreeMap<String, String> =
         serde_json::from_str(include_str!("fixtures/descriptions.json")).expect("fixture");
     for (toolkit, expected) in &descriptions {
-        assert_eq!(toolkit_description(toolkit), expected, "description of {toolkit}");
+        assert_eq!(
+            toolkit_description(toolkit),
+            expected,
+            "description of {toolkit}"
+        );
     }
 }
 

@@ -2,8 +2,8 @@
 
 use async_trait::async_trait;
 
-use super::identity::pick;
 use super::catalog::messaging::SLACK_CURATED as CURATED;
+use super::identity::pick;
 use crate::Result;
 use crate::provider::{ConnectorProvider, ProviderContext, ProviderUserProfile};
 use crate::scope::CuratedTool;
