@@ -2,56 +2,40 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use std::fs;
+use std::sync::Arc;
 
-use serde_json::json;
+use async_trait::async_trait;
+use serde_json::{Value, json};
+use tinystoragedrivers_core::{
+    MemoryStorage, Scope, StorageBackend, StorageError, StreamEntry, StreamStore,
+};
 
 use super::{DEFAULT_HISTORY_LIMIT, TriggerArchive};
 
-/// A scratch directory that removes itself.
-struct TempDir(std::path::PathBuf);
-
-impl TempDir {
-    fn new(name: &str) -> Self {
-        let path = std::env::temp_dir().join(format!(
-            "tinyconnectors-{name}-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
-        let _ = fs::remove_dir_all(&path);
-        fs::create_dir_all(&path).expect("scratch directory");
-        Self(path)
-    }
+fn streams() -> Arc<dyn StreamStore> {
+    MemoryStorage::new()
+        .for_scope(&Scope::new("alice").unwrap())
+        .unwrap()
+        .streams()
+        .clone()
 }
 
-impl Drop for TempDir {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
+fn archive() -> (Arc<dyn StreamStore>, TriggerArchive) {
+    let streams = streams();
+    (streams.clone(), TriggerArchive::new(streams))
 }
 
-fn archive(name: &str) -> (TempDir, TriggerArchive) {
-    let dir = TempDir::new(name);
-    let archive = TriggerArchive::open(&dir.0).expect("opens");
-    (dir, archive)
+fn ids(history: &crate::ComposioTriggerHistoryResult) -> Vec<&str> {
+    history
+        .entries
+        .iter()
+        .map(|entry| entry.metadata_id.as_str())
+        .collect()
 }
 
-#[test]
-fn opening_creates_the_archive_directory() {
-    let (dir, archive) = archive("open");
-    assert!(archive.archive_dir().is_dir());
-    assert!(archive.archive_dir().starts_with(&dir.0));
-}
-
-#[test]
-fn opening_twice_is_fine() {
-    let (dir, _archive) = archive("reopen");
-    assert!(TriggerArchive::open(&dir.0).is_ok());
-}
-
-#[test]
-fn records_a_delivery_and_reads_it_back() {
-    let (_dir, archive) = archive("record");
+#[tokio::test]
+async fn records_a_delivery_and_reads_it_back() {
+    let (_, archive) = archive();
     let entry = archive
         .record(
             "gmail",
@@ -60,198 +44,254 @@ fn records_a_delivery_and_reads_it_back() {
             "uuid-1",
             &json!({ "subject": "hi" }),
         )
+        .await
         .expect("records");
 
     assert_eq!(entry.toolkit, "gmail");
     assert!(entry.received_at_ms > 0);
 
-    let history = archive.list_recent(None).expect("reads");
+    let history = archive.list_recent(None).await.expect("reads");
     assert_eq!(history.entries.len(), 1);
     assert_eq!(history.entries[0].metadata_id, "evt-1");
     assert_eq!(history.entries[0].payload["subject"], "hi");
-    assert_eq!(
-        history.current_day_file,
-        archive.current_day_file().display().to_string()
-    );
+    assert_eq!(history.current_day_file, archive.current_day_file());
+    assert_eq!(history.archive_dir, "triggers");
 }
 
-#[test]
-fn returns_the_newest_deliveries_first() {
-    let (_dir, archive) = archive("order");
+#[tokio::test]
+async fn returns_the_newest_deliveries_first() {
+    let (_, archive) = archive();
     for index in 0..5 {
         archive
             .record("gmail", "T", &format!("evt-{index}"), "u", &json!({}))
+            .await
             .expect("records");
     }
 
-    let history = archive.list_recent(None).expect("reads");
-    let ids: Vec<_> = history
-        .entries
-        .iter()
-        .map(|entry| entry.metadata_id.as_str())
-        .collect();
-    assert_eq!(ids, ["evt-4", "evt-3", "evt-2", "evt-1", "evt-0"]);
+    let history = archive.list_recent(None).await.expect("reads");
+    assert_eq!(ids(&history), ["evt-4", "evt-3", "evt-2", "evt-1", "evt-0"]);
 }
 
-#[test]
-fn honours_the_requested_limit() {
-    let (_dir, archive) = archive("limit");
+#[tokio::test]
+async fn honours_the_requested_limit() {
+    let (_, archive) = archive();
     for index in 0..10 {
         archive
             .record("gmail", "T", &format!("evt-{index}"), "u", &json!({}))
+            .await
             .expect("records");
     }
 
-    let history = archive.list_recent(Some(3)).expect("reads");
-    assert_eq!(history.entries.len(), 3);
-    assert_eq!(history.entries[0].metadata_id, "evt-9");
+    let history = archive.list_recent(Some(3)).await.expect("reads");
+    assert_eq!(ids(&history), ["evt-9", "evt-8", "evt-7"]);
 }
 
-#[test]
-fn a_zero_limit_still_returns_something() {
+#[tokio::test]
+async fn a_zero_limit_still_returns_something() {
     // Asking for nothing is a caller mistake, not a request to be answered
     // literally with an empty list that looks like "no triggers ever fired".
-    let (_dir, archive) = archive("zero");
+    let (_, archive) = archive();
     archive
         .record("gmail", "T", "evt-0", "u", &json!({}))
+        .await
         .expect("records");
 
-    let history = archive.list_recent(Some(0)).expect("reads");
+    let history = archive.list_recent(Some(0)).await.expect("reads");
     assert_eq!(history.entries.len(), 1);
 }
 
-#[test]
-fn an_empty_archive_reads_as_empty_rather_than_failing() {
-    let (_dir, archive) = archive("empty");
-    let history = archive.list_recent(None).expect("reads");
+#[tokio::test]
+async fn an_empty_archive_reads_as_empty_rather_than_failing() {
+    let (_, archive) = archive();
+    let history = archive.list_recent(None).await.expect("reads");
     assert!(history.entries.is_empty());
-    assert_ne!(history.archive_dir.len(), 0);
 }
 
-#[test]
-fn a_corrupt_line_does_not_hide_the_rest() {
-    // A half-written line from a killed process must not make every other
-    // delivery invisible to the person trying to debug a trigger.
-    let (_dir, archive) = archive("corrupt");
+#[tokio::test]
+async fn a_corrupt_record_does_not_hide_the_rest() {
+    let (streams, archive) = archive();
     archive
         .record("gmail", "T", "evt-0", "u", &json!({}))
+        .await
         .expect("records");
-
-    let path = archive.current_day_file();
-    let mut contents = fs::read_to_string(&path).expect("reads file");
-    contents.push_str("{\"received_at_ms\": tru\n");
-    contents.push('\n');
-    fs::write(&path, contents).expect("writes file");
-
+    streams
+        .append(
+            &archive.current_day_file(),
+            json!({ "received_at_ms": "oops" }),
+        )
+        .await
+        .expect("appends junk");
     archive
         .record("gmail", "T", "evt-1", "u", &json!({}))
+        .await
         .expect("records");
 
-    let history = archive.list_recent(None).expect("reads");
-    let ids: Vec<_> = history
-        .entries
-        .iter()
-        .map(|entry| entry.metadata_id.as_str())
-        .collect();
-    assert_eq!(ids, ["evt-1", "evt-0"]);
+    let history = archive.list_recent(None).await.expect("reads");
+    assert_eq!(ids(&history), ["evt-1", "evt-0"]);
 }
 
-#[test]
-fn ignores_files_that_are_not_archive_days() {
-    let (_dir, archive) = archive("stray");
+#[tokio::test]
+async fn a_corrupt_newest_record_is_backfilled_from_older_ones() {
+    let (streams, archive) = archive();
+    for id in ["evt-0", "evt-1", "evt-2"] {
+        archive
+            .record("gmail", "T", id, "u", &json!({}))
+            .await
+            .expect("records");
+    }
+    streams
+        .append(
+            &archive.current_day_file(),
+            json!({ "received_at_ms": "oops" }),
+        )
+        .await
+        .expect("appends junk");
+
+    let history = archive.list_recent(Some(2)).await.expect("reads");
+    assert_eq!(ids(&history), ["evt-2", "evt-1"]);
+}
+
+#[tokio::test]
+async fn ignores_streams_that_are_not_archive_days() {
+    let (streams, archive) = archive();
     archive
         .record("gmail", "T", "evt-0", "u", &json!({}))
+        .await
         .expect("records");
-    fs::write(archive.archive_dir().join("notes.txt"), "not an archive").expect("writes");
+    streams
+        .append("other/2000-01-01", json!({ "junk": true }))
+        .await
+        .expect("appends");
 
-    let history = archive.list_recent(None).expect("reads");
+    let history = archive.list_recent(None).await.expect("reads");
     assert_eq!(history.entries.len(), 1);
 }
 
-#[test]
-fn the_default_limit_is_a_window_not_everything() {
-    // The archive grows without bound, so the default has to be a window — or
-    // a history read eventually returns a user's entire trigger history.
-    let (_dir, archive) = archive("default-limit");
+#[tokio::test]
+async fn the_default_limit_is_a_window_not_everything() {
+    // The archive grows without bound, so the default has to be a window, or a
+    // history read eventually returns a user's entire trigger history.
+    let (_, archive) = archive();
     for index in 0..(DEFAULT_HISTORY_LIMIT + 10) {
         archive
             .record("gmail", "T", &format!("evt-{index}"), "u", &json!({}))
+            .await
             .expect("records");
     }
 
-    let history = archive.list_recent(None).expect("reads");
+    let history = archive.list_recent(None).await.expect("reads");
     assert_eq!(history.entries.len(), DEFAULT_HISTORY_LIMIT);
+    assert_eq!(
+        history.entries[0].metadata_id,
+        format!("evt-{}", DEFAULT_HISTORY_LIMIT + 9)
+    );
 }
 
-#[test]
-fn writes_land_in_the_current_day_file() {
-    let (_dir, archive) = archive("dayfile");
+#[tokio::test]
+async fn writes_land_in_the_current_day_stream() {
+    let (streams, archive) = archive();
     archive
         .record("gmail", "T", "evt-0", "u", &json!({}))
+        .await
         .expect("records");
 
-    let path = archive.current_day_file();
-    assert!(path.exists());
-    assert_eq!(path.extension().and_then(|e| e.to_str()), Some("jsonl"));
-
-    let contents = fs::read_to_string(&path).expect("reads");
-    assert_eq!(contents.lines().count(), 1, "one line per delivery");
-    assert!(contents.ends_with('\n'), "every record is a complete line");
+    let name = archive.current_day_file();
+    assert!(name.starts_with("triggers/"));
+    assert_eq!(
+        streams.len(&name).await.unwrap(),
+        1,
+        "one record per delivery"
+    );
 }
 
-#[test]
-fn opening_under_an_unwritable_root_is_reported() {
-    // Reported at load, not at the first delivery weeks later.
-    let dir = TempDir::new("blocked-parent");
-    let blocked = dir.0.join("file");
-    fs::write(&blocked, b"not a directory").unwrap();
-    let error = TriggerArchive::open(&blocked).expect_err("must refuse");
-    assert!(matches!(error, crate::Error::Archive { .. }));
-    assert!(error.to_string().contains("archive directory"));
-}
-
-#[test]
-fn recording_into_a_removed_archive_is_reported() {
-    // A delivery that cannot be archived is still delivered — the archive is a
-    // record, not the mechanism — but the failure must not be silent.
-    let (dir, archive) = archive("removed");
-    fs::remove_dir_all(&dir.0).expect("removes the directory");
-
-    let error = archive
-        .record("gmail", "T", "evt-0", "u", &json!({}))
-        .expect_err("must report");
-    assert!(matches!(error, crate::Error::Archive { .. }));
-}
-
-#[test]
-fn listing_a_removed_archive_is_reported() {
-    let (dir, archive) = archive("removed-list");
-    fs::remove_dir_all(&dir.0).expect("removes the directory");
-    assert!(archive.list_recent(None).is_err());
-}
-
-#[test]
-fn reads_across_more_than_one_day_file() {
+#[tokio::test]
+async fn reads_across_more_than_one_day() {
     // Newest day first, then newest within the day: the ordering that makes
     // "the last twenty" mean what a user expects.
-    let (_dir, archive) = archive("multiday");
+    let (streams, archive) = archive();
     archive
         .record("gmail", "T", "today-0", "u", &json!({}))
+        .await
         .expect("records");
+    streams
+        .append(
+            "triggers/2000-01-01",
+            json!({
+                "received_at_ms": 1, "toolkit": "gmail", "trigger": "T",
+                "metadata_id": "old-0", "metadata_uuid": "u", "payload": {}
+            }),
+        )
+        .await
+        .expect("appends");
 
-    // A file for an earlier day, written directly.
-    let older = archive.archive_dir().join("2000-01-01.jsonl");
-    let entry = json!({
-        "received_at_ms": 1, "toolkit": "gmail", "trigger": "T",
-        "metadata_id": "old-0", "metadata_uuid": "u", "payload": {}
-    });
-    fs::write(&older, format!("{entry}\n")).expect("writes");
+    let history = archive.list_recent(None).await.expect("reads");
+    assert_eq!(ids(&history), ["today-0", "old-0"]);
+    let limited = archive.list_recent(Some(1)).await.expect("reads");
+    assert_eq!(ids(&limited), ["today-0"]);
+}
 
-    let history = archive.list_recent(None).expect("reads");
-    let ids: Vec<_> = history
-        .entries
-        .iter()
-        .map(|entry| entry.metadata_id.as_str())
-        .collect();
-    assert_eq!(ids, ["today-0", "old-0"]);
+#[tokio::test]
+async fn concurrent_deliveries_are_all_kept() {
+    let (_, archive) = archive();
+    let mut tasks = Vec::new();
+    for index in 0..20 {
+        let archive = archive.clone();
+        tasks.push(tokio::spawn(async move {
+            archive
+                .record("gmail", "T", &format!("evt-{index}"), "u", &json!({}))
+                .await
+                .unwrap();
+        }));
+    }
+    for task in tasks {
+        task.await.unwrap();
+    }
+    let history = archive.list_recent(Some(100)).await.expect("reads");
+    assert_eq!(history.entries.len(), 20);
+}
+
+#[derive(Debug)]
+struct Broken;
+
+#[async_trait]
+impl StreamStore for Broken {
+    async fn append(&self, _: &str, _: Value) -> tinystoragedrivers_core::Result<u64> {
+        Err(StorageError::invalid_input("down"))
+    }
+    async fn append_batch(&self, _: &str, _: Vec<Value>) -> tinystoragedrivers_core::Result<u64> {
+        Err(StorageError::invalid_input("down"))
+    }
+    async fn read_window(
+        &self,
+        _: &str,
+        _: u64,
+        _: usize,
+    ) -> tinystoragedrivers_core::Result<Vec<StreamEntry>> {
+        Err(StorageError::invalid_input("down"))
+    }
+    async fn len(&self, _: &str) -> tinystoragedrivers_core::Result<u64> {
+        Err(StorageError::invalid_input("down"))
+    }
+    async fn truncate_before(&self, _: &str, _: u64) -> tinystoragedrivers_core::Result<u64> {
+        Err(StorageError::invalid_input("down"))
+    }
+    async fn delete_stream(&self, _: &str) -> tinystoragedrivers_core::Result<bool> {
+        Err(StorageError::invalid_input("down"))
+    }
+    async fn streams(&self, _: &str) -> tinystoragedrivers_core::Result<Vec<String>> {
+        Err(StorageError::invalid_input("down"))
+    }
+}
+
+#[tokio::test]
+async fn storage_failures_are_reported_not_swallowed() {
+    // A delivery that cannot be archived is still delivered, but the failure
+    // must not be silent.
+    let archive = TriggerArchive::new(Arc::new(Broken));
+    let error = archive
+        .record("gmail", "T", "evt-0", "u", &json!({}))
+        .await
+        .expect_err("must report");
+    assert!(matches!(error, crate::Error::Archive { .. }));
+    assert!(archive.list_recent(None).await.is_err());
 }

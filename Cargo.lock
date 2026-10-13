@@ -304,16 +304,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fs4"
-version = "1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e72ed92b67c146290f88e9c89d60ca163ea417a446f61ffd7b72df3e7f1dfd5"
-dependencies = [
- "rustix",
- "windows-sys 0.61.2",
-]
-
-[[package]]
 name = "futures-core"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1163,7 +1153,6 @@ version = "0.15.0"
 dependencies = [
  "async-trait",
  "chrono",
- "fs4",
  "getrandom 0.4.3",
  "percent-encoding",
  "serde",
@@ -1173,6 +1162,7 @@ dependencies = [
  "tinybus-module",
  "tinyconnectors-bus",
  "tinyconnectors-sync",
+ "tinystoragedrivers-core",
  "tokio",
  "tracing",
  "ureq",
@@ -1196,6 +1186,18 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tinyconnectors-bus",
+ "tokio",
+]
+
+[[package]]
+name = "tinystoragedrivers-core"
+version = "0.7.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.7.0#6d1a1029de402f5937113fcc56e4023e0dc61c94"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror",
  "tokio",
 ]
 

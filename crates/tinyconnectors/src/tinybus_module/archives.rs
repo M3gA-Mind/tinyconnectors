@@ -23,8 +23,9 @@ impl Archives {
         getrandom::fill(&mut entropy)
             .map_err(|_| tinybus::Error::failed("trigger archive entropy unavailable"))?;
         let handle = ArchiveHandle(format!("{:032x}", u128::from_le_bytes(entropy)));
-        let archive = TriggerArchive::open(std::path::Path::new(state_dir))
-            .map_err(|_| tinybus::Error::failed("trigger archive open failed"))?;
+        let storage = crate::state::resolve_storage(state_dir)
+            .ok_or_else(|| tinybus::Error::failed("trigger archive storage unavailable"))?;
+        let archive = TriggerArchive::new(storage.streams);
         leases.insert(handle.clone(), archive);
         Ok(handle)
     }

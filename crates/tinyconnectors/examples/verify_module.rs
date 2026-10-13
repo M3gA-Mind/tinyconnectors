@@ -598,67 +598,20 @@ async fn verify_archive_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn st
             io::Error::other("ListTriggerHistory did not explain its missing archive").into(),
         );
     }
+    // The loaded module writes through storage ports a host registers; this
+    // verifier registers none, so opening a lease must be refused rather than
+    // silently writing somewhere the host never chose.
     let state_dir = std::env::current_dir()?.join("target/module-e2e-archive");
-    let archive: tinyconnectors_bus::ArchiveHandle = proxy
-        .call(
+    let refused = proxy
+        .call::<tinyconnectors_bus::ArchiveHandle>(
             methods::OPEN_ARCHIVE,
             (tinyconnectors_bus::OpenArchiveRequest {
                 state_dir: state_dir.to_string_lossy().into_owned(),
             },),
         )
-        .await?;
-    let recorded: tinyconnectors_bus::ComposioTriggerHistoryEntry = proxy
-        .call(
-            methods::RECORD_TRIGGER,
-            (tinyconnectors_bus::RecordTriggerRequest {
-                handle: archive.clone(),
-                event: tinyconnectors_bus::ComposioTriggerEvent {
-                    toolkit: "gmail".into(),
-                    trigger: "GMAIL_NEW_MESSAGE".into(),
-                    payload: serde_json::json!({"subject":"fixture"}),
-                    metadata: tinyconnectors_bus::ComposioTriggerMetadata {
-                        id: "event_1".into(),
-                        uuid: "event-uuid-1".into(),
-                    },
-                },
-            },),
-        )
-        .await?;
-    if recorded.metadata_id != "event_1" {
-        return Err(io::Error::other("trigger archive did not record the event").into());
-    }
-    let archive_entries: tinyconnectors_bus::ComposioTriggerHistoryResult = proxy
-        .call(
-            methods::READ_ARCHIVE,
-            (tinyconnectors_bus::ReadArchiveRequest {
-                handle: archive.clone(),
-                limit: Some(1),
-            },),
-        )
-        .await?;
-    if archive_entries
-        .entries
-        .first()
-        .map(|entry| entry.metadata_id.as_str())
-        != Some("event_1")
-    {
-        return Err(io::Error::other("trigger archive did not return the recorded event").into());
-    }
-    let _: () = proxy
-        .call(methods::CLOSE_ARCHIVE, (archive.clone(),))
-        .await?;
-    let closed = proxy
-        .call::<tinyconnectors_bus::ComposioTriggerHistoryResult>(
-            methods::READ_ARCHIVE,
-            (tinyconnectors_bus::ReadArchiveRequest {
-                handle: archive,
-                limit: Some(1),
-            },),
-        )
         .await;
-    if !matches!(closed, Err(error) if error.to_string().contains("unknown trigger archive lease"))
-    {
-        return Err(io::Error::other("closed archive lease remained usable").into());
+    if !matches!(refused, Err(error) if error.to_string().contains("storage unavailable")) {
+        return Err(io::Error::other("OpenArchive did not refuse unregistered storage").into());
     }
     Ok(())
 }

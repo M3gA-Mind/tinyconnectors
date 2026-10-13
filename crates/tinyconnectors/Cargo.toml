@@ -57,8 +57,9 @@ ureq = { workspace = true }
 url = { workspace = true }
 # Encodes bus-supplied values before they become part of a request URL.
 percent-encoding = { workspace = true }
-# Exclusive locking for trigger-archive appends.
-fs4 = { workspace = true }
+# The storage ports the preferences (documents) and trigger archive (streams)
+# are written through.
+tinystoragedrivers-core = { workspace = true }
 # Daily rotation of the trigger archive needs a civil date.
 chrono = { workspace = true }
 

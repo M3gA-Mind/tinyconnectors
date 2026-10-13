@@ -906,6 +906,22 @@ async fn creates_enables_and_disables_a_trigger() -> tinybus::Result<()> {
     Ok(())
 }
 
+/// Register fresh in-memory storage under `dir`, as a host would for a user.
+fn register_for(dir: &TempDir) -> tinystoragedrivers_core::ScopedStorage {
+    use tinystoragedrivers_core::StorageBackend;
+    let storage = tinystoragedrivers_core::MemoryStorage::new()
+        .for_scope(&tinystoragedrivers_core::Scope::new("user").expect("scope"))
+        .expect("scoped");
+    crate::state::register_storage(
+        dir.0.to_string_lossy(),
+        crate::state::ModuleStorage {
+            documents: storage.documents().clone(),
+            streams: storage.streams().clone(),
+        },
+    );
+    storage
+}
+
 #[tokio::test]
 async fn trigger_history_without_a_state_dir_explains_itself() -> tinybus::Result<()> {
     // Rather than an empty list, which reads as "no trigger ever fired".
@@ -1028,6 +1044,7 @@ async fn serve_via_setup(config: ModuleConfig) -> tinybus::Result<(Connection, t
 #[tokio::test]
 async fn setup_serves_the_interface_over_the_bus() -> tinybus::Result<()> {
     let dir = TempDir::new("setup");
+    register_for(&dir);
     let config: ModuleConfig = serde_json::from_value(json!({
         "route": "proxy",
         "base_url": "https://api.example.invalid",
@@ -1063,20 +1080,26 @@ async fn setup_on_the_direct_route_serves_too() -> tinybus::Result<()> {
 }
 
 #[tokio::test]
-async fn setup_refuses_a_state_dir_it_cannot_use() -> tinybus::Result<()> {
-    // Failing at load beats failing on the first trigger, weeks later.
-    let dir = TempDir::new("blocked-state");
-    let blocked = dir.0.join("file");
-    std::fs::write(&blocked, b"not a directory").expect("fixture file");
+async fn setup_with_unregistered_storage_serves_without_history() -> tinybus::Result<()> {
+    // No storage under the `state_dir` key: the module still loads (profiles and
+    // capabilities need none) and history reports that it is unavailable.
+    let dir = TempDir::new("unregistered-state");
     let config: ModuleConfig = serde_json::from_value(json!({
         "route": "proxy",
         "base_url": "https://api.example.invalid",
         "auth_token": "t0ken",
-        "state_dir": blocked.to_string_lossy(),
+        "state_dir": dir.0,
     }))
     .expect("parses");
 
-    assert!(serve_via_setup(config).await.is_err());
+    let (_serving, proxy) = serve_via_setup(config).await?;
+    let result = proxy
+        .call::<ComposioTriggerHistoryResult>(
+            names::methods::LIST_TRIGGER_HISTORY,
+            (ComposioListTriggerHistoryRequest { limit: Some(5) },),
+        )
+        .await;
+    assert!(result.is_err());
     Ok(())
 }
 
@@ -1096,6 +1119,7 @@ async fn setup_refuses_a_base_url_that_would_leak_the_credential() -> tinybus::R
 #[tokio::test]
 async fn trigger_history_reads_the_archive_the_host_gave_it() -> tinybus::Result<()> {
     let dir = TempDir::new("history");
+    let storage = register_for(&dir);
     let config: ModuleConfig = serde_json::from_value(json!({
         "route": "proxy",
         "base_url": "https://api.example.invalid",
@@ -1105,7 +1129,7 @@ async fn trigger_history_reads_the_archive_the_host_gave_it() -> tinybus::Result
     .expect("parses");
 
     // A delivery recorded through the same archive the module opened.
-    let archive = crate::triggers::TriggerArchive::open(&dir.0).expect("opens");
+    let archive = crate::triggers::TriggerArchive::new(storage.streams().clone());
     archive
         .record(
             "gmail",
@@ -1114,6 +1138,7 @@ async fn trigger_history_reads_the_archive_the_host_gave_it() -> tinybus::Result
             "u",
             &json!({ "s": 1 }),
         )
+        .await
         .expect("records");
 
     let (_serving, proxy) = serve_via_setup(config).await?;
@@ -1134,7 +1159,9 @@ async fn a_named_state_dir_persists_the_scope_preference() {
     // The difference between the two stores, observable: a preference written
     // through one module instance is read back by the next.
     let dir = TempDir::new("persist");
-    let store = super::prefs_store(Some(&dir.0));
+    let storage = register_for(&dir);
+    let module_storage = crate::state::resolve_storage(&dir.0.to_string_lossy());
+    let store = super::prefs_store(module_storage.as_ref());
     tinyconnectors_sync::UserScopePref {
         read: true,
         write: false,
@@ -1144,7 +1171,8 @@ async fn a_named_state_dir_persists_the_scope_preference() {
     .await
     .expect("saves");
 
-    let reopened = super::prefs_store(Some(&dir.0));
+    drop(storage);
+    let reopened = super::prefs_store(module_storage.as_ref());
     let pref = tinyconnectors_sync::UserScopePref::load(reopened.as_ref(), "gmail")
         .await
         .expect("loads");
@@ -1482,6 +1510,8 @@ async fn bus_archive_leases_separate_users_and_preserve_daily_history() -> tinyb
     };
     let first = TempDir::new("archive-first");
     let second = TempDir::new("archive-second");
+    register_for(&first);
+    register_for(&second);
     let (_serving, proxy) = serve_via_setup(ModuleConfig::default()).await?;
     let open = |dir: &TempDir| OpenArchiveRequest {
         state_dir: dir.0.to_string_lossy().into_owned(),
