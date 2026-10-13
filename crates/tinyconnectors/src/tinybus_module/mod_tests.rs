@@ -115,7 +115,7 @@ fn service_over(transport: Arc<StubTransport>) -> ConnectorService {
         client,
         // No archive: these tests exercise the backend-facing members. The
         // history member's own behaviour without one is tested separately.
-        archive: None,
+        storage: super::storage::StorageLink::none(),
         archives: Arc::default(),
         offered: tinyconnectors_bus::vocabulary::OfferedToolkits::default(),
     }
@@ -1245,7 +1245,7 @@ async fn a_module_loaded_without_a_route_becomes_usable_after_configure() {
         registry: crate::providers::default_registry(),
         contract_caches: Arc::default(),
         client: Arc::new(std::sync::RwLock::new(None)),
-        archive: None,
+        storage: super::storage::StorageLink::none(),
         archives: Arc::default(),
         offered: tinyconnectors_bus::vocabulary::OfferedToolkits::default(),
     };
@@ -1322,7 +1322,7 @@ async fn a_reconfigured_route_reaches_the_action_runner_too() {
         registry: crate::providers::default_registry(),
         contract_caches: Arc::default(),
         client,
-        archive: None,
+        storage: super::storage::StorageLink::none(),
         archives: Arc::default(),
         offered: tinyconnectors_bus::vocabulary::OfferedToolkits::default(),
     };
