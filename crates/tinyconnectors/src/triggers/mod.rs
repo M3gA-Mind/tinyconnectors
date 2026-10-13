@@ -24,6 +24,7 @@
 mod archive;
 
 pub use archive::{DEFAULT_HISTORY_LIMIT, TriggerArchive};
+pub(crate) use archive::STREAM_PREFIX;
 
 #[cfg(test)]
 #[path = "mod_tests.rs"]

@@ -70,7 +70,6 @@ use tinyconnectors_sync::{
 };
 
 use crate::providers::ClientActions;
-use crate::state::{DocumentPrefsStore, ModuleStorage, resolve_storage};
 use crate::triggers::TriggerArchive;
 
 /// How to reach Composio, when the host has said.
@@ -333,13 +332,11 @@ struct ConnectorService {
     /// unable to reach Composio until the application restarted. `Configure`
     /// replaces it in place.
     client: Arc<RwLock<Option<ComposioClient>>>,
-    /// The archive of webhook deliveries, when the host gave the module a
-    /// directory to keep state in.
-    ///
-    /// Optional because a host that never enables triggers has no reason to
-    /// hand the module a writable directory. Asking for one unconditionally
-    /// would make every deployment carry a path it does not use.
-    archive: Option<TriggerArchive>,
+    /// The host's storage over the storage bus: the trigger archive's streams
+    /// and the preference documents. Connected on first use, so a host that
+    /// never enables triggers pays nothing and a host whose storage comes up
+    /// after the module loads is still reached.
+    storage: storage::StorageLink,
     archives: Arc<archives::Archives>,
     /// The toolkits this build knows.
     ///
@@ -713,15 +710,17 @@ impl ConnectorService {
             .map_err(|_| tinybus::Error::failed("trigger archive write failed"))
     }
 
-    #[allow(
-        clippy::unused_async,
-        reason = "TinyBus interface signatures are async; leasing resolves registered storage synchronously"
-    )]
     async fn open_archive(
         &self,
-        request: tinyconnectors_bus::OpenArchiveRequest,
+        _request: tinyconnectors_bus::OpenArchiveRequest,
     ) -> TinyBusResult<tinyconnectors_bus::ArchiveHandle> {
-        self.archives.open(&request.state_dir)
+        // `state_dir` is kept on the wire for compatibility and ignored: the
+        // host binds the scope from the authenticated caller.
+        let streams = self.storage.streams().await.map_err(|error| {
+            tracing::debug!(%error, "[connectors][triggers] archive storage unavailable");
+            tinybus::Error::failed("trigger archive storage unavailable")
+        })?;
+        self.archives.open(streams)
     }
 
     async fn read_archive(
@@ -894,17 +893,14 @@ impl ConnectorService {
         &self,
         request: ComposioListTriggerHistoryRequest,
     ) -> TinyBusResult<ComposioTriggerHistoryResult> {
-        let archive = self
-            .archive
-            .as_ref()
-            .ok_or_else(|| {
-                tinybus::Error::failed(
-                    "trigger history is unavailable: the module was loaded without registered storage for its `state_dir`",
-                )
-            })?
-            .clone();
+        let streams = self.storage.streams().await.map_err(|error| {
+            tracing::debug!(%error, "[connectors][triggers] history storage unavailable");
+            tinybus::Error::failed(
+                "trigger history is unavailable: the host does not serve storage to this module",
+            )
+        })?;
 
-        archive
+        TriggerArchive::new(streams)
             .list_recent(request.limit)
             .await
             .map_err(|error| to_bus_error(&error))
@@ -1078,14 +1074,6 @@ impl ConnectorService {
     }
 }
 
-/// The preference store for a host that named a directory, or an ephemeral one.
-fn prefs_store(storage: Option<&ModuleStorage>) -> Arc<dyn PrefsStore> {
-    match storage {
-        Some(storage) => Arc::new(DocumentPrefsStore::new(storage.documents.clone())),
-        None => Arc::new(EphemeralPrefsStore::default()),
-    }
-}
-
 /// Preferences that live only as long as the module.
 ///
 /// A user's scope choices on this are forgotten at every restart, which is why
@@ -1139,31 +1127,14 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         return restricted::setup(connection).await;
     }
 
-    // Opened before the route so a bad state directory fails at load rather
-    // than on the first trigger, weeks later.
-    let config_state_dir = config.state_dir().map(std::path::Path::to_path_buf);
-    // `state_dir` names the storage the host registered for this module
-    // (`register_storage`); the module writes through its ports and never to
-    // the directory itself.
-    let storage = config_state_dir
-        .as_deref()
-        .and_then(|dir| dir.to_str())
-        .and_then(resolve_storage);
-    if config_state_dir.is_some() && storage.is_none() {
-        tracing::warn!(
-            "[connectors] no storage registered for the configured `state_dir`; \
-             preferences are in-memory and trigger history is unavailable"
-        );
-    }
-    let archive = storage
-        .as_ref()
-        .map(|storage| TriggerArchive::new(storage.streams.clone()));
+    // `state_dir` is accepted for wire compatibility and unused: storage is
+    // reached through the host's storage bus, scoped by the host.
+    let storage = storage::StorageLink::new(connection.clone());
 
     let offered = config.offered.clone();
     let route = config.into_route().map_err(|error| to_bus_error(&error))?;
     tracing::info!(
         route = route.as_ref().map_or("none", |route| route.name()),
-        archiving_triggers = archive.is_some(),
         "[connectors] serving connector surface"
     );
     let client = Arc::new(RwLock::new(route.map(ComposioClient::new)));
@@ -1173,15 +1144,14 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         // if a provider ever reaches it. It shares the handle rather than
         // copying it, so a later `Configure` reaches it too.
         actions: Arc::new(ClientActions::new(Arc::clone(&client))),
-        // A host that named no state directory gets an in-memory store: profile
-        // and capability members need none, and scope preferences without
-        // persistence are better than a module that refuses to load.
-        prefs: prefs_store(storage.as_ref()),
+        // Preferences go to the host's documents; with no storage served they
+        // stay in memory, which beats a module that refuses to load.
+        prefs: Arc::new(storage::LinkedPrefsStore::new(storage.clone())),
         registry: crate::providers::default_registry(),
         contract_caches: Arc::default(),
         offered,
         client,
-        archive,
+        storage,
         archives: Arc::default(),
     };
 
@@ -1297,6 +1267,7 @@ mod direct_test;
 mod processing;
 
 mod archives;
+mod storage;
 
 impl std::fmt::Debug for RouteConfig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
