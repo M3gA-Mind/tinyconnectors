@@ -112,7 +112,7 @@ fn task_filter_payload_and_cap_match_the_host_shape() -> serde_json::Result<()> 
 }
 
 #[test]
-fn a_member_profile_converts_to_the_host_identity_shape_without_serde() {
+fn a_member_profile_converts_to_the_host_identity_shape_without_serde() -> serde_json::Result<()> {
     let reply = crate::composio::ComposioUserProfile {
         toolkit: "slack".into(),
         connection_id: Some("c1".into()),
@@ -128,8 +128,6 @@ fn a_member_profile_converts_to_the_host_identity_shape_without_serde() {
     assert_eq!(identity.connection_id.as_deref(), Some("c1"));
     assert_eq!(identity.extras["team"], "t1");
     let back = crate::composio::ComposioUserProfile::from(identity);
-    assert_eq!(
-        serde_json::to_value(back).unwrap(),
-        serde_json::to_value(reply).unwrap()
-    );
+    assert_eq!(serde_json::to_value(back)?, serde_json::to_value(reply)?);
+    Ok(())
 }
