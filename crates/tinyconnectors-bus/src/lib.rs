@@ -104,6 +104,12 @@ pub mod names;
 pub mod version;
 
 pub use composio::{
+    ComposioConnectedIntegration, ComposioConnectedIntegrationTool,
+    ComposioConnectedIntegrationsMode, ComposioConnectedIntegrationsResponse,
+    ComposioGatedIntegrationTool, ComposioGetToolContractRequest, ComposioGetToolContractResponse,
+    ComposioIntegrationConnection, ComposioListConnectedIntegrationsRequest,
+    ComposioListToolContractsRequest, ComposioListToolContractsResponse,
+    ComposioProbeToolOutputRequest, ComposioProbedOutputSample, ComposioToolContract,
     ComposioActiveTrigger, ComposioActiveTriggersResponse, ComposioAgentReadyToolkitsResponse,
     ComposioAuthorizeRequest, ComposioAuthorizeResponse, ComposioAvailableTrigger,
     ComposioAvailableTriggerRepo, ComposioAvailableTriggersResponse, ComposioCallRoute,

@@ -58,6 +58,31 @@ pub mod methods {
     /// Added in contract 1.18.
     pub const LIST_VISIBLE_TOOLS: &str = "ListVisibleTools";
 
+    /// Returns one action's live tool contract.
+    ///
+    /// Takes a `ComposioGetToolContractRequest` and returns a
+    /// `ComposioGetToolContractResponse`. Served from the module's TTL cache
+    /// over the backend's full, unfiltered tool listing, with any cached
+    /// output probe overlaid. Added in contract 1.20.
+    pub const GET_TOOL_CONTRACT: &str = "GetToolContract";
+    /// Returns every live tool contract of one toolkit.
+    ///
+    /// Takes a `ComposioListToolContractsRequest` and returns a
+    /// `ComposioListToolContractsResponse`. Added in contract 1.20.
+    pub const LIST_TOOL_CONTRACTS: &str = "ListToolContracts";
+    /// Runs one confirmed read-scope action and reports the real output shape.
+    ///
+    /// Takes a `ComposioProbeToolOutputRequest` and returns a
+    /// `ComposioProbedOutputSample`. Refuses any action that is not a
+    /// confirmed read, and any toolkit with no active connection. Added in
+    /// contract 1.20.
+    pub const PROBE_TOOL_OUTPUT: &str = "ProbeToolOutput";
+    /// Assembles the connected-integration overview for one route.
+    ///
+    /// Takes a `ComposioListConnectedIntegrationsRequest` and returns a
+    /// `ComposioConnectedIntegrationsResponse`. Added in contract 1.20.
+    pub const LIST_CONNECTED_INTEGRATIONS: &str = "ListConnectedIntegrations";
+
     /// Lists the toolkits the backend allowlist currently enables.
     ///
     /// Takes no arguments and returns a [`crate::ComposioToolkitsResponse`].
@@ -285,6 +310,10 @@ pub const METHODS: &[&str] = &[
     methods::EVALUATE_ACTIONS,
     methods::NORMALIZE_IDENTITIES,
     methods::PREPARE_TASK_FILTER,
+    methods::GET_TOOL_CONTRACT,
+    methods::LIST_TOOL_CONTRACTS,
+    methods::PROBE_TOOL_OUTPUT,
+    methods::LIST_CONNECTED_INTEGRATIONS,
     methods::RUNTIME_MODE,
 ];
 

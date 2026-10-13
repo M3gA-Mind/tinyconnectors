@@ -62,6 +62,10 @@ fn the_method_table_holds_the_declared_members() {
             methods::EVALUATE_ACTIONS,
             methods::NORMALIZE_IDENTITIES,
             methods::PREPARE_TASK_FILTER,
+            methods::GET_TOOL_CONTRACT,
+            methods::LIST_TOOL_CONTRACTS,
+            methods::PROBE_TOOL_OUTPUT,
+            methods::LIST_CONNECTED_INTEGRATIONS,
             methods::RUNTIME_MODE,
         ]
     );
