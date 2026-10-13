@@ -9,7 +9,10 @@ pub mod tasks;
 
 pub use profile::{ConnectedIdentity, IdentityKind, ProviderUserProfile};
 pub use scopes::{ToolScope, UserScopePref};
-pub use tasks::{GithubFetchMode, NormalizedTask, TaskContainer, TaskFetchFilter, TaskKind};
+pub use tasks::{
+    DEFAULT_TASK_FETCH_MAX, GithubFetchMode, NormalizedTask, TaskContainer, TaskFetchFilter,
+    TaskKind,
+};
 
 use serde::{Deserialize, Serialize};
 

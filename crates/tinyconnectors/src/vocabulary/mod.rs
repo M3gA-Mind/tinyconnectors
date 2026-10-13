@@ -10,7 +10,6 @@ pub(crate) mod scopes;
 mod tasks;
 
 use profile::IdentityMetadata;
-use tasks::TaskLimit;
 use tinyconnectors_bus::vocabulary::{
     ActionVocabularyRequest, ActionVocabularyResponse, CuratedCatalogRequest, CuratedTool,
     IdentityValueResponse, NormalizeIdentitiesRequest, NormalizeIdentitiesResponse,
