@@ -1641,3 +1641,55 @@ async fn curated_catalog_is_served_without_a_route() -> tinybus::Result<()> {
     assert_eq!(reply[0]["slug"], "GMAIL_FETCH_EMAILS");
     Ok(())
 }
+
+#[tokio::test]
+async fn visible_tools_use_the_stored_preference_unless_one_is_supplied() -> tinybus::Result<()> {
+    let (_serving, proxy) = serve_via_setup(ModuleConfig::default()).await?;
+    let slugs = |reply: &serde_json::Value| -> Vec<String> {
+        reply["tools"]
+            .as_array()
+            .map(|tools| {
+                tools
+                    .iter()
+                    .filter_map(|t| t["slug"].as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
+
+    let default: serde_json::Value = proxy
+        .call("ListVisibleTools", (json!({"toolkit": "Gmail"}),))
+        .await?;
+    assert_eq!(default["toolkit"], "gmail");
+    assert_eq!(default["has_catalog"], true);
+    assert!(!slugs(&default).contains(&"GMAIL_DELETE_MESSAGE".to_owned()));
+
+    let stored: ComposioUserScopesResponse = proxy
+        .call(
+            names::methods::SET_USER_SCOPES,
+            (ComposioSetUserScopesRequest {
+                toolkit: "gmail".into(),
+                scopes: ComposioUserScopes {
+                    read: true,
+                    write: true,
+                    admin: true,
+                },
+            },),
+        )
+        .await?;
+    assert!(stored.scopes.admin);
+    let admin: serde_json::Value = proxy
+        .call("ListVisibleTools", (json!({"toolkit": "gmail"}),))
+        .await?;
+    assert!(slugs(&admin).contains(&"GMAIL_DELETE_MESSAGE".to_owned()));
+
+    let overridden: serde_json::Value = proxy
+        .call(
+            "ListVisibleTools",
+            (json!({"toolkit": "gmail", "preference": {"read": true, "write": false, "admin": false}}),),
+        )
+        .await?;
+    assert!(!slugs(&overridden).contains(&"GMAIL_DELETE_MESSAGE".to_owned()));
+    assert!(!slugs(&overridden).contains(&"GMAIL_SEND_EMAIL".to_owned()));
+    Ok(())
+}

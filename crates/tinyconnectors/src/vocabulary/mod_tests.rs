@@ -311,3 +311,46 @@ fn curated_catalog_for_an_uncurated_toolkit_is_empty() {
     });
     assert!(listed.is_empty());
 }
+
+#[test]
+fn visible_tools_follow_the_scope_preference() {
+    let default = list_visible_tools("gmail", UserScopePref::default());
+    assert!(default.has_catalog);
+    assert!(!default.tools.is_empty());
+    assert!(default.tools.iter().all(|t| t.scope != ToolScope::Admin));
+    assert!(default.tools.iter().any(|t| t.scope == ToolScope::Write));
+
+    let read_only = list_visible_tools(
+        "gmail",
+        UserScopePref {
+            read: true,
+            write: false,
+            admin: false,
+        },
+    );
+    assert!(read_only.tools.iter().all(|t| t.scope == ToolScope::Read));
+    assert!(read_only.tools.len() < default.tools.len());
+
+    let everything = list_visible_tools(
+        "gmail",
+        UserScopePref {
+            read: true,
+            write: true,
+            admin: true,
+        },
+    );
+    let full = list_curated_catalog(CuratedCatalogRequest {
+        toolkit: Some("gmail".into()),
+    });
+    assert_eq!(
+        everything.tools, full,
+        "all scopes on lists the whole catalog"
+    );
+}
+
+#[test]
+fn visible_tools_for_an_uncurated_toolkit_pass_through() {
+    let listed = list_visible_tools("not-a-toolkit", UserScopePref::default());
+    assert!(!listed.has_catalog);
+    assert!(listed.tools.is_empty());
+}

@@ -14,8 +14,8 @@ use tasks::TaskLimit;
 use tinyconnectors_bus::vocabulary::{
     ActionVocabularyRequest, ActionVocabularyResponse, CuratedCatalogRequest, CuratedTool,
     IdentityValueResponse, NormalizeIdentitiesRequest, NormalizeIdentitiesResponse,
-    PreparedTaskFilter, TaskFetchFilter, ToolkitVocabulary, UnknownScopeProfile, VocabularyAction,
-    VocabularyRequest, VocabularyResponse,
+    PreparedTaskFilter, TaskFetchFilter, ToolkitVocabulary, UnknownScopeProfile, UserScopePref,
+    VisibleToolsResponse, VocabularyAction, VocabularyRequest, VocabularyResponse,
 };
 use tinyconnectors_sync::toolkits::catalog::CURATED_TOOLKITS;
 
