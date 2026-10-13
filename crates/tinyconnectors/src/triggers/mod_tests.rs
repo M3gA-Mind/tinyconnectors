@@ -131,6 +131,27 @@ async fn a_corrupt_record_does_not_hide_the_rest() {
 }
 
 #[tokio::test]
+async fn a_corrupt_newest_record_is_backfilled_from_older_ones() {
+    let (streams, archive) = archive();
+    for id in ["evt-0", "evt-1", "evt-2"] {
+        archive
+            .record("gmail", "T", id, "u", &json!({}))
+            .await
+            .expect("records");
+    }
+    streams
+        .append(
+            &archive.current_day_file(),
+            json!({ "received_at_ms": "oops" }),
+        )
+        .await
+        .expect("appends junk");
+
+    let history = archive.list_recent(Some(2)).await.expect("reads");
+    assert_eq!(ids(&history), ["evt-2", "evt-1"]);
+}
+
+#[tokio::test]
 async fn ignores_streams_that_are_not_archive_days() {
     let (streams, archive) = archive();
     archive

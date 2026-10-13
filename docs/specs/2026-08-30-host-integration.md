@@ -81,9 +81,11 @@ module gets a credential:
 
 `config.composio.mode` and the keychain lookup in
 `security::credentials::get_composio_api_key` stay in OpenHuman. They stop
-constructing a client and start choosing a blob. `state_dir` should be the
-host's existing state directory — the module keeps its scope-preference store
-and the trigger archive there. Until the preference migration in section 6
+constructing a client and start choosing a blob. `state_dir` is a storage
+registry key, not a filesystem path: the host registers a `ModuleStorage`
+under that key with `register_storage` before `Configure`, and the module keeps
+its scope-preference store and the trigger archive in that storage. Without a
+registration, history is unavailable and preferences are ephemeral. Until the preference migration in section 6
 lands, the host still owns the user's actual preference.
 
 The blob is also optional. A module loaded without one still answers the

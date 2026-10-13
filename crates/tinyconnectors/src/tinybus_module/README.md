@@ -10,16 +10,18 @@ Contract 1.13 adds `PrepareArguments`, `FilterResponse`, `ClassifyError`,
 the time zone and recency boundary, authorize
 external calls, and reconcile credentials through the existing `Configure`
 operation. Argument normalization, calendar defaults, task filtering, provider
-classification and JSONL append/locking execute inside the module. A structured
+classification and archive appends execute inside the module. A structured
 provider error carries the stable class identifier and existing product message;
 it can contain provider detail and must never be sent to telemetry.
 
-`OpenArchive` receives a host-validated state directory and returns an opaque
+`OpenArchive` receives a host-validated storage key (the host must first call
+`register_storage` for it) and returns an opaque
 lease. `RecordTrigger` and `ReadArchive` use that lease; `CloseArchive` releases
 it without deleting data. Leases are bounded, unknown/closed handles fail, and
 module shutdown drops the table. Hosts close the old user's lease when switching
-identity. Existing load-time `ListTriggerHistory` remains compatible. File I/O
-runs on blocking workers; persisted formats and existing arities are unchanged.
+identity. Existing load-time `ListTriggerHistory` remains compatible. Records
+live in the registered tinystoragedrivers stream and document stores; existing
+arities are unchanged.
 
 The dynamic verifier exercises preparation and filtering with local payloads.
 Hosts must wait for a published compatible artifact with a verified digest

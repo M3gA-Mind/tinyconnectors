@@ -31,6 +31,24 @@ async fn a_key_that_was_never_written_reads_as_absent() {
 }
 
 #[tokio::test]
+async fn a_document_without_the_value_field_is_an_error_not_unset() {
+    let (documents, store) = store();
+    documents
+        .put(
+            PREFS_NAMESPACE,
+            "gmail",
+            json!({ "other": 1 }),
+            tinystoragedrivers_core::Precondition::None,
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        store.get("gmail").await,
+        Err(Error::Store { .. })
+    ));
+}
+
+#[tokio::test]
 async fn a_value_round_trips_even_when_it_is_not_an_object() {
     let (_, store) = store();
     store.set("gmail", &json!({ "read": true })).await.unwrap();
