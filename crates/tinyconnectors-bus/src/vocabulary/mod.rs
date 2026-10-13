@@ -3,12 +3,14 @@
 //! Tables and normalization are deliberately absent from this contract crate.
 //! Display preferences do not replace the module's persisted execution policy.
 
+pub mod offered;
 pub mod profile;
 pub mod scopes;
 pub mod slug;
 pub mod task_sources;
 pub mod tasks;
 
+pub use offered::OfferedToolkits;
 pub use profile::{ConnectedIdentity, IdentityKind, ProviderUserProfile};
 pub use scopes::{ToolScope, UserScopePref};
 pub use slug::{

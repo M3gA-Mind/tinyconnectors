@@ -156,6 +156,8 @@ pub(crate) struct ModuleConfig {
     /// How to reach Composio, when the host has said.
     route: Option<RouteConfig>,
     runtime_mode: tinyconnectors_bus::ComposioRuntimeMode,
+    /// The toolkits the host offers its agent. Applied to listings only.
+    offered: tinyconnectors_bus::vocabulary::OfferedToolkits,
 }
 
 impl<'de> Deserialize<'de> for ModuleConfig {
@@ -178,6 +180,13 @@ impl<'de> Deserialize<'de> for ModuleConfig {
             .transpose()
             .map_err(serde::de::Error::custom)?
             .unwrap_or_default();
+        let offered = value
+            .get("offered_toolkits")
+            .cloned()
+            .map(serde_json::from_value::<tinyconnectors_bus::vocabulary::OfferedToolkits>)
+            .transpose()
+            .map_err(serde::de::Error::custom)?
+            .unwrap_or_default();
         let route = if value.get("route").is_none_or(serde_json::Value::is_null) {
             None
         } else {
@@ -193,6 +202,7 @@ impl<'de> Deserialize<'de> for ModuleConfig {
         Ok(Self {
             route,
             runtime_mode,
+            offered,
         })
     }
 }
@@ -342,6 +352,8 @@ struct ConnectorService {
     prefs: Arc<dyn PrefsStore>,
     /// Tool contracts and probe results remembered between calls.
     contract_caches: Arc<crate::contracts::ContractCaches>,
+    /// Which toolkits listings offer; fixed at load.
+    offered: tinyconnectors_bus::vocabulary::OfferedToolkits,
 }
 
 impl ConnectorService {
@@ -1149,6 +1161,7 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         prefs: prefs_store(storage.as_ref()),
         registry: crate::providers::default_registry(),
         contract_caches: Arc::default(),
+        offered: config.offered.clone(),
         client,
         archive,
         archives: Arc::default(),
