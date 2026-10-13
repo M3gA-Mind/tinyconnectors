@@ -39,6 +39,7 @@ pub use routed::{
     ComposioCallRoute, ComposioReadOperation, ComposioRoutedReadReply, ComposioRoutedReadRequest,
 };
 pub mod connections;
+pub mod contract;
 pub mod direct;
 pub mod execute;
 pub mod github;
@@ -53,6 +54,14 @@ pub use connections::{
     ComposioConfigureResponse, ComposioConnection, ComposioConnectionsResponse,
     ComposioDeleteConnectionRequest, ComposioDeleteResponse, ComposioIdentityFailure,
     ComposioRefreshIdentitiesResponse, ComposioUserProfile, ComposioUserProfileRequest,
+};
+pub use contract::{
+    ComposioConnectedIntegration, ComposioConnectedIntegrationTool,
+    ComposioConnectedIntegrationsMode, ComposioConnectedIntegrationsResponse,
+    ComposioGatedIntegrationTool, ComposioGetToolContractRequest, ComposioGetToolContractResponse,
+    ComposioIntegrationConnection, ComposioListConnectedIntegrationsRequest,
+    ComposioListToolContractsRequest, ComposioListToolContractsResponse,
+    ComposioProbeToolOutputRequest, ComposioProbedOutputSample, ComposioToolContract,
 };
 pub use direct::{
     ComposioDirectConnectionsRequest, ComposioDirectCredential, ComposioDirectToolsRequest,

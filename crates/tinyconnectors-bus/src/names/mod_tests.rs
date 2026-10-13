@@ -57,9 +57,15 @@ fn the_method_table_holds_the_declared_members() {
             methods::LIST_TOOLS_DIRECT,
             methods::ROUTED_READ,
             methods::GET_VOCABULARY,
+            methods::LIST_CURATED_CATALOG,
+            methods::LIST_VISIBLE_TOOLS,
             methods::EVALUATE_ACTIONS,
             methods::NORMALIZE_IDENTITIES,
             methods::PREPARE_TASK_FILTER,
+            methods::GET_TOOL_CONTRACT,
+            methods::LIST_TOOL_CONTRACTS,
+            methods::PROBE_TOOL_OUTPUT,
+            methods::LIST_CONNECTED_INTEGRATIONS,
             methods::RUNTIME_MODE,
         ]
     );

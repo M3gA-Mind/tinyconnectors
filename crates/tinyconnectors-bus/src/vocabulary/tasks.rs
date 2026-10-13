@@ -168,3 +168,21 @@ pub struct TaskFetchFilter {
     #[serde(default)]
     pub max: u32,
 }
+
+/// Cap applied when a [`TaskFetchFilter`] leaves `max` unset.
+pub const DEFAULT_TASK_FETCH_MAX: usize = 25;
+
+impl TaskFetchFilter {
+    /// The cap a fetch honours: `max`, or [`DEFAULT_TASK_FETCH_MAX`] when unset.
+    ///
+    /// Pure data, so the host reads it directly instead of round-tripping
+    /// `PrepareTaskFilter` for a constant.
+    #[must_use]
+    pub fn effective_max(&self) -> usize {
+        if self.max == 0 {
+            DEFAULT_TASK_FETCH_MAX
+        } else {
+            self.max as usize
+        }
+    }
+}

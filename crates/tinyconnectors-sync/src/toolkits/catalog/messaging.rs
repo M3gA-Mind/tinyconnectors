@@ -1,11 +1,11 @@
 //! Curated catalogs — messaging toolkits: Slack, Discord, Telegram,
 //! `WhatsApp`, Microsoft Teams.
 
-use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
+use crate::scope::{CuratedTool, ToolScope};
 
 // ── slack ───────────────────────────────────────────────────────────
 /// The curated action catalog for the `slack` toolkit.
-pub(crate) const SLACK_CURATED: &[CuratedTool] = &[
+pub const SLACK_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "SLACK_FIND_CHANNELS",
         scope: ToolScope::Read,
@@ -63,8 +63,11 @@ pub(crate) const SLACK_CURATED: &[CuratedTool] = &[
         scope: ToolScope::Write,
     },
     CuratedTool {
+        // Adding someone to a channel hands them its whole history, a change
+        // to who can see what however friendly the verb sounds, so it is
+        // `Admin` like `SLACK_INVITE_USER_TO_WORKSPACE`.
         slug: "SLACK_INVITE_USERS_TO_A_SLACK_CHANNEL",
-        scope: ToolScope::Write,
+        scope: ToolScope::Admin,
     },
     CuratedTool {
         slug: "SLACK_ADD_REACTION_TO_AN_ITEM",
@@ -118,7 +121,7 @@ pub(crate) const SLACK_CURATED: &[CuratedTool] = &[
 
 // ── discord ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `discord` toolkit.
-pub(crate) const DISCORD_CURATED: &[CuratedTool] = &[
+pub const DISCORD_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "DISCORD_GET_MY_USER",
         scope: ToolScope::Read,
@@ -165,7 +168,7 @@ pub(crate) const DISCORD_CURATED: &[CuratedTool] = &[
 
 // ── telegram ────────────────────────────────────────────────────────
 /// The curated action catalog for the `telegram` toolkit.
-pub(crate) const TELEGRAM_CURATED: &[CuratedTool] = &[
+pub const TELEGRAM_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "TELEGRAM_GET_UPDATES",
         scope: ToolScope::Read,
@@ -242,7 +245,7 @@ pub(crate) const TELEGRAM_CURATED: &[CuratedTool] = &[
 
 // ── whatsapp ────────────────────────────────────────────────────────
 /// The curated action catalog for the `whatsapp` toolkit.
-pub(crate) const WHATSAPP_CURATED: &[CuratedTool] = &[
+pub const WHATSAPP_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "WHATSAPP_GET_PHONE_NUMBERS",
         scope: ToolScope::Read,
@@ -307,7 +310,7 @@ pub(crate) const WHATSAPP_CURATED: &[CuratedTool] = &[
 
 // ── microsoft_teams ─────────────────────────────────────────────────
 /// The curated action catalog for the `microsoft_teams` toolkit.
-pub(crate) const MICROSOFT_TEAMS_CURATED: &[CuratedTool] = &[
+pub const MICROSOFT_TEAMS_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "MICROSOFT_TEAMS_GET_CHAT",
         scope: ToolScope::Read,

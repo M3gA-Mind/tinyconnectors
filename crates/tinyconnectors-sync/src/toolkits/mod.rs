@@ -14,19 +14,14 @@
 //! slice worth surfacing, ported action-for-action from the lists these
 //! toolkits were already curated against.
 
+pub mod catalog;
 mod clickup;
-mod clickup_catalog;
 mod github;
-mod github_catalog;
 mod gmail;
-mod gmail_catalog;
 mod identity;
 mod linear;
-mod linear_catalog;
 mod notion;
-mod notion_catalog;
 mod slack;
-mod slack_catalog;
 
 pub use clickup::ClickupProvider;
 pub use github::GithubProvider;

@@ -1,13 +1,15 @@
-//! The curated github catalog.
+//! Curated catalog of `GitHub` Composio actions exposed to the agent.
+//!
+//! Composio publishes hundreds of `GitHub` actions; this hand-tuned slice
+//! covers the day-to-day operations an AI assistant actually performs
+//! (browsing repos, reading/writing issues + PRs, code search, basic
+//! workflow control) and hides the long tail of admin endpoints.
 
 use crate::scope::{CuratedTool, ToolScope};
 
-/// Actions worth offering an agent for github.
-///
-/// Composio publishes far more than this. The long tail is edge-case
-/// administration an agent never plans for, and offering all of it makes the
-/// model's tool list worse, not better.
-pub(super) const CURATED: &[CuratedTool] = &[
+/// The curated action catalog for the `github` toolkit.
+pub const GITHUB_CURATED: &[CuratedTool] = &[
+    // ── Read: user / repos ──────────────────────────────────────────
     CuratedTool {
         slug: "GITHUB_GET_THE_AUTHENTICATED_USER",
         scope: ToolScope::Read,
@@ -24,6 +26,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "GITHUB_LIST_REPOSITORY_COLLABORATORS",
         scope: ToolScope::Read,
     },
+    // ── Read: search ────────────────────────────────────────────────
     CuratedTool {
         slug: "GITHUB_SEARCH_REPOSITORIES",
         scope: ToolScope::Read,
@@ -40,6 +43,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "GITHUB_SEARCH_USERS",
         scope: ToolScope::Read,
     },
+    // ── Read: issues ────────────────────────────────────────────────
     CuratedTool {
         slug: "GITHUB_LIST_REPOSITORY_ISSUES",
         scope: ToolScope::Read,
@@ -52,6 +56,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "GITHUB_LIST_ISSUE_COMMENTS",
         scope: ToolScope::Read,
     },
+    // ── Read: pull requests ─────────────────────────────────────────
     CuratedTool {
         slug: "GITHUB_LIST_PULL_REQUESTS",
         scope: ToolScope::Read,
@@ -60,6 +65,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "GITHUB_GET_A_PULL_REQUEST",
         scope: ToolScope::Read,
     },
+    // ── Read: branches / commits ────────────────────────────────────
     CuratedTool {
         slug: "GITHUB_LIST_BRANCHES",
         scope: ToolScope::Read,
@@ -76,6 +82,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "GITHUB_GET_A_COMMIT",
         scope: ToolScope::Read,
     },
+    // ── Write: repos / contents ─────────────────────────────────────
     CuratedTool {
         slug: "GITHUB_CREATE_A_REPOSITORY_FOR_THE_AUTHENTICATED_USER",
         scope: ToolScope::Write,
@@ -88,10 +95,12 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "GITHUB_CREATE_A_COMMIT",
         scope: ToolScope::Write,
     },
+    // GITHUB_COMMIT_MULTIPLE_FILES removed from Composio catalog
     CuratedTool {
         slug: "GITHUB_CREATE_A_COMMIT_COMMENT",
         scope: ToolScope::Write,
     },
+    // ── Write: issues ───────────────────────────────────────────────
     CuratedTool {
         slug: "GITHUB_CREATE_AN_ISSUE",
         scope: ToolScope::Write,
@@ -100,6 +109,8 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "GITHUB_UPDATE_AN_ISSUE",
         scope: ToolScope::Write,
     },
+    // GITHUB_CLOSE_AN_ISSUE — removed: no dedicated Composio slug.
+    // Use GITHUB_UPDATE_AN_ISSUE with state:"closed" instead.
     CuratedTool {
         slug: "GITHUB_CREATE_AN_ISSUE_COMMENT",
         scope: ToolScope::Write,
@@ -112,6 +123,7 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "GITHUB_ADD_ASSIGNEES_TO_AN_ISSUE",
         scope: ToolScope::Write,
     },
+    // ── Write: pull requests ────────────────────────────────────────
     CuratedTool {
         slug: "GITHUB_CREATE_A_PULL_REQUEST",
         scope: ToolScope::Write,
@@ -136,10 +148,17 @@ pub(super) const CURATED: &[CuratedTool] = &[
         slug: "GITHUB_CREATE_A_GIST",
         scope: ToolScope::Write,
     },
+    // ── Admin: destructive / permission-changing ────────────────────
     CuratedTool {
         slug: "GITHUB_DELETE_A_REPOSITORY",
         scope: ToolScope::Admin,
     },
+    // DELETE_A_REFERENCE maps to DELETE /repos/{owner}/{repo}/git/refs/{ref}.
+    // The ref must be a full path (e.g. `refs/heads/branch-name` or
+    // `refs/tags/v1.0`) — passing a bare branch name deletes nothing (404).
+    // This replaces the old GITHUB_DELETE_A_BRANCH slug (Composio v3 rename);
+    // it is broader — it can delete tags too — so agents should always specify
+    // a `refs/heads/` prefix when the intent is branch deletion.
     CuratedTool {
         slug: "GITHUB_DELETE_A_REFERENCE",
         scope: ToolScope::Admin,

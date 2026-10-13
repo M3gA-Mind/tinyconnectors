@@ -1,11 +1,11 @@
 //! Curated catalogs — social media / entertainment toolkits: Twitter,
 //! Spotify, `YouTube`.
 
-use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
+use crate::scope::{CuratedTool, ToolScope};
 
 // ── twitter ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `twitter` toolkit.
-pub(crate) const TWITTER_CURATED: &[CuratedTool] = &[
+pub const TWITTER_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "TWITTER_RECENT_SEARCH",
         scope: ToolScope::Read,
@@ -94,7 +94,7 @@ pub(crate) const TWITTER_CURATED: &[CuratedTool] = &[
 
 // ── spotify ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `spotify` toolkit.
-pub(crate) const SPOTIFY_CURATED: &[CuratedTool] = &[
+pub const SPOTIFY_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "SPOTIFY_GET_CURRENT_USER_S_PROFILE",
         scope: ToolScope::Read,
@@ -171,7 +171,7 @@ pub(crate) const SPOTIFY_CURATED: &[CuratedTool] = &[
 
 // ── youtube ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `youtube` toolkit.
-pub(crate) const YOUTUBE_CURATED: &[CuratedTool] = &[
+pub const YOUTUBE_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "YOUTUBE_SEARCH_YOU_TUBE",
         scope: ToolScope::Read,
