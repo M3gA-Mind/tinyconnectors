@@ -2,18 +2,15 @@
 use crate::triggers::TriggerArchive;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use tinystoragedrivers_core::StreamStore;
 use tinyconnectors_bus::ArchiveHandle;
+use tinystoragedrivers_core::StreamStore;
 
 #[derive(Debug, Default)]
 pub(super) struct Archives(Mutex<HashMap<ArchiveHandle, TriggerArchive>>);
 const MAX_ARCHIVES: usize = 64;
 
 impl Archives {
-    pub(super) fn open(
-        &self,
-        streams: Arc<dyn StreamStore>,
-    ) -> tinybus::Result<ArchiveHandle> {
+    pub(super) fn open(&self, streams: Arc<dyn StreamStore>) -> tinybus::Result<ArchiveHandle> {
         let mut leases = self
             .0
             .lock()

@@ -1,4 +1,4 @@
-//! Unit tests for the document-backed preference store and the storage registry.
+//! Unit tests for the document-backed preference store and the declared storage grant.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -8,9 +8,7 @@ use serde_json::json;
 use tinyconnectors_sync::{Error, PREFS_NAMESPACE, PrefsStore, ScopePrefStore, UserScopePref};
 use tinystoragedrivers_core::{DocumentStore, MemoryStorage, Scope, StorageBackend};
 
-use super::{
-    DocumentPrefsStore, ModuleStorage, register_storage, resolve_storage, unregister_storage,
-};
+use super::{DocumentPrefsStore, STORAGE_NEEDS};
 
 fn scoped(name: &str) -> tinystoragedrivers_core::ScopedStorage {
     MemoryStorage::new()
@@ -157,19 +155,16 @@ async fn a_rejected_key_is_reported_rather_than_swallowed() {
 }
 
 #[test]
-fn a_registered_storage_resolves_until_it_is_unregistered() {
-    let storage = scoped("registry");
-    let key = "registry-test-key";
-    assert!(resolve_storage(key).is_none());
-    register_storage(
-        key,
-        ModuleStorage {
-            documents: storage.documents().clone(),
-            streams: storage.streams().clone(),
-        },
+fn the_declared_grant_matches_what_the_stores_write() {
+    // The host writes its grant from `STORAGE_NEEDS`; if the stores moved to
+    // another collection or stream prefix without it, every call would be
+    // refused by the grant.
+    assert_eq!(STORAGE_NEEDS.collections, &[PREFS_NAMESPACE]);
+    assert_eq!(STORAGE_NEEDS.stream_prefixes, &["triggers/"]);
+    let archive = crate::triggers::TriggerArchive::new(scoped("grant").streams().clone());
+    assert!(
+        archive
+            .current_day_file()
+            .starts_with(STORAGE_NEEDS.stream_prefixes[0])
     );
-    assert!(resolve_storage(key).is_some());
-    unregister_storage(key);
-    assert!(resolve_storage(key).is_none());
-    unregister_storage(key);
 }

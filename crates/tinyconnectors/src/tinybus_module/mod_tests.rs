@@ -1186,7 +1186,8 @@ async fn trigger_history_reads_the_archive_the_host_gave_it() -> tinybus::Result
 }
 
 #[tokio::test]
-async fn scope_preferences_persist_in_the_hosts_documents_across_instances() -> tinybus::Result<()> {
+async fn scope_preferences_persist_in_the_hosts_documents_across_instances() -> tinybus::Result<()>
+{
     // The difference between the two stores, observable: a preference written
     // through one module instance lands in the host's `composio-user-scopes`
     // collection and is read back by the next instance.
@@ -1217,15 +1218,12 @@ async fn scope_preferences_persist_in_the_hosts_documents_across_instances() -> 
         .expect("the preference is a document on the host");
     assert_eq!(stored.doc["value"]["write"], false);
 
-    drop(first);
-    let bus2 = MemoryBus::new();
-    Broker::new().spawn(bus2.clone());
     drop(proxy);
-    // A second instance over the same documents sees the choice.
-    let link_store = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
-    drop(link_store);
-    let pref = crate::state::DocumentPrefsStore::new(storage.scoped.documents().clone());
-    let reread = tinyconnectors_sync::UserScopePref::load(&pref, "gmail")
+    drop(first);
+    // A second instance, over a fresh connection to the same host, sees it.
+    let second = Connection::connect(bus.connect().await?).await?;
+    let store = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::new(second));
+    let reread = tinyconnectors_sync::UserScopePref::load(&store, "gmail")
         .await
         .expect("loads");
     assert!(!reread.write, "the choice survived the module restart");
@@ -1562,25 +1560,35 @@ async fn bus_applies_task_windows_and_returns_structured_provider_errors() -> ti
 }
 
 #[tokio::test]
-async fn bus_archive_leases_separate_users_and_preserve_daily_history() -> tinybus::Result<()> {
+async fn opening_an_archive_without_served_storage_is_refused() -> tinybus::Result<()> {
+    let (_serving, proxy) = serve_via_setup(ModuleConfig::default()).await?;
+    let error = proxy
+        .call::<tinyconnectors_bus::ArchiveHandle>(
+            names::methods::OPEN_ARCHIVE,
+            (tinyconnectors_bus::OpenArchiveRequest {
+                state_dir: "ignored".into(),
+            },),
+        )
+        .await
+        .expect_err("no storage host");
+    assert!(error.to_string().contains("storage unavailable"));
+    Ok(())
+}
+
+#[tokio::test]
+async fn bus_archive_leases_share_the_callers_scope_and_preserve_daily_history()
+-> tinybus::Result<()> {
     use tinyconnectors_bus::{
         ArchiveHandle, ComposioTriggerEvent, ComposioTriggerHistoryEntry, OpenArchiveRequest,
         ReadArchiveRequest, RecordTriggerRequest,
     };
-    let first = TempDir::new("archive-first");
-    let second = TempDir::new("archive-second");
-    register_for(&first);
-    register_for(&second);
-    let (_serving, proxy) = serve_via_setup(ModuleConfig::default()).await?;
-    let open = |dir: &TempDir| OpenArchiveRequest {
-        state_dir: dir.0.to_string_lossy().into_owned(),
+    let (_serving, proxy, _storage) = serve_with_storage(ModuleConfig::default()).await?;
+    // `state_dir` is ignored: the host binds the scope from the caller.
+    let open = || OpenArchiveRequest {
+        state_dir: "ignored".into(),
     };
-    let one: ArchiveHandle = proxy
-        .call(names::methods::OPEN_ARCHIVE, (open(&first),))
-        .await?;
-    let two: ArchiveHandle = proxy
-        .call(names::methods::OPEN_ARCHIVE, (open(&second),))
-        .await?;
+    let one: ArchiveHandle = proxy.call(names::methods::OPEN_ARCHIVE, (open(),)).await?;
+    let two: ArchiveHandle = proxy.call(names::methods::OPEN_ARCHIVE, (open(),)).await?;
     assert_ne!(one, two);
     let event = ComposioTriggerEvent {
         toolkit: "gmail".into(),
@@ -1617,14 +1625,16 @@ async fn bus_archive_leases_separate_users_and_preserve_daily_history() -> tinyb
             },),
         )
         .await?;
-    assert!(other.entries.is_empty());
+    assert_eq!(
+        other.entries.len(),
+        1,
+        "both leases read the caller's one scope on the host"
+    );
     proxy
         .call::<()>(names::methods::CLOSE_ARCHIVE, (one.clone(),))
         .await?;
     closed_archive_calls_fail(&proxy, one, event).await;
-    let reopened: ArchiveHandle = proxy
-        .call(names::methods::OPEN_ARCHIVE, (open(&first),))
-        .await?;
+    let reopened: ArchiveHandle = proxy.call(names::methods::OPEN_ARCHIVE, (open(),)).await?;
     let restored: ComposioTriggerHistoryResult = proxy
         .call(
             names::methods::READ_ARCHIVE,
