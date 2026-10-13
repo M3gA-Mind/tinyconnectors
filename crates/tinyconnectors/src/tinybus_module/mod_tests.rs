@@ -1247,6 +1247,7 @@ async fn a_module_loaded_without_a_route_becomes_usable_after_configure() {
         client: Arc::new(std::sync::RwLock::new(None)),
         archive: None,
         archives: Arc::default(),
+        offered: tinyconnectors_bus::vocabulary::OfferedToolkits::default(),
     };
 
     let before = service.list_toolkits().await.unwrap_err();
@@ -1323,6 +1324,7 @@ async fn a_reconfigured_route_reaches_the_action_runner_too() {
         client,
         archive: None,
         archives: Arc::default(),
+        offered: tinyconnectors_bus::vocabulary::OfferedToolkits::default(),
     };
 
     let before = tinyconnectors_sync::ActionRunner::run(
@@ -1789,11 +1791,11 @@ async fn listings_omit_toolkits_the_host_does_not_offer() -> tinybus::Result<()>
         .collect();
     assert_eq!(offered, ["GMAIL_FETCH_EMAILS"]);
 
-    let toolkits: ComposioToolkitsResponse = proxy.call_bare(names::methods::LIST_TOOLKITS).await?;
+    let toolkits: ComposioToolkitsResponse = proxy.call(names::methods::LIST_TOOLKITS, ()).await?;
     assert_eq!(toolkits.toolkits, ["gmail"]);
 
     let ready: ComposioAgentReadyToolkitsResponse = proxy
-        .call_bare(names::methods::LIST_AGENT_READY_TOOLKITS)
+        .call(names::methods::LIST_AGENT_READY_TOOLKITS, ())
         .await?;
     assert!(ready.toolkits.contains(&"gmail".to_owned()));
     assert!(!ready.toolkits.contains(&"slack".to_owned()));
@@ -1807,7 +1809,7 @@ async fn an_allow_list_offers_only_the_toolkits_it_names() -> tinybus::Result<()
     service.offered = offering(&["gmail"], &[]);
     let (_serving, _client, proxy, _bus) = proxy_to(service).await?;
     let ready: ComposioAgentReadyToolkitsResponse = proxy
-        .call_bare(names::methods::LIST_AGENT_READY_TOOLKITS)
+        .call(names::methods::LIST_AGENT_READY_TOOLKITS, ())
         .await?;
     assert_eq!(ready.toolkits, ["gmail"]);
     Ok(())
