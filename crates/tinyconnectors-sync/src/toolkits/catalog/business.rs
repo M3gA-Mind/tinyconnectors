@@ -1,11 +1,11 @@
 //! Curated catalogs — business toolkits: Shopify, Stripe, `HubSpot`,
 //! Salesforce, Airtable, Figma.
 
-use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
+use crate::scope::{CuratedTool, ToolScope};
 
 // ── shopify ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `shopify` toolkit.
-pub(crate) const SHOPIFY_CURATED: &[CuratedTool] = &[
+pub const SHOPIFY_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "SHOPIFY_BULK_QUERY_OPERATION",
         scope: ToolScope::Read,
@@ -90,7 +90,7 @@ pub(crate) const SHOPIFY_CURATED: &[CuratedTool] = &[
 
 // ── stripe ──────────────────────────────────────────────────────────
 /// The curated action catalog for the `stripe` toolkit.
-pub(crate) const STRIPE_CURATED: &[CuratedTool] = &[
+pub const STRIPE_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "STRIPE_GET_PAYMENT_INTENT",
         scope: ToolScope::Read,
@@ -171,7 +171,7 @@ pub(crate) const STRIPE_CURATED: &[CuratedTool] = &[
 
 // ── hubspot ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `hubspot` toolkit.
-pub(crate) const HUBSPOT_CURATED: &[CuratedTool] = &[
+pub const HUBSPOT_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "HUBSPOT_GET_CONTACTS",
         scope: ToolScope::Read,
@@ -276,7 +276,7 @@ pub(crate) const HUBSPOT_CURATED: &[CuratedTool] = &[
 
 // ── salesforce ──────────────────────────────────────────────────────
 /// The curated action catalog for the `salesforce` toolkit.
-pub(crate) const SALESFORCE_CURATED: &[CuratedTool] = &[
+pub const SALESFORCE_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "SALESFORCE_RUN_SOQL_QUERY",
         scope: ToolScope::Read,
@@ -393,7 +393,7 @@ pub(crate) const SALESFORCE_CURATED: &[CuratedTool] = &[
 
 // ── airtable ────────────────────────────────────────────────────────
 /// The curated action catalog for the `airtable` toolkit.
-pub(crate) const AIRTABLE_CURATED: &[CuratedTool] = &[
+pub const AIRTABLE_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "AIRTABLE_LIST_RECORDS",
         scope: ToolScope::Read,
@@ -470,7 +470,7 @@ pub(crate) const AIRTABLE_CURATED: &[CuratedTool] = &[
 
 // ── figma ───────────────────────────────────────────────────────────
 /// The curated action catalog for the `figma` toolkit.
-pub(crate) const FIGMA_CURATED: &[CuratedTool] = &[
+pub const FIGMA_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "FIGMA_GET_FILE_JSON",
         scope: ToolScope::Read,

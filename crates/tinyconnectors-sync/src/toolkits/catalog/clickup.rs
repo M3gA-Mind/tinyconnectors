@@ -6,10 +6,10 @@
 //! subset the memory document sync relies on, plus the most common
 //! task-write surface the agent already uses through generic tool-calling.
 
-use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
+use crate::scope::{CuratedTool, ToolScope};
 
 /// The curated action catalog for the `clickup` toolkit.
-pub(crate) const CLICKUP_CURATED: &[CuratedTool] = &[
+pub const CLICKUP_CURATED: &[CuratedTool] = &[
     // ── Read: identity ─────────────────────────────────────────────
     CuratedTool {
         slug: "CLICKUP_GET_AUTHORIZED_USER",

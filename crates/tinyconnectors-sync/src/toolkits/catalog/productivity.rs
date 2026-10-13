@@ -8,11 +8,11 @@
 //! through Composio's API, but their data is not pre-ingested into
 //! `OpenHuman`'s memory.
 
-use crate::vocabulary_impl::scopes::{CuratedTool, ToolScope};
+use crate::scope::{CuratedTool, ToolScope};
 
 // ── outlook ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `outlook` toolkit.
-pub(crate) const OUTLOOK_CURATED: &[CuratedTool] = &[
+pub const OUTLOOK_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "OUTLOOK_GET_MESSAGE",
         scope: ToolScope::Read,
@@ -114,7 +114,7 @@ pub(crate) const OUTLOOK_CURATED: &[CuratedTool] = &[
 
 // ── jira ────────────────────────────────────────────────────────────
 /// The curated action catalog for the `jira` toolkit.
-pub(crate) const JIRA_CURATED: &[CuratedTool] = &[
+pub const JIRA_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "JIRA_GET_ISSUE",
         scope: ToolScope::Read,
@@ -215,7 +215,7 @@ pub(crate) const JIRA_CURATED: &[CuratedTool] = &[
 
 // ── trello ──────────────────────────────────────────────────────────
 /// The curated action catalog for the `trello` toolkit.
-pub(crate) const TRELLO_CURATED: &[CuratedTool] = &[
+pub const TRELLO_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "TRELLO_GET_BOARDS_BY_ID_BOARD",
         scope: ToolScope::Read,
@@ -308,7 +308,7 @@ pub(crate) const TRELLO_CURATED: &[CuratedTool] = &[
 
 // ── asana ───────────────────────────────────────────────────────────
 /// The curated action catalog for the `asana` toolkit.
-pub(crate) const ASANA_CURATED: &[CuratedTool] = &[
+pub const ASANA_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "ASANA_GET_A_TASK",
         scope: ToolScope::Read,
@@ -413,7 +413,7 @@ pub(crate) const ASANA_CURATED: &[CuratedTool] = &[
 
 // ── dropbox ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `dropbox` toolkit.
-pub(crate) const DROPBOX_CURATED: &[CuratedTool] = &[
+pub const DROPBOX_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "DROPBOX_GET_METADATA",
         scope: ToolScope::Read,
@@ -482,7 +482,7 @@ pub(crate) const DROPBOX_CURATED: &[CuratedTool] = &[
 
 // ── todoist ─────────────────────────────────────────────────────────
 /// The curated action catalog for the `todoist` toolkit.
-pub(crate) const TODOIST_CURATED: &[CuratedTool] = &[
+pub const TODOIST_CURATED: &[CuratedTool] = &[
     CuratedTool {
         slug: "TODOIST_GET_TASK",
         scope: ToolScope::Read,
