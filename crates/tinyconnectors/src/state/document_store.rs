@@ -48,7 +48,7 @@ impl PrefsStore for DocumentPrefsStore {
             .await
             .map_err(|error| failed(key, "read the preference", &error))?;
         // A toolkit the user never configured is the normal case, not a failure.
-        Ok(found.and_then(|versioned| versioned.value.get(VALUE_FIELD).cloned()))
+        Ok(found.and_then(|versioned| versioned.doc.get(VALUE_FIELD).cloned()))
     }
 
     async fn set(&self, key: &str, value: &Value) -> SyncResult<()> {
