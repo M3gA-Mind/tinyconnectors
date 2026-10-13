@@ -48,7 +48,18 @@ impl PrefsStore for DocumentPrefsStore {
             .await
             .map_err(|error| failed(key, "read the preference", &error))?;
         // A toolkit the user never configured is the normal case, not a failure.
-        Ok(found.and_then(|versioned| versioned.doc.get(VALUE_FIELD).cloned()))
+        // A document that exists without its value is corrupt, not "unset":
+        // defaulting it would silently re-enable a write the user denied.
+        match found {
+            None => Ok(None),
+            Some(versioned) => match versioned.doc.get(VALUE_FIELD) {
+                Some(value) => Ok(Some(value.clone())),
+                None => Err(SyncError::Store {
+                    key: key.to_string(),
+                    message: format!("the stored preference has no `{VALUE_FIELD}` field"),
+                }),
+            },
+        }
     }
 
     async fn set(&self, key: &str, value: &Value) -> SyncResult<()> {

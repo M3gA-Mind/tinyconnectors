@@ -122,20 +122,29 @@ impl TriggerArchive {
                 failed(&stream, format!("could not size the day's stream: {error}"))
             })?;
             // Within a day the stream is append-ordered, so newest is last. Read
-            // only the tail that can still matter.
-            let from = length.saturating_sub(wanted as u64);
-            let records = self
-                .streams
-                .read_window(&stream, from, wanted)
-                .await
-                .map_err(|error| {
-                    failed(&stream, format!("could not read the day's stream: {error}"))
-                })?;
-            let mut day_entries: Vec<ComposioTriggerHistoryEntry> = records
-                .into_iter()
-                .filter_map(|record| serde_json::from_value(record.value).ok())
-                .collect();
-            day_entries.reverse();
+            // backwards in windows until `wanted` valid entries are found, so a
+            // corrupt record does not shrink the result while older valid ones
+            // remain.
+            let mut day_entries: Vec<ComposioTriggerHistoryEntry> = Vec::new();
+            let mut end = length;
+            while end > 0 && day_entries.len() < wanted {
+                let need = wanted - day_entries.len();
+                let from = end.saturating_sub(need as u64);
+                let records = self
+                    .streams
+                    .read_window(&stream, from, usize::try_from(end - from).unwrap_or(need))
+                    .await
+                    .map_err(|error| {
+                        failed(&stream, format!("could not read the day's stream: {error}"))
+                    })?;
+                day_entries.extend(
+                    records
+                        .into_iter()
+                        .rev()
+                        .filter_map(|record| serde_json::from_value(record.value).ok()),
+                );
+                end = from;
+            }
             entries.extend(day_entries);
         }
 
