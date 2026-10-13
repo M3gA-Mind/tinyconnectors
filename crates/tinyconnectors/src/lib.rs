@@ -79,6 +79,7 @@
 //! ```
 
 pub mod client;
+mod contracts;
 mod error;
 pub mod execute;
 pub mod oauth;
