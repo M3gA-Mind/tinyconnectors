@@ -55,18 +55,18 @@ fn shared_provider_profile_preserves_omitted_fields_and_extras() -> serde_json::
         extras: serde_json::json!({"future": "preserved"}),
         ..Default::default()
     };
-    let wire = serde_json::json!({
+    // Older peers omit unset fields; they still decode.
+    let omitted = serde_json::json!({
         "toolkit": "gmail", "email": "alice@example.com", "extras": {"future": "preserved"}
     });
-    assert_eq!(serde_json::to_value(&profile)?, wire);
     assert_eq!(
-        serde_json::from_value::<ProviderUserProfile>(wire)?,
+        serde_json::from_value::<ProviderUserProfile>(omitted)?,
         profile
     );
-    assert_eq!(
-        serde_json::to_value(ProviderUserProfile::default())?,
-        serde_json::json!({"toolkit": ""})
-    );
+    // Encoding writes every field, matching the host's former shape.
+    let encoded = serde_json::to_value(&profile)?;
+    assert_eq!(encoded["connection_id"], serde_json::Value::Null);
+    assert_eq!(encoded["email"], "alice@example.com");
     Ok(())
 }
 
