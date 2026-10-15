@@ -46,6 +46,13 @@ The two are not equivalent and the module says so: direct mode has no per-user
 allowlist to report, so `ListToolkits` returns a named refusal rather than an
 empty list that would read as "you may connect nothing".
 
+Direct mode also refuses the trigger members by default, because a webhook has
+to arrive somewhere and the module has no endpoint. A host that owns a public
+webhook endpoint sets `"webhooks": true` on its direct route (contract 1.22);
+the members then run against Composio's trigger API as the configured entity
+only, and the host verifies and decodes deliveries with `tinyconnectors-bus`'s
+`webhook` feature.
+
 ## The module holds no connector credential
 
 The credential is the host's to supply, in the configuration blob, and the

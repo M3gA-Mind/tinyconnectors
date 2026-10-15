@@ -18,7 +18,7 @@ it should use:
 
 ```json
 { "route": "proxy",  "base_url": "https://api.example.com", "auth_token": "<user session token>" }
-{ "route": "direct", "api_key": "<user Composio key>", "entity_id": "default" }
+{ "route": "direct", "api_key": "<user Composio key>", "entity_id": "default", "webhooks": false }
 ```
 
 **proxy** goes through the TinyHumans backend, which owns the Composio API key,
@@ -76,6 +76,28 @@ Direct mode cannot answer `ListToolkits` — there is no per-user allowlist when
 you talk to Composio directly — or `DeleteConnection`, whose proxy version also
 clears memory sourced from the connection. Both return a named refusal rather
 than an empty result that would read like an answer.
+
+### Triggers on the direct route
+
+By default direct mode refuses every trigger member too: a trigger is a webhook
+subscription, and the module has no endpoint for a delivery to reach. A host
+that owns a public webhook endpoint, and has pointed its Composio project's
+webhook at it, adds `"webhooks": true` to the direct route (contract 1.22; also
+accepted by `Configure` and on a `RoutedRead` credential). The trigger members
+then call Composio's trigger API with the user's key, always as the configured
+`entity_id`:
+
+- `ListAvailableTriggers` reads the toolkit's trigger types; every row is
+  `static`, with defaults and required keys taken from the config schema.
+- `ListTriggers` lists only this entity's subscriptions.
+- `CreateTrigger` and `EnableTrigger` upsert a subscription, and refuse a
+  connection whose owner is known to be another user.
+- `DisableTrigger` removes the subscription, after checking it is this
+  entity's.
+
+`ListGithubRepos` stays refused: a GitHub trigger takes its repository as
+ordinary required configuration. The host verifies each delivery and decodes it
+into a `ComposioTriggerEvent` with `tinyconnectors-bus`'s `webhook` feature.
 
 ## Installing
 
