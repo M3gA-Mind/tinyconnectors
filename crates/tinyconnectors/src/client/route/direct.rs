@@ -231,7 +231,9 @@ impl DirectRoute {
         if let Some(connection_id) = connection_id {
             self.ensure_owned(connection_id).await?;
         }
-        let mut body = serde_json::json!({ "user_id": self.entity_id });
+        // The same latest snapshot the catalog was read from.
+        let mut body =
+            serde_json::json!({ "user_id": self.entity_id, "toolkit_versions": "latest" });
         if let Some(connection_id) = connection_id {
             body["connected_account_id"] = connection_id.trim().into();
         }
@@ -616,7 +618,12 @@ impl Route for DirectRoute {
         // fan-out. v3 lists a trigger type once per toolkit, so every row here
         // is static and a repository is ordinary required configuration.
         self.require_webhooks("ListAvailableTriggers")?;
-        let path = format!("/triggers_types?toolkit_slugs={}&limit=50", encode(toolkit));
+        // `toolkit_versions=latest`, as for tools: the default is a pinned
+        // snapshot that can lack newer triggers and their config schemas.
+        let path = format!(
+            "/triggers_types?toolkit_slugs={}&limit=50&toolkit_versions=latest",
+            encode(toolkit)
+        );
         tracing::debug!(toolkit = %toolkit, "[connectors][direct] list_available_triggers");
         let rows = self.list_pages(&path).await?;
         Ok(ComposioAvailableTriggersResponse {
@@ -650,10 +657,12 @@ impl Route for DirectRoute {
         let wants_lookup = toolkit.is_none_or(|t| t.trim().is_empty())
             && rows.iter().any(triggers::names_no_toolkit);
         let connection_toolkits: std::collections::HashMap<String, String> = if wants_lookup {
-            match self.list_connections().await {
-                Ok(listing) => listing
-                    .connections
-                    .into_iter()
+            // Paged, unlike `list_connections`: an account on a later page
+            // would otherwise miss the map and fall back to the first word.
+            match self.list_pages("/connected_accounts?limit=200").await {
+                Ok(accounts) => accounts
+                    .iter()
+                    .filter_map(connection_from_v3)
                     .map(|connection| (connection.id, connection.toolkit.to_ascii_lowercase()))
                     .collect(),
                 Err(error) => {

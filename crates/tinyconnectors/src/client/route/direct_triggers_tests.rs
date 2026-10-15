@@ -116,7 +116,7 @@ const ACTIVE_PATH: &str =
 async fn lists_available_triggers_from_the_v3_catalog() {
     let transport = ScriptedTransport::new().expect(
         "GET",
-        "/triggers_types?toolkit_slugs=gmail&limit=50",
+        "/triggers_types?toolkit_slugs=gmail&limit=50&toolkit_versions=latest",
         json!({
             "items": [
                 {
@@ -170,7 +170,7 @@ async fn lists_available_triggers_from_the_v3_catalog() {
 async fn reads_a_field_map_config_with_per_field_required_flags() {
     let transport = ScriptedTransport::new().expect(
         "GET",
-        "/triggers_types?toolkit_slugs=github&limit=50",
+        "/triggers_types?toolkit_slugs=github&limit=50&toolkit_versions=latest",
         json!({
             "items": [{
                 "slug": "GITHUB_COMMIT_EVENT",
@@ -202,12 +202,12 @@ async fn follows_the_catalog_cursor_to_its_last_page() {
     let transport = ScriptedTransport::new()
         .expect(
             "GET",
-            "/triggers_types?toolkit_slugs=slack&limit=50",
+            "/triggers_types?toolkit_slugs=slack&limit=50&toolkit_versions=latest",
             json!({ "items": [{ "slug": "SLACK_A" }], "next_cursor": "page 2" }),
         )
         .expect(
             "GET",
-            "/triggers_types?toolkit_slugs=slack&limit=50&cursor=page%202",
+            "/triggers_types?toolkit_slugs=slack&limit=50&toolkit_versions=latest&cursor=page%202",
             json!({ "items": [{ "slug": "SLACK_B" }], "next_cursor": "" }),
         );
 
@@ -227,12 +227,12 @@ async fn a_repeated_cursor_is_an_incomplete_listing_not_a_finished_one() {
     let transport = ScriptedTransport::new()
         .expect(
             "GET",
-            "/triggers_types?toolkit_slugs=slack&limit=50",
+            "/triggers_types?toolkit_slugs=slack&limit=50&toolkit_versions=latest",
             json!({ "items": [{ "slug": "SLACK_A" }], "next_cursor": "c" }),
         )
         .expect(
             "GET",
-            "/triggers_types?toolkit_slugs=slack&limit=50&cursor=c",
+            "/triggers_types?toolkit_slugs=slack&limit=50&toolkit_versions=latest&cursor=c",
             json!({ "items": [{ "slug": "SLACK_B" }], "next_cursor": "c" }),
         );
 
@@ -406,7 +406,7 @@ async fn creates_a_trigger_without_a_connection_or_config() {
     assert_eq!(response.status.as_deref(), Some("active"));
     assert_eq!(
         transport.body_of(0),
-        json!({ "user_id": "entity-1" }),
+        json!({ "user_id": "entity-1", "toolkit_versions": "latest" }),
         "nothing absent is sent as null"
     );
 }
@@ -435,7 +435,7 @@ async fn enables_a_trigger_and_reports_what_was_enabled() {
     assert_eq!(response.connection_id, "c1");
     assert_eq!(
         transport.body_of(1),
-        json!({ "user_id": "entity-1", "connected_account_id": "c1" })
+        json!({ "user_id": "entity-1", "toolkit_versions": "latest", "connected_account_id": "c1" })
     );
     transport.assert_script_done();
 }
@@ -725,13 +725,13 @@ async fn a_listing_that_never_ends_is_an_error_not_a_partial_list() {
     let transport = ScriptedTransport::new();
     transport.expect(
         "GET",
-        "/triggers_types?toolkit_slugs=slack&limit=50",
+        "/triggers_types?toolkit_slugs=slack&limit=50&toolkit_versions=latest",
         json!({ "items": [{ "slug": "SLACK_0" }], "next_cursor": "p1" }),
     );
     for page in 1..super::MAX_PAGES {
         transport.expect(
             "GET",
-            &format!("/triggers_types?toolkit_slugs=slack&limit=50&cursor=p{page}"),
+            &format!("/triggers_types?toolkit_slugs=slack&limit=50&toolkit_versions=latest&cursor=p{page}"),
             json!({ "items": [{ "slug": "SLACK_N" }], "next_cursor": format!("p{}", page + 1) }),
         );
     }
@@ -784,5 +784,31 @@ async fn a_failed_toolkit_lookup_falls_back_to_the_slugs_first_word() {
     let response = route(&transport).list_triggers(None).await.unwrap();
 
     assert_eq!(response.triggers[0].toolkit, "gmail");
+    transport.assert_script_done();
+}
+
+#[tokio::test]
+async fn the_toolkit_lookup_follows_connection_pages() {
+    let transport = ScriptedTransport::new()
+        .expect(
+            "GET",
+            ACTIVE_PATH,
+            json!({ "items": [{ "id": "ti_1", "trigger_name": "MICROSOFT_TEAMS_NEW_MESSAGE",
+                                "connected_account_id": "c300", "user_id": "entity-1" }] }),
+        )
+        .expect(
+            "GET",
+            "/connected_accounts?limit=200",
+            json!({ "items": [{ "id": "c1", "toolkit": "gmail" }], "next_cursor": "p2" }),
+        )
+        .expect(
+            "GET",
+            "/connected_accounts?limit=200&cursor=p2",
+            json!({ "items": [{ "id": "c300", "toolkit": "microsoft_teams" }] }),
+        );
+
+    let response = route(&transport).list_triggers(None).await.unwrap();
+
+    assert_eq!(response.triggers[0].toolkit, "microsoft_teams");
     transport.assert_script_done();
 }
