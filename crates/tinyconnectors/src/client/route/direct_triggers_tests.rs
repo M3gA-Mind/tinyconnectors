@@ -444,24 +444,35 @@ async fn refuses_to_enable_a_trigger_on_another_users_connection() {
 }
 
 #[tokio::test]
-async fn an_unknown_owner_does_not_block_the_subscription() {
-    // The owner lookup is best effort; Composio itself still checks the
-    // `user_id` the upsert carries against the account.
+async fn refuses_a_subscription_when_the_owner_lookup_fails() {
+    // A subscription routes the account's events to whoever holds the project
+    // webhook, so it is made only on an account this entity is known to own.
+    // Composio checks the upsert's `user_id` against the account only on
+    // projects with 2FA enabled, so it cannot be relied on to catch this.
     let transport = ScriptedTransport::new();
     transport.expect_failure("GET", "/connected_accounts/c1", "HTTP 500");
-    transport.expect(
-        "POST",
-        "/trigger_instances/GMAIL_NEW_GMAIL_MESSAGE/upsert",
-        json!({ "trigger_id": "ti_1" }),
-    );
 
-    let response = route(&transport)
+    let error = route(&transport)
         .create_trigger("GMAIL_NEW_GMAIL_MESSAGE", Some("c1"), None)
         .await
-        .unwrap();
+        .unwrap_err();
 
-    assert_eq!(response.trigger_id, "ti_1");
-    transport.assert_script_done();
+    assert!(matches!(error, Error::ConnectionNotOwned { .. }), "{error}");
+    assert_eq!(transport.requests().len(), 1, "no subscription was made");
+}
+
+#[tokio::test]
+async fn refuses_a_subscription_on_an_account_that_names_no_owner() {
+    let transport =
+        ScriptedTransport::new().expect("GET", "/connected_accounts/c1", json!({ "id": "c1" }));
+
+    let error = route(&transport)
+        .enable_trigger("c1", "GMAIL_NEW_GMAIL_MESSAGE", None)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, Error::ConnectionNotOwned { .. }), "{error}");
+    assert_eq!(transport.requests().len(), 1, "no subscription was made");
 }
 
 #[tokio::test]
