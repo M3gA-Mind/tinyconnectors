@@ -16,14 +16,6 @@ use super::{DirectRoute, Route};
 use crate::client::Transport;
 use crate::{Error, Result};
 
-/// One request the route made.
-#[derive(Debug, Clone)]
-struct Request {
-    method: &'static str,
-    path: String,
-    body: Option<Value>,
-}
-
 /// A transport that answers a scripted sequence of requests, in order.
 ///
 /// Each step names the method and the full path it expects, so an unexpected
@@ -31,7 +23,8 @@ struct Request {
 #[derive(Debug, Default)]
 struct ScriptedTransport {
     steps: Mutex<VecDeque<(&'static str, String, std::result::Result<Value, String>)>>,
-    log: Mutex<Vec<Request>>,
+    /// The body of every request made, in order; `None` for a GET or DELETE.
+    log: Mutex<Vec<Option<Value>>>,
 }
 
 impl ScriptedTransport {
@@ -60,11 +53,7 @@ impl ScriptedTransport {
         path: &str,
         body: Option<&Value>,
     ) -> Result<serde_json::Value> {
-        self.log.lock().unwrap().push(Request {
-            method,
-            path: path.to_string(),
-            body: body.cloned(),
-        });
+        self.log.lock().unwrap().push(body.cloned());
         let (want_method, want_path, reply) = self
             .steps
             .lock()
@@ -82,12 +71,12 @@ impl ScriptedTransport {
         })
     }
 
-    fn requests(&self) -> Vec<Request> {
+    fn requests(&self) -> Vec<Option<Value>> {
         self.log.lock().unwrap().clone()
     }
 
     fn body_of(&self, index: usize) -> Value {
-        self.requests()[index].body.clone().expect("a request body")
+        self.requests()[index].clone().expect("a request body")
     }
 
     fn assert_script_done(&self) {
