@@ -46,6 +46,7 @@ pub(super) async fn read(
                 entity_id: credential.entity_id,
                 base_url: credential.base_url,
                 transport: credential.transport,
+                webhooks: credential.webhooks,
                 state_dir: None,
             }
         }

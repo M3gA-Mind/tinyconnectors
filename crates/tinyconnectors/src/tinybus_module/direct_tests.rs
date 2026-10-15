@@ -227,8 +227,6 @@ const ACTIVE_TRIGGERS: &str = r#"{"items":[{"id":"ti_1","trigger_name":"GMAIL_NE
 
 #[tokio::test]
 async fn a_load_time_blob_serves_triggers_only_when_it_opts_into_webhooks() {
-    use crate::client::Route as _;
-
     let (base, seen) = server(|_| json(ACTIVE_TRIGGERS));
     let blob = |webhooks: Option<bool>| {
         let mut blob = json!({

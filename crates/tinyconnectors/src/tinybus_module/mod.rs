@@ -81,7 +81,7 @@ use crate::triggers::TriggerArchive;
 /// ```json
 /// { "route": "proxy",  "base_url": "https://api.example.com", "auth_token": "…",
 ///   "state_dir": "/var/lib/openhuman" }
-/// { "route": "direct", "api_key": "…", "entity_id": "default" }
+/// { "route": "direct", "api_key": "…", "entity_id": "default", "webhooks": false }
 /// ```
 ///
 /// Reachable only through `module_export!`, which names the type in the ABI
@@ -139,6 +139,11 @@ pub(crate) enum RouteConfig {
         /// absent means no proxy and bundled roots.
         #[serde(default)]
         transport: Option<ComposioTransportConfig>,
+        /// Whether the host receives Composio's webhook deliveries at an
+        /// endpoint of its own. Optional: absent means `false`, and the trigger
+        /// members refuse — see [`DirectRoute::with_webhooks`].
+        #[serde(default)]
+        webhooks: bool,
     },
 }
 
@@ -260,12 +265,13 @@ impl RouteConfig {
                 entity_id,
                 base_url,
                 transport,
-                webhooks: _,
+                webhooks,
             } => Some(Self::Direct {
                 api_key,
                 entity_id,
                 base_url,
                 transport,
+                webhooks,
                 state_dir: None,
             }),
         }
@@ -308,6 +314,7 @@ impl RouteConfig {
                 entity_id,
                 base_url,
                 transport,
+                webhooks,
                 ..
             } => {
                 let base_url = base_url.unwrap_or_else(|| COMPOSIO_API_BASE.to_string());
@@ -315,11 +322,10 @@ impl RouteConfig {
                     HttpTransport::api_key(&base_url, api_key.clone())?
                         .with_network(transport.as_ref())?,
                 );
-                Ok(Arc::new(DirectRoute::new(
-                    transport,
-                    &api_key,
-                    entity_id.unwrap_or_default(),
-                )))
+                Ok(Arc::new(
+                    DirectRoute::new(transport, &api_key, entity_id.unwrap_or_default())
+                        .with_webhooks(webhooks),
+                ))
             }
         }
     }
