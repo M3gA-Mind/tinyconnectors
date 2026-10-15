@@ -660,3 +660,57 @@ async fn refuses_to_disable_a_trigger_whose_row_names_no_owner() {
     assert!(matches!(error, Error::TriggerNotOwned { .. }), "{error}");
     transport.assert_script_done();
 }
+
+#[tokio::test]
+async fn an_ambiguous_empty_upsert_recovery_is_refused_rather_than_guessed() {
+    let transport = ScriptedTransport::new()
+        .expect(
+            "POST",
+            "/trigger_instances/GMAIL_NEW_GMAIL_MESSAGE/upsert",
+            Value::Null,
+        )
+        .expect(
+            "GET",
+            ACTIVE_PATH,
+            json!({ "items": [
+                { "id": "ti_a", "trigger_name": "GMAIL_NEW_GMAIL_MESSAGE",
+                  "connected_account_id": "c1", "user_id": "entity-1" },
+                { "id": "ti_b", "trigger_name": "GMAIL_NEW_GMAIL_MESSAGE",
+                  "connected_account_id": "c2", "user_id": "entity-1" }
+            ] }),
+        );
+
+    let error = route(&transport)
+        .create_trigger("GMAIL_NEW_GMAIL_MESSAGE", None, None)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, Error::Decode { .. }), "{error}");
+}
+
+#[tokio::test]
+async fn empty_upsert_recovery_matches_the_requested_configuration() {
+    let transport = ScriptedTransport::new()
+        .expect(
+            "POST",
+            "/trigger_instances/GITHUB_COMMIT_EVENT/upsert",
+            Value::Null,
+        )
+        .expect(
+            "GET",
+            ACTIVE_PATH,
+            json!({ "items": [
+                { "id": "ti_a", "trigger_name": "GITHUB_COMMIT_EVENT",
+                  "trigger_config": { "repo": "a" }, "user_id": "entity-1" },
+                { "id": "ti_b", "trigger_name": "GITHUB_COMMIT_EVENT",
+                  "trigger_config": { "repo": "b" }, "user_id": "entity-1" }
+            ] }),
+        );
+
+    let response = route(&transport)
+        .create_trigger("GITHUB_COMMIT_EVENT", None, Some(json!({ "repo": "b" })))
+        .await
+        .unwrap();
+
+    assert_eq!(response.trigger_id, "ti_b");
+}

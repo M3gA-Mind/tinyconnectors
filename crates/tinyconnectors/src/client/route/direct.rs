@@ -248,7 +248,7 @@ impl DirectRoute {
             // A 204 (or any reply without an id) still means the upsert took
             // effect; the instance is found among this entity's active ones.
             None => self
-                .find_active_trigger(slug, connection_id)
+                .find_active_trigger(slug, connection_id, trigger_config.as_ref())
                 .await?
                 .ok_or(Error::Decode {
                     path,
@@ -263,6 +263,7 @@ impl DirectRoute {
         &self,
         slug: &str,
         connection_id: Option<&str>,
+        config: Option<&serde_json::Value>,
     ) -> Result<Option<String>> {
         let path = format!(
             "/trigger_instances/active?user_ids={}&show_disabled=false&limit=50",
@@ -270,8 +271,8 @@ impl DirectRoute {
         );
         let rows = self.list_pages(&path).await?;
         let wanted = connection_id.map(str::trim);
-        Ok(rows.iter().find_map(|row| {
-            let named = slug_field(row, &["trigger_name", "triggerName", "slug"])?;
+        let mut matches = rows.iter().filter(|row| {
+            let named = slug_field(row, &["trigger_name", "triggerName", "slug"]);
             let on_connection = field(
                 row,
                 &[
@@ -280,12 +281,23 @@ impl DirectRoute {
                     "connection_id",
                 ],
             );
-            (named.eq_ignore_ascii_case(slug.trim())
+            let same_config = config.is_none_or(|config| {
+                row.get("trigger_config")
+                    .or_else(|| row.get("triggerConfig"))
+                    .is_some_and(|stored| stored == config)
+            });
+            named.is_some_and(|named| named.eq_ignore_ascii_case(slug.trim()))
                 && triggers::owned_by(row, &self.entity_id)
-                && wanted.is_none_or(|wanted| wanted == on_connection.as_deref().unwrap_or("")))
-            .then(|| slug_field(row, &["id", "trigger_id", "triggerId"]))
-            .flatten()
-        }))
+                && wanted.is_none_or(|wanted| wanted == on_connection.as_deref().unwrap_or(""))
+                && same_config
+        });
+        // Composio identifies the instance by slug, account and configuration.
+        // Several matches mean the id cannot be told apart, and guessing one
+        // could hand back another instance's id.
+        let (Some(only), None) = (matches.next(), matches.next()) else {
+            return Ok(None);
+        };
+        Ok(slug_field(only, &["id", "trigger_id", "triggerId"]))
     }
 
     /// Every row of a cursor-paged v3 listing.
