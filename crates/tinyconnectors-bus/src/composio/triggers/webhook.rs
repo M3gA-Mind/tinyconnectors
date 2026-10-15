@@ -262,7 +262,12 @@ pub fn decode_with_toolkits(
     {
         Some(metadata) if kind == V3_TRIGGER_TYPE => decode_v3(&value, metadata, known),
         Some(_) => Err(undecodable("not a V3 trigger delivery")),
-        None if !kind.is_empty() && kind != V3_TRIGGER_TYPE => Ok(decode_v2(&value, &kind, known)),
+        None if !kind.is_empty() && kind != V3_TRIGGER_TYPE => decode_v2(&value, &kind, known)
+            .ok_or_else(|| {
+                undecodable(
+                    "not a V2 trigger delivery: needs `timestamp` and `data` naming a connection",
+                )
+            }),
         None => decode_v1(&value, known)
             .ok_or_else(|| undecodable("no trigger slug in `metadata`, `type` or `trigger_name`")),
     }
@@ -295,17 +300,36 @@ fn decode_v3(
 }
 
 /// Decode the legacy payload, whose routing ids are mixed into `data`.
-fn decode_v2(value: &serde_json::Value, kind: &str, known: &[&str]) -> ComposioTriggerEvent {
+///
+/// `None` unless the shape is a V2 trigger's: a `timestamp`, and `data` as an
+/// object that names the connection it came from.
+fn decode_v2(
+    value: &serde_json::Value,
+    kind: &str,
+    known: &[&str],
+) -> Option<ComposioTriggerEvent> {
     let trigger = kind.to_ascii_uppercase();
     let data = value.get("data").cloned().unwrap_or_default();
-    let fields = data.as_object();
+    let fields = data.as_object()?;
+    value.get("timestamp").filter(|at| !at.is_null())?;
+    let names_connection = [
+        "connection_nano_id",
+        "connection_id",
+        "connected_account_id",
+    ]
+    .iter()
+    .any(|key| !text(fields.get(*key)).is_empty());
+    if !names_connection {
+        return None;
+    }
+    let fields = Some(fields);
     let first = |keys: &[&str]| {
         keys.iter()
             .map(|key| text(fields.and_then(|fields| fields.get(*key))))
             .find(|value| !value.is_empty())
             .unwrap_or_default()
     };
-    ComposioTriggerEvent {
+    Some(ComposioTriggerEvent {
         toolkit: fields
             .and_then(explicit_toolkit)
             .or_else(|| value.as_object().and_then(explicit_toolkit))
@@ -323,14 +347,21 @@ fn decode_v2(value: &serde_json::Value, kind: &str, known: &[&str]) -> ComposioT
         },
         payload: data,
         trigger,
-    }
+    })
 }
 
 /// Decode the oldest payload, whose routing ids sit at the top level beside
-/// the provider's `payload`. `None` when it names no `trigger_name`.
+/// the provider's `payload`. `None` unless it names a `trigger_name`, its
+/// `connection_id` and `trigger_id`, and carries a `payload`.
 fn decode_v1(value: &serde_json::Value, known: &[&str]) -> Option<ComposioTriggerEvent> {
     let trigger = text(value.get("trigger_name"));
-    if trigger.is_empty() {
+    let complete = !trigger.is_empty()
+        && !text(value.get("connection_id")).is_empty()
+        && !text(value.get("trigger_id")).is_empty()
+        && value
+            .get("payload")
+            .is_some_and(|payload| !payload.is_null());
+    if !complete {
         return None;
     }
     Some(ComposioTriggerEvent {
