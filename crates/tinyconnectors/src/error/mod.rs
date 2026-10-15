@@ -117,6 +117,18 @@ pub enum Error {
         trigger_id: String,
     },
 
+    /// A paged listing was cut off before its last page.
+    ///
+    /// Returned instead of a partial list: a caller that treats the answer as
+    /// complete would report rows past the cut as absent.
+    #[error("listing {path} has more pages than the {limit} this route follows")]
+    ListingIncomplete {
+        /// Backend-relative path of the listing.
+        path: String,
+        /// How many pages were followed before stopping.
+        limit: usize,
+    },
+
     /// A direct-mode API key was rejected repeatedly and is now gated.
     ///
     /// Without this, a revoked key makes every poll hit Composio and fail

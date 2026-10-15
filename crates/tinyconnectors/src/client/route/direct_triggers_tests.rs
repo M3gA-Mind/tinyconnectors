@@ -714,3 +714,28 @@ async fn empty_upsert_recovery_matches_the_requested_configuration() {
 
     assert_eq!(response.trigger_id, "ti_b");
 }
+
+#[tokio::test]
+async fn a_listing_that_never_ends_is_an_error_not_a_partial_list() {
+    let transport = ScriptedTransport::new();
+    transport.expect(
+        "GET",
+        "/triggers_types?toolkit_slugs=slack&limit=50",
+        json!({ "items": [{ "slug": "SLACK_0" }], "next_cursor": "p1" }),
+    );
+    for page in 1..super::MAX_PAGES {
+        transport.expect(
+            "GET",
+            &format!("/triggers_types?toolkit_slugs=slack&limit=50&cursor=p{page}"),
+            json!({ "items": [{ "slug": "SLACK_N" }], "next_cursor": format!("p{}", page + 1) }),
+        );
+    }
+
+    let error = route(&transport)
+        .list_available_triggers("slack", Some("c1"))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, Error::ListingIncomplete { .. }), "{error}");
+    transport.assert_script_done();
+}

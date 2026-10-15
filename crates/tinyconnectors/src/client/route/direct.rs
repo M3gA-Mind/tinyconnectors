@@ -302,9 +302,10 @@ impl DirectRoute {
 
     /// Every row of a cursor-paged v3 listing.
     ///
-    /// Stops at the last page, at a cursor that does not advance, or after
-    /// [`MAX_PAGES`] — a listing longer than that is truncated rather than
-    /// followed forever.
+    /// Stops at the last page or at a cursor that does not advance. A listing
+    /// still advancing after [`MAX_PAGES`] is an
+    /// [`Error::ListingIncomplete`]: a partial list would make later rows look
+    /// absent.
     async fn list_pages(&self, path: &str) -> Result<Vec<serde_json::Value>> {
         let mut rows = Vec::new();
         let mut cursor: Option<String> = None;
@@ -317,11 +318,14 @@ impl DirectRoute {
             rows.extend(triggers::rows_of(&value));
             let next = triggers::next_cursor(&value);
             if next.is_none() || next == cursor {
-                break;
+                return Ok(rows);
             }
             cursor = next;
         }
-        Ok(rows)
+        Err(Error::ListingIncomplete {
+            path: path.to_string(),
+            limit: MAX_PAGES,
+        })
     }
 
     async fn call<F>(&self, request: F) -> Result<serde_json::Value>
