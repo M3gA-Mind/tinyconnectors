@@ -85,7 +85,9 @@ fn config_shape(
         .filter_map(|(key, field)| field.get("default").map(|d| (key.clone(), d.clone())))
         .collect();
     let required: Vec<String> = fields()
-        .filter(|(_, field)| field.get("required").and_then(serde_json::Value::as_bool) == Some(true))
+        .filter(|(_, field)| {
+            field.get("required").and_then(serde_json::Value::as_bool) == Some(true)
+        })
         .map(|(key, _)| key.clone())
         .collect();
     (defaults, (!required.is_empty()).then_some(required))

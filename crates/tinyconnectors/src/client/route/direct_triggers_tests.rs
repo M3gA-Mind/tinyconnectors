@@ -167,6 +167,37 @@ async fn lists_available_triggers_from_the_v3_catalog() {
 }
 
 #[tokio::test]
+async fn reads_a_field_map_config_with_per_field_required_flags() {
+    let transport = ScriptedTransport::new().expect(
+        "GET",
+        "/triggers_types?toolkit_slugs=github&limit=50",
+        json!({
+            "items": [{
+                "slug": "GITHUB_COMMIT_EVENT",
+                "config": {
+                    "owner": { "type": "string", "required": true },
+                    "repo": { "type": "string", "required": true },
+                    "branch": { "type": "string", "required": false, "default": "main" }
+                }
+            }]
+        }),
+    );
+
+    let response = route(&transport)
+        .list_available_triggers("github", Some("c1"))
+        .await
+        .unwrap();
+
+    let trigger = &response.triggers[0];
+    assert_eq!(
+        trigger.required_config_keys,
+        Some(vec!["owner".to_string(), "repo".to_string()])
+    );
+    assert_eq!(trigger.default_config, Some(json!({ "branch": "main" })));
+    transport.assert_script_done();
+}
+
+#[tokio::test]
 async fn follows_the_catalog_cursor_to_its_last_page() {
     let transport = ScriptedTransport::new()
         .expect(

@@ -340,3 +340,29 @@ fn refuses_a_body_that_is_not_a_trigger_delivery() {
         );
     }
 }
+
+#[test]
+fn a_known_multiword_toolkit_wins_over_the_slugs_first_word() {
+    let body = json!({
+        "id": "msg_1",
+        "type": "composio.trigger.message",
+        "metadata": { "trigger_slug": "MICROSOFT_TEAMS_NEW_MESSAGE" },
+        "data": {}
+    });
+    let bytes = body.to_string();
+
+    let event = decode_with_toolkits(bytes.as_bytes(), &["microsoft", "microsoft_teams"]).unwrap();
+    assert_eq!(event.toolkit, "microsoft_teams", "the longest known prefix");
+
+    let event = decode_with_toolkits(bytes.as_bytes(), &["gmail"]).unwrap();
+    assert_eq!(event.toolkit, "microsoft", "no known match falls back");
+}
+
+#[test]
+fn a_known_toolkit_also_resolves_a_legacy_v2_delivery() {
+    let body = json!({ "type": "microsoft_teams_new_message", "data": {} });
+
+    let event = decode_with_toolkits(body.to_string().as_bytes(), &["microsoft_teams"]).unwrap();
+
+    assert_eq!(event.toolkit, "microsoft_teams");
+}
