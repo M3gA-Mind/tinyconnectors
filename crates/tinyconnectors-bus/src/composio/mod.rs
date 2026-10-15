@@ -17,7 +17,8 @@
 //! - [`tools`] — function-calling schemas for a toolkit's actions.
 //! - [`execute`] — the result of running one action.
 //! - [`triggers`] — the trigger catalog, active subscriptions, and the webhook
-//!   events they deliver.
+//!   events they deliver; with the `webhook` feature, verifying and decoding
+//!   those deliveries.
 //! - [`github`] — the repository listing GitHub-scoped triggers are bound to.
 //!
 //! # These shapes are not ours to choose
