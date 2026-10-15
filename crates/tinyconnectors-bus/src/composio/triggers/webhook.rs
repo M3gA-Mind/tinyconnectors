@@ -33,7 +33,8 @@
 //! …}, data}`. The legacy (V2) body puts the lowercase trigger slug in `type`,
 //! the `log_id` at the top level, and mixes the routing ids (`connection_id`,
 //! `trigger_nano_id` or `trigger_id`, `user_id`) into `data` beside the event.
-//! [`decode`] accepts both; for V2 the payload is `data` as sent, routing keys
+//! [`decode`] accepts both, and the older V1 envelope (top-level `trigger_name`,
+//! `connection_id`, `payload`); for V2 the payload is `data` as sent, routing keys
 //! included, so nothing the provider sent is lost.
 //!
 //! Neither version names the toolkit reliably. An explicit `toolkit_slug` (or
@@ -262,7 +263,8 @@ pub fn decode_with_toolkits(
         Some(metadata) if kind == V3_TRIGGER_TYPE => decode_v3(&value, metadata, known),
         Some(_) => Err(undecodable("not a V3 trigger delivery")),
         None if !kind.is_empty() && kind != V3_TRIGGER_TYPE => Ok(decode_v2(&value, &kind, known)),
-        None => Err(undecodable("no trigger slug in `metadata` or `type`")),
+        None => decode_v1(&value, known)
+            .ok_or_else(|| undecodable("no trigger slug in `metadata`, `type` or `trigger_name`")),
     }
 }
 
@@ -312,12 +314,40 @@ fn decode_v2(value: &serde_json::Value, kind: &str, known: &[&str]) -> ComposioT
             id: text(value.get("id")),
             uuid: text(value.get("log_id")),
             user_id: first(&["user_id"]),
-            connected_account_id: first(&["connection_id", "connected_account_id"]),
+            connected_account_id: first(&[
+                "connection_nano_id",
+                "connected_account_id",
+                "connection_id",
+            ]),
             trigger_id: first(&["trigger_nano_id", "trigger_id"]),
         },
         payload: data,
         trigger,
     }
+}
+
+/// Decode the oldest payload, whose routing ids sit at the top level beside
+/// the provider's `payload`. `None` when it names no `trigger_name`.
+fn decode_v1(value: &serde_json::Value, known: &[&str]) -> Option<ComposioTriggerEvent> {
+    let trigger = text(value.get("trigger_name"));
+    if trigger.is_empty() {
+        return None;
+    }
+    Some(ComposioTriggerEvent {
+        toolkit: value
+            .as_object()
+            .and_then(explicit_toolkit)
+            .unwrap_or_else(|| toolkit_of(&trigger, known)),
+        metadata: ComposioTriggerMetadata {
+            id: text(value.get("id")),
+            uuid: text(value.get("log_id")),
+            user_id: text(value.get("user_id")),
+            connected_account_id: text(value.get("connection_id")),
+            trigger_id: text(value.get("trigger_id")),
+        },
+        payload: value.get("payload").cloned().unwrap_or_default(),
+        trigger: trigger.to_ascii_uppercase(),
+    })
 }
 
 /// A header's trimmed value, or the error naming it when blank.

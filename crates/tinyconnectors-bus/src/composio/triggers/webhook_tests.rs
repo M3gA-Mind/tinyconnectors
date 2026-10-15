@@ -379,3 +379,40 @@ fn a_non_trigger_delivery_with_metadata_is_not_decoded_as_a_trigger() {
 
     assert!(matches!(error, WebhookError::UndecodableBody { .. }));
 }
+
+#[test]
+fn decodes_a_legacy_v1_delivery() {
+    let body = json!({
+        "trigger_name": "gmail_new_gmail_message",
+        "trigger_id": "ti_1",
+        "connection_id": "ca_1",
+        "payload": { "subject": "hi" }
+    });
+
+    let event = decode(body.to_string().as_bytes()).unwrap();
+
+    assert_eq!(event.trigger, "GMAIL_NEW_GMAIL_MESSAGE");
+    assert_eq!(event.toolkit, "gmail");
+    assert_eq!(event.metadata.trigger_id, "ti_1");
+    assert_eq!(event.metadata.connected_account_id, "ca_1");
+    assert_eq!(event.payload, json!({ "subject": "hi" }));
+}
+
+#[test]
+fn a_body_with_no_trigger_in_any_version_is_undecodable() {
+    let error = decode(br#"{"payload":{}}"#).unwrap_err();
+
+    assert!(matches!(error, WebhookError::UndecodableBody { .. }));
+}
+
+#[test]
+fn a_v2_delivery_prefers_the_connection_nano_id() {
+    let body = json!({
+        "type": "gmail_new_gmail_message",
+        "data": { "connection_id": "uuid-old", "connection_nano_id": "ca_9" }
+    });
+
+    let event = decode(body.to_string().as_bytes()).unwrap();
+
+    assert_eq!(event.metadata.connected_account_id, "ca_9");
+}
