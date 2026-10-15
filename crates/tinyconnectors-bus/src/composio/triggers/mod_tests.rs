@@ -8,7 +8,7 @@
 
 use super::{
     ComposioActiveTrigger, ComposioAvailableTrigger, ComposioDisableTriggerResponse,
-    ComposioEnableTriggerResponse, ComposioTriggerEvent,
+    ComposioEnableTriggerResponse, ComposioTriggerEvent, ComposioTriggerMetadata,
 };
 use serde_json::json;
 
@@ -224,4 +224,32 @@ fn active_trigger_reads_an_object_wrapped_field_by_any_known_key() {
         let trigger: ComposioActiveTrigger = serde_json::from_value(raw).expect("parses");
         assert_eq!(trigger.id, "t1", "{key}");
     }
+}
+
+#[test]
+fn trigger_metadata_carries_who_and_what_a_delivery_was_for() {
+    let wire = json!({
+        "id": "evt-1",
+        "uuid": "log-1",
+        "user_id": "entity-1",
+        "connected_account_id": "ca_1",
+        "trigger_id": "ti_1"
+    });
+    let metadata: ComposioTriggerMetadata = serde_json::from_value(wire.clone()).expect("parses");
+    assert_eq!(metadata.user_id, "entity-1");
+    assert_eq!(metadata.connected_account_id, "ca_1");
+    assert_eq!(metadata.trigger_id, "ti_1");
+    assert_eq!(serde_json::to_value(&metadata).expect("serializes"), wire);
+}
+
+#[test]
+fn trigger_metadata_from_before_1_22_still_decodes_and_keeps_its_wire_form() {
+    // A delivery fanned out by a backend that predates the new fields has only
+    // `id` and `uuid`; re-serializing it must not grow empty keys.
+    let wire = json!({ "id": "evt-1", "uuid": "uuid-1" });
+    let metadata: ComposioTriggerMetadata = serde_json::from_value(wire.clone()).expect("parses");
+    assert!(metadata.user_id.is_empty());
+    assert!(metadata.connected_account_id.is_empty());
+    assert!(metadata.trigger_id.is_empty());
+    assert_eq!(serde_json::to_value(&metadata).expect("serializes"), wire);
 }
