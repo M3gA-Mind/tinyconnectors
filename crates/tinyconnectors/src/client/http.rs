@@ -187,6 +187,10 @@ impl HttpTransport {
                 message,
             })?;
 
+        // A success with no body (204) is an empty answer, not malformed JSON.
+        if body.trim().is_empty() {
+            return Ok(serde_json::Value::Null);
+        }
         serde_json::from_str(&body).map_err(|error| Error::Decode {
             path: path_for_error,
             message: error.to_string(),

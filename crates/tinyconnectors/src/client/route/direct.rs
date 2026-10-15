@@ -242,15 +242,50 @@ impl DirectRoute {
         let path = format!("/trigger_instances/{}/upsert", encode(slug));
         tracing::debug!(slug = %slug, "[connectors][direct] upsert trigger");
         let value = self.call(self.transport.post(&path, &body)).await?;
-        let trigger_id =
-            slug_field(&value, &["trigger_id", "triggerId", "id"]).ok_or(Error::Decode {
-                path,
-                message: "upsert response carried no trigger id".to_string(),
-            })?;
-        Ok(UpsertReply {
-            trigger_id,
-            status: field(&value, &["status"]),
-        })
+        let status = field(&value, &["status"]);
+        let trigger_id = match slug_field(&value, &["trigger_id", "triggerId", "id"]) {
+            Some(id) => id,
+            // A 204 (or any reply without an id) still means the upsert took
+            // effect; the instance is found among this entity's active ones.
+            None => self
+                .find_active_trigger(slug, connection_id)
+                .await?
+                .ok_or(Error::Decode {
+                    path,
+                    message: "upsert response carried no trigger id".to_string(),
+                })?,
+        };
+        Ok(UpsertReply { trigger_id, status })
+    }
+
+    /// The id of this entity's active instance of `slug` on `connection_id`.
+    async fn find_active_trigger(
+        &self,
+        slug: &str,
+        connection_id: Option<&str>,
+    ) -> Result<Option<String>> {
+        let path = format!(
+            "/trigger_instances/active?user_ids={}&show_disabled=false&limit=50",
+            encode(&self.entity_id)
+        );
+        let rows = self.list_pages(&path).await?;
+        let wanted = connection_id.map(str::trim);
+        Ok(rows.iter().find_map(|row| {
+            let named = slug_field(row, &["trigger_name", "triggerName", "slug"])?;
+            let on_connection = field(
+                row,
+                &[
+                    "connected_account_id",
+                    "connectedAccountId",
+                    "connection_id",
+                ],
+            );
+            (named.eq_ignore_ascii_case(slug.trim())
+                && triggers::owned_by(row, &self.entity_id)
+                && wanted.is_none_or(|wanted| wanted == on_connection.as_deref().unwrap_or("")))
+            .then(|| slug_field(row, &["id", "trigger_id", "triggerId"]))
+            .flatten()
+        }))
     }
 
     /// Every row of a cursor-paged v3 listing.
@@ -639,7 +674,7 @@ impl Route for DirectRoute {
         let found = self.call(self.transport.get(&lookup)).await?;
         let owned = triggers::rows_of(&found).iter().any(|row| {
             slug_field(row, &["id", "trigger_id", "triggerId"]).as_deref() == Some(trigger_id)
-                && triggers::owned_by(row, &self.entity_id)
+                && triggers::names_owner(row, &self.entity_id)
         });
         if !owned {
             return Err(Error::TriggerNotOwned {

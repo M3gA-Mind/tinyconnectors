@@ -259,7 +259,8 @@ pub fn decode_with_toolkits(
         .get("metadata")
         .and_then(serde_json::Value::as_object)
     {
-        Some(metadata) => decode_v3(&value, metadata, known),
+        Some(metadata) if kind == V3_TRIGGER_TYPE => decode_v3(&value, metadata, known),
+        Some(_) => Err(undecodable("not a V3 trigger delivery")),
         None if !kind.is_empty() && kind != V3_TRIGGER_TYPE => Ok(decode_v2(&value, &kind, known)),
         None => Err(undecodable("no trigger slug in `metadata` or `type`")),
     }

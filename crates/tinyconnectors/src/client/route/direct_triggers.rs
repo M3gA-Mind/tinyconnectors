@@ -102,6 +102,14 @@ pub(super) fn owned_by(row: &serde_json::Value, entity_id: &str) -> bool {
     slug_field(row, &["user_id", "userId"]).is_none_or(|owner| owner == entity_id)
 }
 
+/// Whether a row positively names `entity_id` as its owner.
+///
+/// Stricter than [`owned_by`], which keeps an owner-less row for a listing:
+/// deleting a subscription requires the owner to be on the row.
+pub(super) fn names_owner(row: &serde_json::Value, entity_id: &str) -> bool {
+    slug_field(row, &["user_id", "userId"]).is_some_and(|owner| owner == entity_id)
+}
+
 /// The toolkit a trigger slug belongs to, by its first word: `GMAIL_…` → `gmail`.
 ///
 /// Only a fallback. A toolkit slug can itself hold an underscore, so an
