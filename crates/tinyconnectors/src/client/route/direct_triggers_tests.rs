@@ -513,6 +513,7 @@ async fn an_upsert_reply_without_a_trigger_id_is_a_decode_error() {
         "/trigger_instances/GMAIL_NEW_GMAIL_MESSAGE/upsert",
         json!({ "trigger_id": "  " }),
     );
+    transport.expect("GET", ACTIVE_PATH, json!({ "items": [] }));
 
     let error = route(&transport)
         .create_trigger("GMAIL_NEW_GMAIL_MESSAGE", None, None)
@@ -520,6 +521,35 @@ async fn an_upsert_reply_without_a_trigger_id_is_a_decode_error() {
         .unwrap_err();
 
     assert!(matches!(error, Error::Decode { .. }), "{error}");
+}
+
+#[tokio::test]
+async fn an_empty_upsert_reply_recovers_the_instance_from_the_active_list() {
+    // The documented 204: the transport hands back null.
+    let transport = ScriptedTransport::new()
+        .expect(
+            "POST",
+            "/trigger_instances/GMAIL_NEW_GMAIL_MESSAGE/upsert",
+            Value::Null,
+        )
+        .expect(
+            "GET",
+            ACTIVE_PATH,
+            json!({ "items": [
+                { "id": "ti_other", "trigger_name": "GMAIL_NEW_GMAIL_MESSAGE",
+                  "connected_account_id": "c2", "user_id": "entity-1" },
+                { "id": "ti_7", "trigger_name": "gmail_new_gmail_message",
+                  "connected_account_id": "c1", "user_id": "entity-1" }
+            ] }),
+        );
+    transport.expect("GET", "/connected_accounts/c1", json!({ "id": "c1", "user_id": "entity-1" }));
+
+    let response = route(&transport)
+        .create_trigger("GMAIL_NEW_GMAIL_MESSAGE", Some("c1"), None)
+        .await
+        .unwrap();
+
+    assert_eq!(response.trigger_id, "ti_7");
 }
 
 #[tokio::test]
