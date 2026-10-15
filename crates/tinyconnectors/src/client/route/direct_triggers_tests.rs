@@ -528,6 +528,11 @@ async fn an_empty_upsert_reply_recovers_the_instance_from_the_active_list() {
     // The documented 204: the transport hands back null.
     let transport = ScriptedTransport::new()
         .expect(
+            "GET",
+            "/connected_accounts/c1",
+            json!({ "id": "c1", "user_id": "entity-1" }),
+        )
+        .expect(
             "POST",
             "/trigger_instances/GMAIL_NEW_GMAIL_MESSAGE/upsert",
             Value::Null,
@@ -542,7 +547,6 @@ async fn an_empty_upsert_reply_recovers_the_instance_from_the_active_list() {
                   "connected_account_id": "c1", "user_id": "entity-1" }
             ] }),
         );
-    transport.expect("GET", "/connected_accounts/c1", json!({ "id": "c1", "user_id": "entity-1" }));
 
     let response = route(&transport)
         .create_trigger("GMAIL_NEW_GMAIL_MESSAGE", Some("c1"), None)
@@ -640,5 +644,19 @@ async fn a_rejected_key_on_a_trigger_call_counts_toward_the_gate() {
     let error = direct.list_triggers(None).await.unwrap_err();
 
     assert!(matches!(error, Error::DirectAuthGated { .. }), "{error}");
+    transport.assert_script_done();
+}
+
+#[tokio::test]
+async fn refuses_to_disable_a_trigger_whose_row_names_no_owner() {
+    let transport = ScriptedTransport::new().expect(
+        "GET",
+        "/trigger_instances/active?trigger_ids=ti_9&user_ids=entity-1&show_disabled=true&limit=50",
+        json!({ "items": [{ "id": "ti_9" }] }),
+    );
+
+    let error = route(&transport).disable_trigger("ti_9").await.unwrap_err();
+
+    assert!(matches!(error, Error::TriggerNotOwned { .. }), "{error}");
     transport.assert_script_done();
 }

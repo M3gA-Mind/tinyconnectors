@@ -252,6 +252,17 @@ async fn a_body_that_is_not_json_is_a_decode_failure_naming_the_path() {
 }
 
 #[tokio::test]
+async fn an_empty_success_body_is_null_rather_than_a_decode_failure() {
+    // A 204 has no body; the caller decides whether it needed one.
+    let (base_url, _requests) = loopback_server("");
+    let transport = HttpTransport::bearer(&base_url, "t0ken").unwrap();
+
+    let value = transport.get("/anything").await.unwrap();
+
+    assert!(value.is_null());
+}
+
+#[tokio::test]
 async fn a_refused_connection_is_a_transport_failure_naming_the_path() {
     // Bind and drop, so the port is closed but plausible.
     let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

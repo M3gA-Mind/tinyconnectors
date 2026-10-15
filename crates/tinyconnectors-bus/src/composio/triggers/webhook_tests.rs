@@ -366,3 +366,16 @@ fn a_known_toolkit_also_resolves_a_legacy_v2_delivery() {
 
     assert_eq!(event.toolkit, "microsoft_teams");
 }
+
+#[test]
+fn a_non_trigger_delivery_with_metadata_is_not_decoded_as_a_trigger() {
+    let body = json!({
+        "type": "composio.connected_account.expired",
+        "metadata": { "trigger_slug": "GMAIL_NEW_GMAIL_MESSAGE" },
+        "data": {}
+    });
+
+    let error = decode(body.to_string().as_bytes()).unwrap_err();
+
+    assert!(matches!(error, WebhookError::UndecodableBody { .. }));
+}
