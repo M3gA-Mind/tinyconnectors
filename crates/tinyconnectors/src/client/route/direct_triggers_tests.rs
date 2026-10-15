@@ -106,7 +106,8 @@ fn route(transport: &Arc<ScriptedTransport>) -> DirectRoute {
     DirectRoute::new(transport.clone(), "sk-test", "entity-1").with_webhooks(true)
 }
 
-const ACTIVE_PATH: &str = "/trigger_instances/active?user_ids=entity-1&show_disabled=false&limit=50";
+const ACTIVE_PATH: &str =
+    "/trigger_instances/active?user_ids=entity-1&show_disabled=false&limit=50";
 
 #[tokio::test]
 async fn lists_available_triggers_from_the_v3_catalog() {
@@ -305,7 +306,10 @@ async fn an_explicit_toolkit_on_an_active_row_wins_over_the_slug_prefix() {
         ]}),
     );
 
-    let response = route(&transport).list_triggers(Some("outlook")).await.unwrap();
+    let response = route(&transport)
+        .list_triggers(Some("outlook"))
+        .await
+        .unwrap();
 
     assert_eq!(response.triggers.len(), 1);
     assert_eq!(response.triggers[0].toolkit, "outlook");

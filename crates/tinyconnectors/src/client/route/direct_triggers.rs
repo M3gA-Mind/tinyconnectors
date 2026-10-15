@@ -83,7 +83,10 @@ pub(super) fn owned_by(row: &serde_json::Value, entity_id: &str) -> bool {
 /// Only a fallback. A toolkit slug can itself hold an underscore, so an
 /// explicit toolkit field, or the caller's own filter, is always preferred.
 pub(super) fn toolkit_of_slug(slug: &str) -> String {
-    slug.split('_').next().unwrap_or_default().to_ascii_lowercase()
+    slug.split('_')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase()
 }
 
 /// Whether a trigger slug names a trigger of `toolkit`: `MICROSOFT_TEAMS_X`
@@ -130,7 +133,11 @@ pub(super) fn active_trigger_from_v3(
         toolkit,
         connection_id: field(
             row,
-            &["connected_account_id", "connectedAccountId", "connection_id"],
+            &[
+                "connected_account_id",
+                "connectedAccountId",
+                "connection_id",
+            ],
         )
         .unwrap_or_default(),
         trigger_config: row

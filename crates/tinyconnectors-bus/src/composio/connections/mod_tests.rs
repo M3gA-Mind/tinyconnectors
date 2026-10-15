@@ -142,6 +142,7 @@ fn a_direct_configuration_omits_the_optional_fields_it_was_not_given() {
         entity_id: None,
         base_url: None,
         transport: None,
+        webhooks: false,
     })
     .expect("serialize");
 
