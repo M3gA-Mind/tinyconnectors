@@ -32,8 +32,7 @@ fn credential(base_url: &str) -> ComposioDirectCredential {
         api_key: "ck_member".to_string(),
         entity_id: None,
         base_url: Some(base_url.to_string()),
-        transport: None,
-    }
+        transport: None, webhooks: false, }
 }
 
 #[tokio::test]
@@ -218,3 +217,94 @@ fn the_manifest_declares_every_member_the_contract_names_in_order() {
 
 #[path = "route_tests.rs"]
 mod route_tests;
+
+/// One active trigger owned by the entity `ent`, as Composio lists it.
+const ACTIVE_TRIGGERS: &str = r#"{"items":[{"id":"ti_1","trigger_name":"GMAIL_NEW_GMAIL_MESSAGE","connected_account_id":"c1","user_id":"ent"}]}"#;
+
+#[tokio::test]
+async fn a_load_time_blob_serves_triggers_only_when_it_opts_into_webhooks() {
+    use crate::client::Route as _;
+
+    let (base, seen) = server(|_| json(ACTIVE_TRIGGERS));
+    let blob = |webhooks: Option<bool>| {
+        let mut blob = json!({
+            "route": "direct", "api_key": "ck", "entity_id": "ent", "base_url": base,
+        });
+        if let Some(webhooks) = webhooks {
+            blob["webhooks"] = webhooks.into();
+        }
+        serde_json::from_value::<ModuleConfig>(blob).unwrap()
+    };
+
+    let route = blob(Some(true)).into_route().unwrap().unwrap();
+    let reply = route.list_triggers(None).await.unwrap();
+    assert_eq!(reply.triggers[0].id, "ti_1");
+    assert!(
+        seen.lock().unwrap()[0].contains("user_ids=ent"),
+        "listed as the configured entity"
+    );
+
+    for webhooks in [None, Some(false)] {
+        let route = blob(webhooks).into_route().unwrap().unwrap();
+        let error = route.list_triggers(None).await.unwrap_err();
+        assert!(
+            matches!(error, crate::Error::UnsupportedByRoute { .. }),
+            "{error}"
+        );
+    }
+    assert_eq!(seen.lock().unwrap().len(), 1, "a refusal costs no request");
+}
+
+#[tokio::test]
+async fn a_configured_direct_route_serves_triggers_when_it_receives_webhooks() {
+    let (base, _) = server(|_| json(ACTIVE_TRIGGERS));
+    let service = unrouted_service();
+
+    service
+        .configure(ComposioConfigureRequest::Direct {
+            api_key: "ck".to_string(),
+            entity_id: Some("ent".to_string()),
+            base_url: Some(base),
+            transport: None,
+            webhooks: true,
+        })
+        .await
+        .unwrap();
+
+    let reply = service
+        .list_triggers(tinyconnectors_bus::ComposioListTriggersRequest { toolkit: None })
+        .await
+        .unwrap();
+    assert_eq!(reply.triggers[0].id, "ti_1");
+}
+
+#[tokio::test]
+async fn a_routed_read_with_a_webhook_credential_lists_triggers() {
+    use tinyconnectors_bus::{
+        ComposioCallRoute, ComposioListTriggersRequest, ComposioReadOperation,
+        ComposioRoutedReadReply, ComposioRoutedReadRequest,
+    };
+
+    let (base, _) = server(|_| json(ACTIVE_TRIGGERS));
+    let reply = unrouted_service()
+        .routed_read(ComposioRoutedReadRequest {
+            route: ComposioCallRoute::Direct {
+                credential: ComposioDirectCredential {
+                    entity_id: Some("ent".to_string()),
+                    webhooks: true,
+                    ..credential(&base)
+                },
+            },
+            operation: ComposioReadOperation::ListTriggers(ComposioListTriggersRequest {
+                toolkit: Some("gmail".to_string()),
+            }),
+        })
+        .await
+        .unwrap();
+
+    let ComposioRoutedReadReply::ListTriggers(reply) = reply else {
+        panic!("wrong reply: {reply:?}");
+    };
+    assert_eq!(reply.triggers[0].id, "ti_1");
+    assert_eq!(reply.triggers[0].toolkit, "gmail");
+}
