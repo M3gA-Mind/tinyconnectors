@@ -254,7 +254,11 @@ async fn a_load_time_blob_serves_triggers_only_when_it_opts_into_webhooks() {
             "{error}"
         );
     }
-    assert_eq!(seen.lock().unwrap().len(), 1, "a refusal costs no request");
+    assert_eq!(
+        seen.lock().unwrap().len(),
+        2,
+        "the listing and its toolkit lookup; a refusal costs no request"
+    );
 }
 
 #[tokio::test]
