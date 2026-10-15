@@ -79,7 +79,11 @@ fn ignores_a_signature_under_another_scheme() {
 fn rejects_a_tampered_body() {
     let signature = format!("v1,{}", sign(SECRET, ID, TIMESTAMP, BODY));
     assert_eq!(
-        check(&signature, br#"{"type":"composio.trigger.messagE"}"#, TIMESTAMP),
+        check(
+            &signature,
+            br#"{"type":"composio.trigger.messagE"}"#,
+            TIMESTAMP
+        ),
         Err(WebhookError::SignatureMismatch)
     );
 }

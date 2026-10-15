@@ -63,7 +63,7 @@ pub(super) fn available_trigger_from_v3(
     Some(ComposioAvailableTrigger {
         slug,
         scope: "static".to_string(),
-        default_config: (!defaults.is_empty()).then(|| serde_json::Value::Object(defaults)),
+        default_config: (!defaults.is_empty()).then_some(serde_json::Value::Object(defaults)),
         required_config_keys: required,
         repo: None,
     })

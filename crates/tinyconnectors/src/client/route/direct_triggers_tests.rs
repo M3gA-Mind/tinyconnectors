@@ -16,13 +16,16 @@ use super::{DirectRoute, Route};
 use crate::client::Transport;
 use crate::{Error, Result};
 
+/// One scripted step: the method and full path expected, and the reply to it.
+type Step = (&'static str, String, std::result::Result<Value, String>);
+
 /// A transport that answers a scripted sequence of requests, in order.
 ///
 /// Each step names the method and the full path it expects, so an unexpected
 /// request fails the test at the point it is made rather than being answered.
 #[derive(Debug, Default)]
 struct ScriptedTransport {
-    steps: Mutex<VecDeque<(&'static str, String, std::result::Result<Value, String>)>>,
+    steps: Mutex<VecDeque<Step>>,
     /// The body of every request made, in order; `None` for a GET or DELETE.
     log: Mutex<Vec<Option<Value>>>,
 }

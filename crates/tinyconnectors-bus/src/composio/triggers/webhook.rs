@@ -201,8 +201,8 @@ pub fn verify(
         });
     }
 
-    let mut mac = Hmac::<Sha256>::new_from_slice(secret.as_bytes())
-        .map_err(|_| WebhookError::EmptySecret)?;
+    let mut mac =
+        Hmac::<Sha256>::new_from_slice(secret.as_bytes()).map_err(|_| WebhookError::EmptySecret)?;
     mac.update(id.as_bytes());
     mac.update(b".");
     mac.update(timestamp.as_bytes());
@@ -238,7 +238,10 @@ pub fn decode(body: &[u8]) -> Result<ComposioTriggerEvent, WebhookError> {
     };
     let kind = text(object.get("type"));
 
-    match object.get("metadata").and_then(serde_json::Value::as_object) {
+    match object
+        .get("metadata")
+        .and_then(serde_json::Value::as_object)
+    {
         Some(metadata) => decode_v3(&value, metadata),
         None if !kind.is_empty() && kind != V3_TRIGGER_TYPE => Ok(decode_v2(&value, &kind)),
         None => Err(undecodable("no trigger slug in `metadata` or `type`")),
