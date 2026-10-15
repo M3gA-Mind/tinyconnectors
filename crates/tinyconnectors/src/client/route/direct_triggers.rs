@@ -35,30 +35,7 @@ pub(super) fn available_trigger_from_v3(
     let slug = slug_field(row, &["slug", "name"])?;
     let config = row.get("config");
 
-    let defaults: serde_json::Map<String, serde_json::Value> = config
-        .and_then(|config| config.get("properties"))
-        .and_then(serde_json::Value::as_object)
-        .map(|properties| {
-            properties
-                .iter()
-                .filter_map(|(key, schema)| {
-                    schema
-                        .get("default")
-                        .map(|default| (key.clone(), default.clone()))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-
-    let required = config
-        .and_then(|config| config.get("required"))
-        .and_then(serde_json::Value::as_array)
-        .map(|keys| {
-            keys.iter()
-                .filter_map(serde_json::Value::as_str)
-                .map(str::to_string)
-                .collect::<Vec<_>>()
-        });
+    let (defaults, required) = config_shape(config);
 
     Some(ComposioAvailableTrigger {
         slug,
@@ -67,6 +44,51 @@ pub(super) fn available_trigger_from_v3(
         required_config_keys: required,
         repo: None,
     })
+}
+
+/// The defaults and required keys of a trigger type's `config`.
+///
+/// Composio has shipped two shapes: a JSON Schema object (`properties` plus a
+/// `required` list) and a bare map of field name to a descriptor carrying
+/// `required: true` and an optional `default`. Both are read.
+fn config_shape(
+    config: Option<&serde_json::Value>,
+) -> (
+    serde_json::Map<String, serde_json::Value>,
+    Option<Vec<String>>,
+) {
+    let Some(config) = config.and_then(serde_json::Value::as_object) else {
+        return (serde_json::Map::new(), None);
+    };
+    let schema_fields = config
+        .get("properties")
+        .and_then(serde_json::Value::as_object);
+    let required_list = config.get("required").and_then(serde_json::Value::as_array);
+
+    if schema_fields.is_some() || required_list.is_some() {
+        let defaults = schema_fields
+            .into_iter()
+            .flatten()
+            .filter_map(|(key, schema)| schema.get("default").map(|d| (key.clone(), d.clone())))
+            .collect();
+        let required = required_list.map(|keys| {
+            keys.iter()
+                .filter_map(serde_json::Value::as_str)
+                .map(str::to_string)
+                .collect()
+        });
+        return (defaults, required);
+    }
+
+    let fields = || config.iter().filter(|(_, field)| field.is_object());
+    let defaults = fields()
+        .filter_map(|(key, field)| field.get("default").map(|d| (key.clone(), d.clone())))
+        .collect();
+    let required: Vec<String> = fields()
+        .filter(|(_, field)| field.get("required").and_then(serde_json::Value::as_bool) == Some(true))
+        .map(|(key, _)| key.clone())
+        .collect();
+    (defaults, (!required.is_empty()).then_some(required))
 }
 
 /// Whether an active-instance row belongs to `entity_id`.

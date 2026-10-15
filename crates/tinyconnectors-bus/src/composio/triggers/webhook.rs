@@ -229,6 +229,23 @@ pub fn verify(
 /// Returns [`WebhookError::UndecodableBody`] when the body is not a JSON
 /// object, or names no trigger slug in either version's place for it.
 pub fn decode(body: &[u8]) -> Result<ComposioTriggerEvent, WebhookError> {
+    decode_with_toolkits(body, &[])
+}
+
+/// [`decode`], resolving the toolkit against `known` toolkit slugs.
+///
+/// A delivery rarely names its toolkit, and a toolkit slug can hold an
+/// underscore (`microsoft_teams`), so the slug's first word alone mislabels
+/// it. When the payload names no toolkit, the longest slug in `known` that
+/// prefixes the trigger slug wins; with no match, the first word is used.
+///
+/// # Errors
+///
+/// As [`decode`].
+pub fn decode_with_toolkits(
+    body: &[u8],
+    known: &[&str],
+) -> Result<ComposioTriggerEvent, WebhookError> {
     let value: serde_json::Value =
         serde_json::from_slice(body).map_err(|error| WebhookError::UndecodableBody {
             reason: error.to_string(),
@@ -242,8 +259,8 @@ pub fn decode(body: &[u8]) -> Result<ComposioTriggerEvent, WebhookError> {
         .get("metadata")
         .and_then(serde_json::Value::as_object)
     {
-        Some(metadata) => decode_v3(&value, metadata),
-        None if !kind.is_empty() && kind != V3_TRIGGER_TYPE => Ok(decode_v2(&value, &kind)),
+        Some(metadata) => decode_v3(&value, metadata, known),
+        None if !kind.is_empty() && kind != V3_TRIGGER_TYPE => Ok(decode_v2(&value, &kind, known)),
         None => Err(undecodable("no trigger slug in `metadata` or `type`")),
     }
 }
@@ -252,6 +269,7 @@ pub fn decode(body: &[u8]) -> Result<ComposioTriggerEvent, WebhookError> {
 fn decode_v3(
     value: &serde_json::Value,
     metadata: &serde_json::Map<String, serde_json::Value>,
+    known: &[&str],
 ) -> Result<ComposioTriggerEvent, WebhookError> {
     let trigger = text(metadata.get("trigger_slug"));
     if trigger.is_empty() {
@@ -260,7 +278,7 @@ fn decode_v3(
     Ok(ComposioTriggerEvent {
         toolkit: explicit_toolkit(metadata)
             .or_else(|| value.as_object().and_then(explicit_toolkit))
-            .unwrap_or_else(|| toolkit_of(&trigger)),
+            .unwrap_or_else(|| toolkit_of(&trigger, known)),
         payload: value.get("data").cloned().unwrap_or_default(),
         metadata: ComposioTriggerMetadata {
             id: text(value.get("id")),
@@ -274,7 +292,7 @@ fn decode_v3(
 }
 
 /// Decode the legacy payload, whose routing ids are mixed into `data`.
-fn decode_v2(value: &serde_json::Value, kind: &str) -> ComposioTriggerEvent {
+fn decode_v2(value: &serde_json::Value, kind: &str, known: &[&str]) -> ComposioTriggerEvent {
     let trigger = kind.to_ascii_uppercase();
     let data = value.get("data").cloned().unwrap_or_default();
     let fields = data.as_object();
@@ -288,7 +306,7 @@ fn decode_v2(value: &serde_json::Value, kind: &str) -> ComposioTriggerEvent {
         toolkit: fields
             .and_then(explicit_toolkit)
             .or_else(|| value.as_object().and_then(explicit_toolkit))
-            .unwrap_or_else(|| toolkit_of(&trigger)),
+            .unwrap_or_else(|| toolkit_of(&trigger, known)),
         metadata: ComposioTriggerMetadata {
             id: text(value.get("id")),
             uuid: text(value.get("log_id")),
@@ -328,8 +346,19 @@ fn explicit_toolkit(fields: &serde_json::Map<String, serde_json::Value>) -> Opti
         .find(|toolkit| !toolkit.is_empty())
 }
 
-/// The toolkit a trigger slug belongs to, by its first word.
-fn toolkit_of(trigger: &str) -> String {
+/// The toolkit a trigger slug belongs to: the longest `known` slug that
+/// prefixes it, else its first word.
+fn toolkit_of(trigger: &str, known: &[&str]) -> String {
+    let upper = trigger.to_ascii_uppercase();
+    let best = known
+        .iter()
+        .filter(|toolkit| {
+            !toolkit.is_empty() && upper.starts_with(&format!("{}_", toolkit.to_ascii_uppercase()))
+        })
+        .max_by_key(|toolkit| toolkit.len());
+    if let Some(toolkit) = best {
+        return toolkit.to_ascii_lowercase();
+    }
     trigger
         .split('_')
         .next()
