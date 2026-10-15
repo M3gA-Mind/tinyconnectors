@@ -53,6 +53,7 @@ pub struct DirectRoute {
     /// the old one's.
     failures: Mutex<HashMap<u64, u32>>,
     key_fingerprint: u64,
+    webhooks: bool,
 }
 
 impl DirectRoute {
@@ -73,7 +74,15 @@ impl DirectRoute {
             entity_id,
             failures: Mutex::new(HashMap::new()),
             key_fingerprint: fingerprint(api_key),
+            webhooks: false,
         }
+    }
+
+    /// Serve the trigger members.
+    #[must_use]
+    pub fn with_webhooks(mut self, webhooks: bool) -> Self {
+        self.webhooks = webhooks;
+        self
     }
 
     /// Refuse before calling when the key is already known bad.
@@ -539,3 +548,7 @@ fn execute_response_from_v3(raw: serde_json::Value) -> ComposioExecuteResponse {
 #[cfg(test)]
 #[path = "direct_tests.rs"]
 mod test;
+
+#[cfg(test)]
+#[path = "direct_triggers_tests.rs"]
+mod triggers_test;
