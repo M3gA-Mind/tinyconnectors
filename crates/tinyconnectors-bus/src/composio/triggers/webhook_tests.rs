@@ -313,6 +313,7 @@ fn decodes_a_legacy_v2_delivery() {
 fn a_v2_delivery_may_name_its_trigger_id_directly() {
     let body = json!({
         "type": "github_star_added_event",
+        "timestamp": "2026-10-15T00:00:00Z",
         "data": { "trigger_id": "ti_3", "connected_account_id": "ca_3" }
     });
 
@@ -360,7 +361,11 @@ fn a_known_multiword_toolkit_wins_over_the_slugs_first_word() {
 
 #[test]
 fn a_known_toolkit_also_resolves_a_legacy_v2_delivery() {
-    let body = json!({ "type": "microsoft_teams_new_message", "data": {} });
+    let body = json!({
+        "type": "microsoft_teams_new_message",
+        "timestamp": "2026-10-15T00:00:00Z",
+        "data": { "connection_id": "ca_1" }
+    });
 
     let event = decode_with_toolkits(body.to_string().as_bytes(), &["microsoft_teams"]).unwrap();
 
@@ -409,10 +414,34 @@ fn a_body_with_no_trigger_in_any_version_is_undecodable() {
 fn a_v2_delivery_prefers_the_connection_nano_id() {
     let body = json!({
         "type": "gmail_new_gmail_message",
+        "timestamp": "2026-10-15T00:00:00Z",
         "data": { "connection_id": "uuid-old", "connection_nano_id": "ca_9" }
     });
 
     let event = decode(body.to_string().as_bytes()).unwrap();
 
     assert_eq!(event.metadata.connected_account_id, "ca_9");
+}
+
+#[test]
+fn refuses_bodies_that_only_look_like_a_legacy_delivery() {
+    for body in [
+        // A type alone is not a V2 trigger.
+        json!({ "type": "not-a-trigger" }),
+        // V2 needs a timestamp...
+        json!({ "type": "x_y", "data": { "connection_id": "ca_1" } }),
+        // ...data that is an object...
+        json!({ "type": "x_y", "timestamp": "t", "data": "text" }),
+        // ...and a connection.
+        json!({ "type": "x_y", "timestamp": "t", "data": {} }),
+        // V1 needs its connection, trigger id and payload as well as a name.
+        json!({ "trigger_name": "X_Y" }),
+        json!({ "trigger_name": "X_Y", "connection_id": "ca_1", "trigger_id": "ti_1" }),
+    ] {
+        let error = decode(body.to_string().as_bytes()).unwrap_err();
+        assert!(
+            matches!(error, WebhookError::UndecodableBody { .. }),
+            "{body}"
+        );
+    }
 }
