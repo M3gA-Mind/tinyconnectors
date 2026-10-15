@@ -84,7 +84,20 @@ impl DirectRoute {
         }
     }
 
-    /// Serve the trigger members.
+    /// Serve the trigger members, for a host that receives Composio's webhook
+    /// deliveries at its own public endpoint.
+    ///
+    /// Off by default, and every trigger member then refuses with
+    /// [`Error::UnsupportedByRoute`]: a subscription whose deliveries reach no
+    /// endpoint is created successfully and then fires into the void. A host
+    /// turns it on only once it has pointed the Composio project's webhook at
+    /// an endpoint it serves, and verifies what arrives there (the contract
+    /// crate's `webhook` feature does that part).
+    ///
+    /// With it on, subscriptions are made and listed as the route's entity
+    /// alone: a connection whose owner is known to be another user is refused
+    /// with [`Error::ConnectionNotOwned`], and a subscription that is not the
+    /// entity's cannot be removed ([`Error::TriggerNotOwned`]).
     #[must_use]
     pub fn with_webhooks(mut self, webhooks: bool) -> Self {
         self.webhooks = webhooks;
@@ -138,12 +151,14 @@ impl DirectRoute {
 
     /// Refuse a member this route cannot honestly serve.
     ///
-    /// Every trigger member lands here. A trigger is a webhook subscription,
-    /// and a webhook has to arrive somewhere: the proxy backend HMAC-verifies
+    /// Every trigger member lands here unless the host opted in with
+    /// [`Self::with_webhooks`]. A trigger is a webhook subscription, and a
+    /// webhook has to arrive somewhere: the proxy backend HMAC-verifies
     /// deliveries and fans them out over the user's sockets, while this module
-    /// has no socket and no public endpoint. A direct-mode subscription would
-    /// be created successfully and then deliver to nobody — a silent failure
-    /// the user would only notice as an automation that never fires.
+    /// has no socket and no public endpoint. Without a host endpoint, a
+    /// direct-mode subscription would be created successfully and then deliver
+    /// to nobody — a silent failure the user would only notice as an
+    /// automation that never fires.
     fn unsupported(&self, member: &'static str) -> Error {
         Error::UnsupportedByRoute {
             route: self.name(),
@@ -525,9 +540,10 @@ impl Route for DirectRoute {
         &self,
         _connection_id: Option<&str>,
     ) -> Result<ComposioGithubReposResponse> {
-        // Only ever used to pick a repository for a GitHub-scoped trigger, and
-        // triggers are unavailable here. Offering the picker without the thing
-        // it picks for would be a dead end.
+        // Only ever used to pick a repository for a GitHub-scoped trigger. With
+        // webhooks off there are no triggers to pick for; with them on, v3
+        // takes the repository as ordinary required trigger configuration, and
+        // there is no verified v3 request shape for the listing to port.
         Err(self.unsupported("ListGithubRepos"))
     }
 
