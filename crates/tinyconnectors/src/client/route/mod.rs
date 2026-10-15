@@ -7,7 +7,8 @@
 //!   the billing margin, the per-user toolkit allowlist, and the HMAC
 //!   verification of inbound webhooks.
 //! - **direct** — straight at `backend.composio.dev/api/v3` with a
-//!   user-supplied `x-api-key`. No allowlist, no margin, no webhook fan-out.
+//!   user-supplied `x-api-key`. No allowlist, no margin, and no webhook
+//!   fan-out unless the host has an endpoint of its own (see below).
 //!
 //! They differ in base URL, in authentication header, in paths, *and in
 //! response shape*. A route is therefore not a transport: it owns the paths it
@@ -34,12 +35,19 @@
 //!   covered it, so there is no verified v3 request shape to port. Refusing
 //!   loses nothing: that host could not disconnect an account in direct mode
 //!   either.
-//! - **Every trigger member, and the GitHub repository listing.** Triggers are
-//!   webhooks, and a webhook has to arrive somewhere. The proxy backend
-//!   HMAC-verifies deliveries and fans them out over the user's sockets; the
-//!   module has no socket and no public endpoint. A direct-mode subscription
-//!   would be created successfully and then deliver to nobody, which is worse
-//!   than not offering it.
+//! - **Every trigger member, unless the host opts in with `webhooks: true`.**
+//!   Triggers are webhooks, and a webhook has to arrive somewhere. The proxy
+//!   backend HMAC-verifies deliveries and fans them out over the user's
+//!   sockets; the module has no socket and no public endpoint. A direct-mode
+//!   subscription would be created successfully and then deliver to nobody,
+//!   which is worse than not offering it. A host that owns a public webhook
+//!   endpoint, and has pointed its Composio project at it, sets the flag
+//!   ([`DirectRoute::with_webhooks`]); the members then run against Composio's
+//!   trigger API as the configured entity only, and the host verifies and
+//!   decodes deliveries itself with the contract crate's `webhook` feature.
+//! - The GitHub repository listing, either way. v3 takes a repository as
+//!   ordinary required trigger configuration, and there is no verified request
+//!   shape for the picker to port.
 
 mod direct;
 mod proxy;

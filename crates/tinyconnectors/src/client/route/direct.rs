@@ -59,6 +59,8 @@ pub struct DirectRoute {
     /// the old one's.
     failures: Mutex<HashMap<u64, u32>>,
     key_fingerprint: u64,
+    /// Whether the host receives webhook deliveries itself, which is what
+    /// makes the trigger members safe to serve. See [`Self::with_webhooks`].
     webhooks: bool,
 }
 
