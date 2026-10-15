@@ -167,8 +167,9 @@ never lists, subscribes on, or removes another's triggers:
 | `CreateTrigger`, `EnableTrigger` | owner check, then `POST /trigger_instances/{slug}/upsert` |
 | `DisableTrigger` | ownership lookup, then `DELETE /trigger_instances/manage/{id}` |
 
-A connection whose owner is known to be another user is refused
-(`ConnectionNotOwned`), as is removing a subscription that is not the entity's
+A connection is refused (`ConnectionNotOwned`) unless the entity is known to
+own it: another user's account, a failed owner lookup and an account naming no
+owner all fail closed, as is removing a subscription that is not the entity's
 (`TriggerNotOwned`). `ListGithubRepos` stays refused. The capability matrix's
 `trigger_webhooks` is unchanged: it describes the compiled build, while
 delivery depends on the route and the host.

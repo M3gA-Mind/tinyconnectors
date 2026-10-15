@@ -97,8 +97,8 @@ impl DirectRoute {
     /// crate's `webhook` feature does that part).
     ///
     /// With it on, subscriptions are made and listed as the route's entity
-    /// alone: a connection whose owner is known to be another user is refused
-    /// with [`Error::ConnectionNotOwned`], and a subscription that is not the
+    /// alone: a connection this entity is not known to own is refused with
+    /// [`Error::ConnectionNotOwned`], and a subscription that is not the
     /// entity's cannot be removed ([`Error::TriggerNotOwned`]).
     #[must_use]
     pub fn with_webhooks(mut self, webhooks: bool) -> Self {

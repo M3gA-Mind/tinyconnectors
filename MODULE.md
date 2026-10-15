@@ -91,7 +91,7 @@ then call Composio's trigger API with the user's key, always as the configured
   `static`, with defaults and required keys taken from the config schema.
 - `ListTriggers` lists only this entity's subscriptions.
 - `CreateTrigger` and `EnableTrigger` upsert a subscription, and refuse a
-  connection whose owner is known to be another user.
+  connection unless this entity is known to own it.
 - `DisableTrigger` removes the subscription, after checking it is this
   entity's.
 
