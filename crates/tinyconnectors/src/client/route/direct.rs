@@ -204,17 +204,20 @@ impl DirectRoute {
         }
     }
 
-    /// Refuse a connection whose known owner is not this route's entity.
+    /// Refuse a connection unless this route's entity is known to own it.
     ///
-    /// An unknown owner passes: the lookup is best effort (see
-    /// [`Self::account_owner`]), and Composio still checks the `user_id` the
-    /// subscription carries against the account.
+    /// Unlike execute, which falls back to the configured entity when the
+    /// owner lookup fails (see [`Self::account_owner`]), a subscription fails
+    /// closed: it routes the account's events to whoever holds the project
+    /// webhook, and Composio checks the subscription's `user_id` against the
+    /// account only on projects with 2FA enabled. A failed lookup, or an
+    /// account that names no owner, is refused like another user's account.
     async fn ensure_owned(&self, connection_id: &str) -> Result<()> {
         match self.account_owner(connection_id).await? {
-            Some(owner) if owner != self.entity_id => Err(Error::ConnectionNotOwned {
+            Some(owner) if owner == self.entity_id => Ok(()),
+            _ => Err(Error::ConnectionNotOwned {
                 connection_id: connection_id.trim().to_string(),
             }),
-            _ => Ok(()),
         }
     }
 
