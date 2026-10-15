@@ -139,8 +139,7 @@ async fn a_configured_direct_route_sends_through_the_proxy_it_was_given() {
             transport: Some(ComposioTransportConfig {
                 proxy_url: Some(proxy),
                 ..Default::default()
-            }),
-        })
+            }), webhooks: false, })
         .await
         .unwrap();
 
@@ -164,8 +163,7 @@ async fn an_unusable_proxy_refuses_the_configure_and_keeps_the_old_route() {
             transport: Some(ComposioTransportConfig {
                 proxy_url: Some("ftp://nope".to_string()),
                 ..Default::default()
-            }),
-        })
+            }), webhooks: false, })
         .await
         .unwrap_err();
     assert!(
