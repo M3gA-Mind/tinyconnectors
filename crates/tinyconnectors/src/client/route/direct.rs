@@ -8,6 +8,9 @@ use async_trait::async_trait;
 
 use super::Route;
 use super::url::{comma_joined, encode};
+
+#[path = "direct_triggers.rs"]
+mod triggers;
 use crate::client::Transport;
 use crate::{
     ComposioActiveTriggersResponse, ComposioAuthorizeResponse, ComposioAvailableTriggersResponse,
@@ -22,6 +25,9 @@ pub const COMPOSIO_API_BASE: &str = "https://backend.composio.dev/api/v3";
 
 /// Consecutive rejections of the same key before the gate closes.
 pub const INVALID_API_KEY_THRESHOLD: u32 = 3;
+
+/// Most pages of one v3 listing the route will follow.
+const MAX_PAGES: usize = 20;
 
 const GATED_MESSAGE: &str = "Composio rejected this API key repeatedly, so further direct-mode \
                              calls are paused. Enter a valid key to resume.";
@@ -53,6 +59,9 @@ pub struct DirectRoute {
     /// the old one's.
     failures: Mutex<HashMap<u64, u32>>,
     key_fingerprint: u64,
+    /// Whether the host receives webhook deliveries itself, which is what
+    /// makes the trigger members safe to serve. See [`Self::with_webhooks`].
+    webhooks: bool,
 }
 
 impl DirectRoute {
@@ -73,7 +82,28 @@ impl DirectRoute {
             entity_id,
             failures: Mutex::new(HashMap::new()),
             key_fingerprint: fingerprint(api_key),
+            webhooks: false,
         }
+    }
+
+    /// Serve the trigger members, for a host that receives Composio's webhook
+    /// deliveries at its own public endpoint.
+    ///
+    /// Off by default, and every trigger member then refuses with
+    /// [`Error::UnsupportedByRoute`]: a subscription whose deliveries reach no
+    /// endpoint is created successfully and then fires into the void. A host
+    /// turns it on only once it has pointed the Composio project's webhook at
+    /// an endpoint it serves, and verifies what arrives there (the contract
+    /// crate's `webhook` feature does that part).
+    ///
+    /// With it on, subscriptions are made and listed as the route's entity
+    /// alone: a connection this entity is not known to own is refused with
+    /// [`Error::ConnectionNotOwned`], and a subscription that is not the
+    /// entity's cannot be removed ([`Error::TriggerNotOwned`]).
+    #[must_use]
+    pub fn with_webhooks(mut self, webhooks: bool) -> Self {
+        self.webhooks = webhooks;
+        self
     }
 
     /// Refuse before calling when the key is already known bad.
@@ -123,12 +153,14 @@ impl DirectRoute {
 
     /// Refuse a member this route cannot honestly serve.
     ///
-    /// Every trigger member lands here. A trigger is a webhook subscription,
-    /// and a webhook has to arrive somewhere: the proxy backend HMAC-verifies
+    /// Every trigger member lands here unless the host opted in with
+    /// [`Self::with_webhooks`]. A trigger is a webhook subscription, and a
+    /// webhook has to arrive somewhere: the proxy backend HMAC-verifies
     /// deliveries and fans them out over the user's sockets, while this module
-    /// has no socket and no public endpoint. A direct-mode subscription would
-    /// be created successfully and then deliver to nobody — a silent failure
-    /// the user would only notice as an automation that never fires.
+    /// has no socket and no public endpoint. Without a host endpoint, a
+    /// direct-mode subscription would be created successfully and then deliver
+    /// to nobody — a silent failure the user would only notice as an
+    /// automation that never fires.
     fn unsupported(&self, member: &'static str) -> Error {
         Error::UnsupportedByRoute {
             route: self.name(),
@@ -163,6 +195,145 @@ impl DirectRoute {
         }
     }
 
+    /// Refuse a trigger member unless the host receives webhooks itself.
+    fn require_webhooks(&self, member: &'static str) -> Result<()> {
+        if self.webhooks {
+            Ok(())
+        } else {
+            Err(self.unsupported(member))
+        }
+    }
+
+    /// Refuse a connection unless this route's entity is known to own it.
+    ///
+    /// Unlike execute, which falls back to the configured entity when the
+    /// owner lookup fails (see [`Self::account_owner`]), a subscription fails
+    /// closed: it routes the account's events to whoever holds the project
+    /// webhook, and Composio checks the subscription's `user_id` against the
+    /// account only on projects with 2FA enabled. A failed lookup, or an
+    /// account that names no owner, is refused like another user's account.
+    async fn ensure_owned(&self, connection_id: &str) -> Result<()> {
+        match self.account_owner(connection_id).await? {
+            Some(owner) if owner == self.entity_id => Ok(()),
+            _ => Err(Error::ConnectionNotOwned {
+                connection_id: connection_id.trim().to_string(),
+            }),
+        }
+    }
+
+    /// Create or re-enable a trigger instance as this entity.
+    async fn upsert(
+        &self,
+        slug: &str,
+        connection_id: Option<&str>,
+        trigger_config: Option<serde_json::Value>,
+    ) -> Result<UpsertReply> {
+        if let Some(connection_id) = connection_id {
+            self.ensure_owned(connection_id).await?;
+        }
+        // The same latest snapshot the catalog was read from.
+        let mut body =
+            serde_json::json!({ "user_id": self.entity_id, "toolkit_versions": "latest" });
+        if let Some(connection_id) = connection_id {
+            body["connected_account_id"] = connection_id.trim().into();
+        }
+        if let Some(config) = &trigger_config {
+            body["trigger_config"] = config.clone();
+        }
+
+        let path = format!("/trigger_instances/{}/upsert", encode(slug));
+        tracing::debug!(slug = %slug, "[connectors][direct] upsert trigger");
+        let value = self.call(self.transport.post(&path, &body)).await?;
+        let status = field(&value, &["status"]);
+        let trigger_id = match slug_field(&value, &["trigger_id", "triggerId", "id"]) {
+            Some(id) => id,
+            // A 204 (or any reply without an id) still means the upsert took
+            // effect; the instance is found among this entity's active ones.
+            None => self
+                .find_active_trigger(slug, connection_id, trigger_config.as_ref())
+                .await?
+                .ok_or(Error::Decode {
+                    path,
+                    message: "upsert response carried no trigger id".to_string(),
+                })?,
+        };
+        Ok(UpsertReply { trigger_id, status })
+    }
+
+    /// The id of this entity's active instance of `slug` on `connection_id`.
+    async fn find_active_trigger(
+        &self,
+        slug: &str,
+        connection_id: Option<&str>,
+        config: Option<&serde_json::Value>,
+    ) -> Result<Option<String>> {
+        let path = format!(
+            "/trigger_instances/active?user_ids={}&show_disabled=false&limit=50",
+            encode(&self.entity_id)
+        );
+        let rows = self.list_pages(&path).await?;
+        let wanted = connection_id.map(str::trim);
+        let mut matches = rows.iter().filter(|row| {
+            let named = slug_field(row, &["trigger_name", "triggerName", "slug"]);
+            let on_connection = field(
+                row,
+                &[
+                    "connected_account_id",
+                    "connectedAccountId",
+                    "connection_id",
+                ],
+            );
+            let same_config = config.is_none_or(|config| {
+                row.get("trigger_config")
+                    .or_else(|| row.get("triggerConfig"))
+                    .is_some_and(|stored| stored == config)
+            });
+            named.is_some_and(|named| named.eq_ignore_ascii_case(slug.trim()))
+                && triggers::owned_by(row, &self.entity_id)
+                && wanted.is_none_or(|wanted| wanted == on_connection.as_deref().unwrap_or(""))
+                && same_config
+        });
+        // Composio identifies the instance by slug, account and configuration.
+        // Several matches mean the id cannot be told apart, and guessing one
+        // could hand back another instance's id.
+        let (Some(only), None) = (matches.next(), matches.next()) else {
+            return Ok(None);
+        };
+        Ok(slug_field(only, &["id", "trigger_id", "triggerId"]))
+    }
+
+    /// Every row of a cursor-paged v3 listing.
+    ///
+    /// Stops at the last page. A cursor that does not advance, or a listing
+    /// still going after [`MAX_PAGES`], is an
+    /// [`Error::ListingIncomplete`]: a partial list would make later rows look
+    /// absent.
+    async fn list_pages(&self, path: &str) -> Result<Vec<serde_json::Value>> {
+        let mut rows = Vec::new();
+        let mut cursor: Option<String> = None;
+        for _ in 0..MAX_PAGES {
+            let page_path = match &cursor {
+                Some(cursor) => format!("{path}&cursor={}", encode(cursor)),
+                None => path.to_string(),
+            };
+            let value = self.call(self.transport.get(&page_path)).await?;
+            rows.extend(triggers::rows_of(&value));
+            let next = triggers::next_cursor(&value);
+            if next.is_none() {
+                return Ok(rows);
+            }
+            // A cursor that repeats would never reach the last page.
+            if next == cursor {
+                break;
+            }
+            cursor = next;
+        }
+        Err(Error::ListingIncomplete {
+            path: path.to_string(),
+            limit: MAX_PAGES,
+        })
+    }
+
     async fn call<F>(&self, request: F) -> Result<serde_json::Value>
     where
         F: std::future::Future<Output = Result<serde_json::Value>>,
@@ -172,6 +343,12 @@ impl DirectRoute {
         self.record(&outcome);
         outcome
     }
+}
+
+/// What an upsert answered.
+struct UpsertReply {
+    trigger_id: String,
+    status: Option<String>,
 }
 
 fn fingerprint(api_key: &str) -> u64 {
@@ -425,47 +602,147 @@ impl Route for DirectRoute {
         &self,
         _connection_id: Option<&str>,
     ) -> Result<ComposioGithubReposResponse> {
-        // Only ever used to pick a repository for a GitHub-scoped trigger, and
-        // triggers are unavailable here. Offering the picker without the thing
-        // it picks for would be a dead end.
+        // Only ever used to pick a repository for a GitHub-scoped trigger. With
+        // webhooks off there are no triggers to pick for; with them on, v3
+        // takes the repository as ordinary required trigger configuration, and
+        // there is no verified v3 request shape for the listing to port.
         Err(self.unsupported("ListGithubRepos"))
     }
 
     async fn list_available_triggers(
         &self,
-        _toolkit: &str,
+        toolkit: &str,
         _connection_id: Option<&str>,
     ) -> Result<ComposioAvailableTriggersResponse> {
-        Err(self.unsupported("ListAvailableTriggers"))
+        // The connection only matters to the proxy's per-repository GitHub
+        // fan-out. v3 lists a trigger type once per toolkit, so every row here
+        // is static and a repository is ordinary required configuration.
+        self.require_webhooks("ListAvailableTriggers")?;
+        // `toolkit_versions=latest`, as for tools: the default is a pinned
+        // snapshot that can lack newer triggers and their config schemas.
+        let path = format!(
+            "/triggers_types?toolkit_slugs={}&limit=50&toolkit_versions=latest",
+            encode(toolkit)
+        );
+        tracing::debug!(toolkit = %toolkit, "[connectors][direct] list_available_triggers");
+        let rows = self.list_pages(&path).await?;
+        Ok(ComposioAvailableTriggersResponse {
+            triggers: rows
+                .iter()
+                .filter_map(triggers::available_trigger_from_v3)
+                .collect(),
+        })
     }
 
-    async fn list_triggers(
-        &self,
-        _toolkit: Option<&str>,
-    ) -> Result<ComposioActiveTriggersResponse> {
-        Err(self.unsupported("ListTriggers"))
+    async fn list_triggers(&self, toolkit: Option<&str>) -> Result<ComposioActiveTriggersResponse> {
+        // Always filtered to this entity: one Composio key can hold many users,
+        // and a listing without `user_ids` would show every one of them.
+        self.require_webhooks("ListTriggers")?;
+        let path = format!(
+            "/trigger_instances/active?user_ids={}&show_disabled=false&limit=50",
+            encode(&self.entity_id)
+        );
+        tracing::debug!("[connectors][direct] list_triggers");
+        let rows: Vec<_> = self
+            .list_pages(&path)
+            .await?
+            .into_iter()
+            .filter(|row| triggers::owned_by(row, &self.entity_id))
+            .collect();
+
+        // A row seldom names its toolkit, and a toolkit slug can hold an
+        // underscore, so an unfiltered listing asks the connections which
+        // toolkit each row's account is. A failed lookup only costs accuracy:
+        // those rows fall back to the slug's first word.
+        let wants_lookup = toolkit.is_none_or(|t| t.trim().is_empty())
+            && rows.iter().any(triggers::names_no_toolkit);
+        let connection_toolkits: std::collections::HashMap<String, String> = if wants_lookup {
+            // Paged, unlike `list_connections`: an account on a later page
+            // would otherwise miss the map and fall back to the first word.
+            match self.list_pages("/connected_accounts?limit=200").await {
+                Ok(accounts) => accounts
+                    .iter()
+                    .filter_map(connection_from_v3)
+                    .map(|connection| (connection.id, connection.toolkit.to_ascii_lowercase()))
+                    .collect(),
+                Err(error) => {
+                    tracing::debug!(%error, "[connectors][direct] toolkit lookup failed");
+                    std::collections::HashMap::default()
+                }
+            }
+        } else {
+            std::collections::HashMap::default()
+        };
+
+        Ok(ComposioActiveTriggersResponse {
+            triggers: rows
+                .iter()
+                .filter_map(|row| {
+                    triggers::active_trigger_from_v3(row, toolkit, &connection_toolkits)
+                })
+                .collect(),
+        })
     }
 
     async fn create_trigger(
         &self,
-        _slug: &str,
-        _connection_id: Option<&str>,
-        _trigger_config: Option<serde_json::Value>,
+        slug: &str,
+        connection_id: Option<&str>,
+        trigger_config: Option<serde_json::Value>,
     ) -> Result<ComposioCreateTriggerResponse> {
-        Err(self.unsupported("CreateTrigger"))
+        self.require_webhooks("CreateTrigger")?;
+        let reply = self.upsert(slug, connection_id, trigger_config).await?;
+        Ok(ComposioCreateTriggerResponse {
+            trigger_id: reply.trigger_id,
+            status: reply.status,
+        })
     }
 
     async fn enable_trigger(
         &self,
-        _connection_id: &str,
-        _slug: &str,
-        _trigger_config: Option<serde_json::Value>,
+        connection_id: &str,
+        slug: &str,
+        trigger_config: Option<serde_json::Value>,
     ) -> Result<ComposioEnableTriggerResponse> {
-        Err(self.unsupported("EnableTrigger"))
+        // The upsert re-enables a matching disabled instance, so enabling and
+        // creating are the same call — as they are on the proxy route.
+        self.require_webhooks("EnableTrigger")?;
+        let reply = self
+            .upsert(slug, Some(connection_id), trigger_config)
+            .await?;
+        Ok(ComposioEnableTriggerResponse {
+            trigger_id: reply.trigger_id,
+            slug: slug.trim().to_string(),
+            connection_id: connection_id.trim().to_string(),
+        })
     }
 
-    async fn disable_trigger(&self, _trigger_id: &str) -> Result<ComposioDisableTriggerResponse> {
-        Err(self.unsupported("DisableTrigger"))
+    async fn disable_trigger(&self, trigger_id: &str) -> Result<ComposioDisableTriggerResponse> {
+        // Disabling removes the subscription, as the proxy route's DELETE does.
+        // The instance is looked up as this entity first: its id alone would
+        // let one user of a shared key remove another's subscription.
+        self.require_webhooks("DisableTrigger")?;
+        let trigger_id = trigger_id.trim();
+        let lookup = format!(
+            "/trigger_instances/active?trigger_ids={}&user_ids={}&show_disabled=true&limit=50",
+            encode(trigger_id),
+            encode(&self.entity_id)
+        );
+        tracing::debug!(trigger_id = %trigger_id, "[connectors][direct] disable_trigger");
+        let found = self.call(self.transport.get(&lookup)).await?;
+        let owned = triggers::rows_of(&found).iter().any(|row| {
+            slug_field(row, &["id", "trigger_id", "triggerId"]).as_deref() == Some(trigger_id)
+                && triggers::names_owner(row, &self.entity_id)
+        });
+        if !owned {
+            return Err(Error::TriggerNotOwned {
+                trigger_id: trigger_id.to_string(),
+            });
+        }
+
+        let path = format!("/trigger_instances/manage/{}", encode(trigger_id));
+        self.call(self.transport.delete(&path)).await?;
+        Ok(ComposioDisableTriggerResponse { deleted: true })
     }
 }
 
@@ -539,3 +816,7 @@ fn execute_response_from_v3(raw: serde_json::Value) -> ComposioExecuteResponse {
 #[cfg(test)]
 #[path = "direct_tests.rs"]
 mod test;
+
+#[cfg(test)]
+#[path = "direct_triggers_tests.rs"]
+mod triggers_test;

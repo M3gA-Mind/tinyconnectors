@@ -40,6 +40,7 @@ fn debug_never_prints_the_proxy_url_or_the_key() {
             proxy_url: Some("http://user:hunter2@proxy.internal:3128".to_string()),
             ..Default::default()
         }),
+        webhooks: false,
     };
     let rendered = format!("{credential:?}");
     assert!(!rendered.contains("ck_secret_key"), "{rendered}");
@@ -65,6 +66,7 @@ fn the_requests_keep_their_wire_shape() {
             entity_id: Some("ent".to_string()),
             base_url: Some("http://127.0.0.1:1/api".to_string()),
             transport: None,
+            webhooks: false,
         },
     };
     let value = serde_json::to_value(&connections).unwrap();
@@ -84,4 +86,23 @@ fn the_requests_keep_their_wire_shape() {
     let bare: ComposioDirectToolsRequest =
         serde_json::from_value(json!({ "credential": { "api_key": "ck" } })).unwrap();
     assert!(bare.toolkits.is_empty() && bare.tags.is_empty());
+}
+
+#[test]
+fn a_credential_opts_into_webhooks_only_when_it_says_so() {
+    let credential: ComposioDirectCredential =
+        serde_json::from_value(json!({ "api_key": "ck" })).unwrap();
+    assert!(!credential.webhooks, "absent is off");
+    assert!(
+        serde_json::to_value(&credential)
+            .unwrap()
+            .get("webhooks")
+            .is_none(),
+        "off is left off the wire"
+    );
+
+    let wire = json!({ "api_key": "ck", "webhooks": true });
+    let credential: ComposioDirectCredential = serde_json::from_value(wire.clone()).unwrap();
+    assert!(credential.webhooks);
+    assert_eq!(serde_json::to_value(&credential).unwrap(), wire);
 }

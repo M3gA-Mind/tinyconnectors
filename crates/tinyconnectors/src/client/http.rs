@@ -246,6 +246,11 @@ impl Transport for HttpTransport {
     }
 }
 
+/// The one status that promises no body.
+const NO_CONTENT: u16 = 204;
+/// What a 204 reads as: JSON `null`, so the caller decides whether it needed an answer.
+const NO_CONTENT_BODY: &str = "null";
+
 /// Turn one request's outcome into its body, or a failure message.
 ///
 /// The backend route keeps the HTTP client's own wording. The credentialed
@@ -260,8 +265,11 @@ fn finish(
     result: std::result::Result<ureq::http::Response<ureq::Body>, ureq::Error>,
 ) -> std::result::Result<String, String> {
     if strictness == Strictness::Backend {
-        return result
-            .map_err(|error| error.to_string())?
+        let mut response = result.map_err(|error| error.to_string())?;
+        if response.status().as_u16() == NO_CONTENT {
+            return Ok(NO_CONTENT_BODY.to_string());
+        }
+        return response
             .body_mut()
             .read_to_string()
             .map_err(|error| error.to_string());
@@ -269,6 +277,9 @@ fn finish(
     let mut response =
         result.map_err(|error| format!("error sending request for url ({url}): {error}"))?;
     let status = response.status().as_u16();
+    if status == NO_CONTENT {
+        return Ok(NO_CONTENT_BODY.to_string());
+    }
     let body = response.body_mut().read_to_string();
     if (200..300).contains(&status) {
         return body.map_err(|error| error.to_string());

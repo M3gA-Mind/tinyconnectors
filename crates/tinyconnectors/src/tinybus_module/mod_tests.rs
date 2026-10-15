@@ -1285,6 +1285,7 @@ async fn a_module_loaded_without_a_route_becomes_usable_after_configure() {
             entity_id: None,
             base_url: None,
             transport: None,
+            webhooks: false,
         })
         .await
         .expect("a direct route is installable");
@@ -1310,6 +1311,7 @@ async fn configure_replaces_a_route_that_is_already_installed() {
             entity_id: Some("ent_9".to_string()),
             base_url: None,
             transport: None,
+            webhooks: false,
         })
         .await
         .expect("replacing a route is allowed");
@@ -1370,6 +1372,7 @@ async fn a_reconfigured_route_reaches_the_action_runner_too() {
             entity_id: None,
             base_url: None,
             transport: None,
+            webhooks: false,
         })
         .await
         .expect("install a route");

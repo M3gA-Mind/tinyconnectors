@@ -18,6 +18,7 @@ fn credential(base_url: &str) -> ComposioDirectCredential {
         entity_id: None,
         base_url: Some(base_url.to_string()),
         transport: None,
+        webhooks: false,
     }
 }
 

@@ -43,6 +43,7 @@ fn legacy_configuration_debug_also_redacts_route_credentials() {
         entity_id: Some("private-entity".into()),
         base_url: None,
         transport: None,
+        webhooks: false,
     };
     assert!(!format!("{direct:?}").contains("secret-key"));
     assert_eq!(
@@ -62,6 +63,7 @@ fn direct_route_debug_redacts_key_entity_and_proxy_credentials() {
                 proxy_url: Some("http://user:password@proxy".into()),
                 ..Default::default()
             }),
+            webhooks: false,
         },
     };
     let debug = format!("{request:?}");

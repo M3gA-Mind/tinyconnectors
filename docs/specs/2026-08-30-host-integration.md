@@ -147,6 +147,48 @@ them out over the user's sockets. The module has no socket, so this stays
 exactly where it is. Feed each delivery to `ListTriggerHistory`'s archive by
 calling the module, so the history member has something to report.
 
+### Triggers for a host with its own webhook endpoint
+
+The proxy route gets webhook delivery from the backend. The direct route has no
+backend, so by default it refuses every trigger member: a subscription whose
+deliveries reach nobody is worse than none. A host that serves a public webhook
+endpoint itself, and has set its Composio project's webhook URL to it, opts in
+with `"webhooks": true` on the direct blob, the direct `Configure` request, or a
+`RoutedRead` credential (contract 1.22). Absent means `false`.
+
+With the flag on, the trigger members use Composio's trigger API with the
+host's key, always as the configured `entity_id`, so one tenant of a shared key
+never lists, subscribes on, or removes another's triggers:
+
+| member | Composio call |
+| --- | --- |
+| `ListAvailableTriggers` | `GET /triggers_types?toolkit_slugs=…`; rows are `static` |
+| `ListTriggers` | `GET /trigger_instances/active?user_ids=<entity>` |
+| `CreateTrigger`, `EnableTrigger` | owner check, then `POST /trigger_instances/{slug}/upsert` |
+| `DisableTrigger` | ownership lookup, then `DELETE /trigger_instances/manage/{id}` |
+
+A connection is refused (`ConnectionNotOwned`) unless the entity is known to
+own it: another user's account, a failed owner lookup and an account naming no
+owner all fail closed. Removing a subscription that is not the entity's is
+refused too (`TriggerNotOwned`). `ListGithubRepos` stays refused. The capability matrix's
+`trigger_webhooks` is unchanged: it describes the compiled build, while
+delivery depends on the route and the host.
+
+The host's endpoint does the rest with `tinyconnectors-bus`'s `webhook` feature:
+
+1. `webhook::verify(secret, headers, raw_body, now, DEFAULT_TOLERANCE_SECS)`
+   on the raw body, before parsing. It checks the HMAC-SHA256 signature over
+   `"{webhook-id}.{webhook-timestamp}.{body}"`, accepts any matching `v1`
+   entry, and refuses a timestamp more than the tolerance from `now`. Answer a
+   failure with a 4xx.
+2. `webhook::decode(raw_body)` into a `ComposioTriggerEvent`, from the current
+   or the legacy payload. `metadata.user_id` says which tenant it is for, and
+   `metadata.trigger_id` and `metadata.connected_account_id` which subscription
+   and account.
+3. Optionally remember recent `webhook-id`s to refuse replays inside the
+   tolerance window, then route the event to its tenant and, if the history
+   member should report it, record it through the module's archive.
+
 **Scope enforcement is the module's once the store moves (section 6).** `ListTools` hides what the user's
 preference forbids and `Execute` refuses it. Do not re-filter host-side against
 a separately stored preference — two sources of truth for a permission is how

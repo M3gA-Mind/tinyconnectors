@@ -23,6 +23,14 @@ use crate::client::Transport;
 /// Returns the base URL and a channel carrying the request line and headers the
 /// transport actually sent.
 fn loopback_server(response_body: &'static str) -> (String, mpsc::Receiver<String>) {
+    loopback_server_with_status("200 OK", response_body)
+}
+
+/// [`loopback_server`] answering with the given status line, e.g. `204 No Content`.
+fn loopback_server_with_status(
+    status_line: &'static str,
+    response_body: &'static str,
+) -> (String, mpsc::Receiver<String>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("binds a port");
     let port = listener.local_addr().expect("has an address").port();
     let (sender, receiver) = mpsc::channel();
@@ -56,7 +64,7 @@ fn loopback_server(response_body: &'static str) -> (String, mpsc::Receiver<Strin
         let mut stream = &stream;
         let _ = write!(
             stream,
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            "HTTP/1.1 {status_line}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             response_body.len(),
             response_body
         );
@@ -249,6 +257,30 @@ async fn a_body_that_is_not_json_is_a_decode_failure_naming_the_path() {
             .to_string()
             .contains("/agent-integrations/composio/toolkits")
     );
+}
+
+#[tokio::test]
+async fn a_204_is_null_rather_than_a_decode_failure() {
+    let (base_url, _requests) = loopback_server_with_status("204 No Content", "");
+    let transport = HttpTransport::bearer(&base_url, "t0ken").unwrap();
+
+    let value = transport
+        .post("/anything", &serde_json::json!({}))
+        .await
+        .unwrap();
+
+    assert!(value.is_null());
+}
+
+#[tokio::test]
+async fn an_empty_200_stays_a_decode_failure() {
+    // Only a 204 promises no body; an empty 200 from a JSON read is malformed.
+    let (base_url, _requests) = loopback_server("");
+    let transport = HttpTransport::bearer(&base_url, "t0ken").unwrap();
+
+    let error = transport.get("/anything").await.unwrap_err();
+
+    assert!(matches!(error, Error::Decode { .. }), "{error}");
 }
 
 #[tokio::test]

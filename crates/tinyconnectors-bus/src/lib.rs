@@ -34,6 +34,14 @@
 //! and re-exports it. A payload type describes what a frame carries, not what
 //! the module does with it.
 //!
+//! One opt-in exception: the `webhook` feature adds
+//! `composio::triggers::webhook`, two pure functions that verify a Composio
+//! webhook delivery's signature and decode its body into a
+//! [`ComposioTriggerEvent`]. It is here, not in the module, because the party
+//! that needs it is a host receiving deliveries at its own endpoint, and that
+//! host links this crate rather than the module. It holds no transport and
+//! reads no clock, and it compiles to nothing unless asked for.
+//!
 //! **No transport.** This crate does not depend on `tinybus` and holds no
 //! connection, client, or codec. A host already owns its connection — its
 //! reconnect policy, its timeouts, its tracing — and the useful part is the

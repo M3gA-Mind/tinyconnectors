@@ -20,7 +20,9 @@ connector backend, not the only one this contract expects to carry, so it is
 namespaced: a second backend arrives as a sibling module with its own interface
 and object path rather than as a rename of every type here.
 
-Two dependencies, both pure Rust: `serde` and `serde_json`.
+Two dependencies, both pure Rust: `serde` and `serde_json`. The optional
+`webhook` feature adds `hmac`, `sha2`, `base64` and `thiserror` — still pure
+Rust, still no I/O.
 
 ## This crate sits underneath `tinyconnectors`
 
@@ -53,6 +55,13 @@ host depends on `tinyconnectors-bus` and gets vocabulary alone.
 `crates/tinyconnectors`. A payload type describes what a frame carries, not what
 the module does with it. The split is readable off the path: a name here is
 data, a name there is an obligation.
+
+One opt-in exception, behind the `webhook` feature:
+`composio::triggers::webhook` verifies a Composio webhook delivery's signature
+(`verify`) and decodes its body into a `ComposioTriggerEvent` (`decode`), for a
+host that receives deliveries at its own public endpoint. It lives here because
+that host links this crate, not the module. Both functions are pure: bytes and
+a caller-supplied `now` in, a verdict out, no transport and no clock.
 
 **No credentials.** Nothing here holds an API key, a token, or a refresh secret.
 The OAuth handoff crosses this boundary as a URL the user opens and an id to
@@ -114,6 +123,12 @@ fields of `ComposioCapability` (`initial_sync`, `periodic_sync`,
 `sync_interval_secs`, `memory_ingest`). The module no longer reads records out
 of connected accounts; a host that wants account data runs actions through
 `Execute`.
+
+Contract 1.22 adds three optional fields: `webhooks` on the direct
+`ComposioConfigureRequest` and on `ComposioDirectCredential`, which let a direct
+route serve the trigger members for a host that receives deliveries itself, and
+`user_id`, `connected_account_id` and `trigger_id` on `ComposioTriggerMetadata`.
+Each is omitted from the wire when unset, so older peers see the same blobs.
 
 `CONTRACT_VERSION` describes *this vocabulary*, not the package. Bump its major
 component when a payload's wire form changes incompatibly or a member is removed

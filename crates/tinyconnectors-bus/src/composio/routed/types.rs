@@ -47,9 +47,11 @@ pub enum ComposioReadOperation {
     ListConnections,
     /// GitHub repositories visible to the specified connection.
     ListGithubRepos(ComposioListGithubReposRequest),
-    /// Available triggers; direct routes retain their existing refusal.
+    /// Available triggers; a direct route refuses unless its credential sets
+    /// `webhooks`.
     ListAvailableTriggers(ComposioListAvailableTriggersRequest),
-    /// Active triggers; direct routes retain their existing refusal.
+    /// Active triggers; a direct route refuses unless its credential sets
+    /// `webhooks`.
     ListTriggers(ComposioListTriggersRequest),
 }
 

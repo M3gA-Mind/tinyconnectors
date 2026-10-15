@@ -69,6 +69,14 @@ async-trait = "0.1"
 # certificate store, and `socks-proxy` lets it route through a SOCKS proxy: the
 # two network policies a host applies to its own clients.
 ureq = { version = "3", features = ["json", "platform-verifier", "socks-proxy"] }
+# Webhook signature verification, behind `tinyconnectors-bus`'s `webhook`
+# feature: Composio signs each delivery with HMAC-SHA256 and sends the digest
+# base64-encoded. `hmac` compares in constant time (`verify_slice`). All three
+# are pure Rust with no I/O, so the contract crate stays transport-free, and
+# the versions match what the lockfile already carries through other crates.
+hmac = { version = "0.12", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+base64 = { version = "0.23", default-features = false, features = ["alloc"] }
 # Base-URL validation in the HTTP transport. A parser, not a prefix match: a
 # `starts_with("http://127.0.0.1")` check is fooled by userinfo smuggling like
 # `http://127.0.0.1:8080@evil.com`, which resolves to `evil.com` and would take

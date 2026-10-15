@@ -8,7 +8,10 @@
 //!   (`scope: "github_repo"`).
 //! - [`ComposioActiveTrigger`] — a subscription that *is* enabled.
 //! - [`ComposioTriggerEvent`] — one delivery. The backend HMAC-verifies the
-//!   webhook and fans it out over the user's sockets; this is that payload.
+//!   webhook and fans it out over the user's sockets; this is that payload. A
+//!   host that receives deliveries at its own endpoint instead verifies and
+//!   decodes them into the same type with `webhook::verify` and
+//!   `webhook::decode` (the `webhook` feature).
 //!
 //! [`ComposioTriggerHistoryEntry`] is the module's own record of a delivery,
 //! not a backend shape: it is what a daily JSONL archive holds so a user can
@@ -24,6 +27,9 @@
 //! subscriptions having been silently deleted.
 
 mod types;
+
+#[cfg(feature = "webhook")]
+pub mod webhook;
 
 pub use types::{
     ComposioActiveTrigger, ComposioActiveTriggersResponse, ComposioAvailableTrigger,

@@ -79,6 +79,12 @@ pub struct ComposioDirectCredential {
     /// Network settings for this call. Absent means no proxy and bundled roots.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transport: Option<ComposioTransportConfig>,
+    /// Whether the host receives Composio's webhook deliveries at an endpoint
+    /// of its own, which lets a direct route built from this credential serve
+    /// the trigger members. Absent means `false`: they refuse, as before.
+    /// Added in contract 1.22.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub webhooks: bool,
 }
 
 impl fmt::Debug for ComposioDirectCredential {
@@ -88,6 +94,7 @@ impl fmt::Debug for ComposioDirectCredential {
             .field("entity_id", &self.entity_id)
             .field("base_url", &self.base_url)
             .field("transport", &self.transport)
+            .field("webhooks", &self.webhooks)
             .finish_non_exhaustive()
     }
 }

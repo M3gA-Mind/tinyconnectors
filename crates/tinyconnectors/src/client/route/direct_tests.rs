@@ -154,8 +154,9 @@ async fn refuses_to_delete_a_connection_and_says_why() {
 async fn refuses_every_trigger_member_and_says_why() {
     // A trigger is a webhook, and a webhook has to arrive somewhere. The proxy
     // backend HMAC-verifies deliveries and fans them out over the user's
-    // sockets; this module has no socket and no public endpoint. A direct-mode
-    // subscription would be created and then deliver to nobody.
+    // sockets; this module has no socket and no public endpoint. Unless the
+    // host says it receives deliveries itself, a direct-mode subscription
+    // would be created and then deliver to nobody.
     let transport = FakeTransport::replying(json!({}));
     let direct = route(transport.clone());
 
