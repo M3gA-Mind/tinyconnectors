@@ -277,6 +277,11 @@ async fn lists_only_this_entitys_active_triggers() {
             ]
         }),
     );
+    transport.expect(
+        "GET",
+        "/connected_accounts?limit=200",
+        json!({ "items": [] }),
+    );
 
     let response = route(&transport).list_triggers(None).await.unwrap();
 
@@ -737,5 +742,47 @@ async fn a_listing_that_never_ends_is_an_error_not_a_partial_list() {
         .unwrap_err();
 
     assert!(matches!(error, Error::ListingIncomplete { .. }), "{error}");
+    transport.assert_script_done();
+}
+
+#[tokio::test]
+async fn an_unfiltered_listing_labels_rows_with_their_connections_toolkit() {
+    let transport = ScriptedTransport::new()
+        .expect(
+            "GET",
+            ACTIVE_PATH,
+            json!({ "items": [{
+                "id": "ti_1",
+                "trigger_name": "MICROSOFT_TEAMS_NEW_MESSAGE",
+                "connected_account_id": "c1",
+                "user_id": "entity-1"
+            }] }),
+        )
+        .expect(
+            "GET",
+            "/connected_accounts?limit=200",
+            json!({ "items": [{ "id": "c1", "toolkit": { "slug": "microsoft_teams" },
+                                "status": "ACTIVE" }] }),
+        );
+
+    let response = route(&transport).list_triggers(None).await.unwrap();
+
+    assert_eq!(response.triggers[0].toolkit, "microsoft_teams");
+    transport.assert_script_done();
+}
+
+#[tokio::test]
+async fn a_failed_toolkit_lookup_falls_back_to_the_slugs_first_word() {
+    let transport = ScriptedTransport::new().expect(
+        "GET",
+        ACTIVE_PATH,
+        json!({ "items": [{ "id": "ti_1", "trigger_name": "GMAIL_NEW_GMAIL_MESSAGE",
+                            "connected_account_id": "c1", "user_id": "entity-1" }] }),
+    );
+    transport.expect_failure("GET", "/connected_accounts?limit=200", "boom");
+
+    let response = route(&transport).list_triggers(None).await.unwrap();
+
+    assert_eq!(response.triggers[0].toolkit, "gmail");
     transport.assert_script_done();
 }

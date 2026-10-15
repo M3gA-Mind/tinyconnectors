@@ -636,12 +636,41 @@ impl Route for DirectRoute {
             encode(&self.entity_id)
         );
         tracing::debug!("[connectors][direct] list_triggers");
-        let rows = self.list_pages(&path).await?;
+        let rows: Vec<_> = self
+            .list_pages(&path)
+            .await?
+            .into_iter()
+            .filter(|row| triggers::owned_by(row, &self.entity_id))
+            .collect();
+
+        // A row seldom names its toolkit, and a toolkit slug can hold an
+        // underscore, so an unfiltered listing asks the connections which
+        // toolkit each row's account is. A failed lookup only costs accuracy:
+        // those rows fall back to the slug's first word.
+        let wants_lookup = toolkit.is_none_or(|t| t.trim().is_empty())
+            && rows.iter().any(triggers::names_no_toolkit);
+        let connection_toolkits: std::collections::HashMap<String, String> = if wants_lookup {
+            match self.list_connections().await {
+                Ok(listing) => listing
+                    .connections
+                    .into_iter()
+                    .map(|connection| (connection.id, connection.toolkit.to_ascii_lowercase()))
+                    .collect(),
+                Err(error) => {
+                    tracing::debug!(%error, "[connectors][direct] toolkit lookup failed");
+                    Default::default()
+                }
+            }
+        } else {
+            Default::default()
+        };
+
         Ok(ComposioActiveTriggersResponse {
             triggers: rows
                 .iter()
-                .filter(|row| triggers::owned_by(row, &self.entity_id))
-                .filter_map(|row| triggers::active_trigger_from_v3(row, toolkit))
+                .filter_map(|row| {
+                    triggers::active_trigger_from_v3(row, toolkit, &connection_toolkits)
+                })
                 .collect(),
         })
     }

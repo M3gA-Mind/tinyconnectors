@@ -93,6 +93,18 @@ fn config_shape(
     (defaults, (!required.is_empty()).then_some(required))
 }
 
+/// The keys a row may carry its connected account's id under.
+const CONNECTION_KEYS: &[&str] = &[
+    "connected_account_id",
+    "connectedAccountId",
+    "connection_id",
+];
+
+/// Whether an active-instance row names no toolkit of its own.
+pub(super) fn names_no_toolkit(row: &serde_json::Value) -> bool {
+    slug_field(row, &["toolkit", "toolkit_slug", "app_name", "appName"]).is_none()
+}
+
 /// Whether an active-instance row belongs to `entity_id`.
 ///
 /// A row with no `user_id` is kept: the listing was already filtered by user,
@@ -132,9 +144,12 @@ fn slug_in_toolkit(slug: &str, toolkit: &str) -> bool {
 ///
 /// With a `toolkit` filter, a row outside it yields `None`, and a row inside
 /// it is labelled with the filter rather than with the slug's first word.
+/// Without one, a row that names no toolkit takes its connection's toolkit from
+/// `connection_toolkits`, and only then the slug's first word.
 pub(super) fn active_trigger_from_v3(
     row: &serde_json::Value,
     toolkit: Option<&str>,
+    connection_toolkits: &std::collections::HashMap<String, String>,
 ) -> Option<ComposioActiveTrigger> {
     let id = slug_field(row, &["id", "trigger_id", "triggerId"])?;
     let slug = slug_field(row, &["trigger_name", "triggerName", "slug"]).unwrap_or_default();
@@ -151,7 +166,13 @@ pub(super) fn active_trigger_from_v3(
             }
             explicit.unwrap_or_else(|| wanted.to_string())
         }
-        None => explicit.unwrap_or_else(|| toolkit_of_slug(&slug)),
+        None => explicit
+            .or_else(|| {
+                field(row, CONNECTION_KEYS)
+                    .and_then(|id| connection_toolkits.get(&id).cloned())
+                    .filter(|toolkit| !toolkit.is_empty())
+            })
+            .unwrap_or_else(|| toolkit_of_slug(&slug)),
     };
 
     let disabled = row
@@ -163,15 +184,7 @@ pub(super) fn active_trigger_from_v3(
         id,
         slug,
         toolkit,
-        connection_id: field(
-            row,
-            &[
-                "connected_account_id",
-                "connectedAccountId",
-                "connection_id",
-            ],
-        )
-        .unwrap_or_default(),
+        connection_id: field(row, CONNECTION_KEYS).unwrap_or_default(),
         trigger_config: row
             .get("trigger_config")
             .or_else(|| row.get("triggerConfig"))
