@@ -235,8 +235,8 @@ impl DirectRoute {
         if let Some(connection_id) = connection_id {
             body["connected_account_id"] = connection_id.trim().into();
         }
-        if let Some(config) = trigger_config {
-            body["trigger_config"] = config;
+        if let Some(config) = &trigger_config {
+            body["trigger_config"] = config.clone();
         }
 
         let path = format!("/trigger_instances/{}/upsert", encode(slug));
