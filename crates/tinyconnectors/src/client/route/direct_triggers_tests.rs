@@ -382,6 +382,7 @@ async fn creates_a_trigger_as_the_entity_on_its_own_connection() {
         transport.body_of(1),
         json!({
             "user_id": "entity-1",
+            "toolkit_versions": "latest",
             "connected_account_id": "c1",
             "trigger_config": { "labelIds": "INBOX" }
         })
