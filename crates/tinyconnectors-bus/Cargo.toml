@@ -19,6 +19,20 @@ publish = false
 [dependencies]
 serde = { workspace = true }
 serde_json = { workspace = true }
+# Verifying and decoding Composio's webhook deliveries, for a host that
+# receives them at its own endpoint. Optional: only the `webhook` feature
+# pulls these in, so a host that never sees a delivery pays nothing.
+hmac = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+# The webhook module's error type, the same derive the module crate uses.
+thiserror = { workspace = true, optional = true }
+
+[features]
+# `composio::triggers::webhook`: verify a delivery's signature and decode its
+# body into a `ComposioTriggerEvent`. Pure functions over bytes — no transport,
+# no runtime — for a host that owns a public webhook endpoint.
+webhook = ["dep:hmac", "dep:sha2", "dep:base64", "dep:thiserror"]
 
 [lints]
 workspace = true

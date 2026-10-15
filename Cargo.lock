@@ -1330,8 +1330,12 @@ dependencies = [
 name = "tinyconnectors-bus"
 version = "0.19.3"
 dependencies = [
+ "base64",
+ "hmac",
  "serde",
  "serde_json",
+ "sha2",
+ "thiserror",
 ]
 
 [[package]]

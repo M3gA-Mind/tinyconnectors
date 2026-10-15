@@ -25,6 +25,9 @@
 
 mod types;
 
+#[cfg(feature = "webhook")]
+pub mod webhook;
+
 pub use types::{
     ComposioActiveTrigger, ComposioActiveTriggersResponse, ComposioAvailableTrigger,
     ComposioAvailableTriggerRepo, ComposioAvailableTriggersResponse, ComposioCreateTriggerRequest,
