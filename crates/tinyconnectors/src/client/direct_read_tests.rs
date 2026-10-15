@@ -17,7 +17,9 @@ fn credential(base_url: &str) -> ComposioDirectCredential {
         api_key: "ck_test_key".to_string(),
         entity_id: None,
         base_url: Some(base_url.to_string()),
-        transport: None, webhooks: false, }
+        transport: None,
+        webhooks: false,
+    }
 }
 
 #[tokio::test]

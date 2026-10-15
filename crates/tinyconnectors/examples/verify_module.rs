@@ -525,7 +525,9 @@ async fn verify_direct_and_routed_members(
         api_key: "module-e2e-direct-key".into(),
         entity_id: Some("test-entity".into()),
         base_url: Some(format!("{backend_url}/api/v3")),
-        transport: None, webhooks: false, };
+        transport: None,
+        webhooks: false,
+    };
     let direct_connections: tinyconnectors_bus::ComposioConnectionsResponse = proxy
         .call(
             methods::LIST_CONNECTIONS_DIRECT,

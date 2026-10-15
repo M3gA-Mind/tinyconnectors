@@ -260,6 +260,7 @@ impl RouteConfig {
                 entity_id,
                 base_url,
                 transport,
+                webhooks: _,
             } => Some(Self::Direct {
                 api_key,
                 entity_id,

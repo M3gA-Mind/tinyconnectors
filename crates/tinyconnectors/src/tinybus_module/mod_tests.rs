@@ -1284,7 +1284,9 @@ async fn a_module_loaded_without_a_route_becomes_usable_after_configure() {
             api_key: "sk-live".to_string(),
             entity_id: None,
             base_url: None,
-            transport: None, webhooks: false, })
+            transport: None,
+            webhooks: false,
+        })
         .await
         .expect("a direct route is installable");
     assert_eq!(reply.route, "direct");
@@ -1308,7 +1310,9 @@ async fn configure_replaces_a_route_that_is_already_installed() {
             api_key: "sk-live".to_string(),
             entity_id: Some("ent_9".to_string()),
             base_url: None,
-            transport: None, webhooks: false, })
+            transport: None,
+            webhooks: false,
+        })
         .await
         .expect("replacing a route is allowed");
     assert_eq!(reply.route, "direct");
@@ -1367,7 +1371,9 @@ async fn a_reconfigured_route_reaches_the_action_runner_too() {
             api_key: "sk-live".to_string(),
             entity_id: None,
             base_url: None,
-            transport: None, webhooks: false, })
+            transport: None,
+            webhooks: false,
+        })
         .await
         .expect("install a route");
 
