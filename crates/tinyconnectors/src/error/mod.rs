@@ -93,6 +93,30 @@ pub enum Error {
         member: &'static str,
     },
 
+    /// A connected account belongs to a different user than the one the route
+    /// acts as.
+    ///
+    /// Raised before a trigger subscription is made on it. One Composio key can
+    /// hold many users' accounts, and a subscription on someone else's account
+    /// would deliver their events to this user. The other user's id is not
+    /// named: it is theirs, not this caller's.
+    #[error("connection {connection_id} belongs to another user")]
+    ConnectionNotOwned {
+        /// Connected account the caller named.
+        connection_id: String,
+    },
+
+    /// A trigger subscription is not one of this user's.
+    ///
+    /// Raised instead of removing it: either no such subscription exists, or
+    /// it belongs to another user of the same Composio key. The two are not
+    /// told apart, so the answer does not reveal which ids other users hold.
+    #[error("trigger {trigger_id} is not a subscription of this user")]
+    TriggerNotOwned {
+        /// Subscription id the caller named.
+        trigger_id: String,
+    },
+
     /// A direct-mode API key was rejected repeatedly and is now gated.
     ///
     /// Without this, a revoked key makes every poll hit Composio and fail
