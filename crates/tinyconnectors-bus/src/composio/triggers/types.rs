@@ -216,6 +216,21 @@ pub struct ComposioTriggerMetadata {
     /// Backend event UUID.
     #[serde(default)]
     pub uuid: String,
+    /// User (Composio entity) the subscription belongs to, when reported.
+    ///
+    /// What a host receiving deliveries itself routes on: one Composio project
+    /// delivers every user's events to the same endpoint. Added in contract
+    /// 1.22; empty, and absent on the wire, when unknown.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub user_id: String,
+    /// Connected account the event came from, when reported. Added in
+    /// contract 1.22.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub connected_account_id: String,
+    /// Subscription that produced the event, when reported — the id
+    /// `DisableTrigger` takes. Added in contract 1.22.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub trigger_id: String,
 }
 
 /// One archived delivery.
