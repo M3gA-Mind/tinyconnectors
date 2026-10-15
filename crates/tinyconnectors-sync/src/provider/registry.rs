@@ -104,8 +104,11 @@ impl ProviderRegistry {
                         // is offered, it does not gate the mechanism.
                         tool_execution: true,
                         user_profile: true,
-                        // Triggers are a backend concern, not a provider one —
-                        // the module has no endpoint for a webhook to reach.
+                        // Triggers are a route and host concern, not a
+                        // provider one: delivery needs an endpoint, which the
+                        // module never has — a proxy backend's fan-out or a
+                        // direct-route host's own endpoint supplies it. This
+                        // matrix describes the build, so it cannot promise it.
                         trigger_webhooks: false,
                     }
                 })
