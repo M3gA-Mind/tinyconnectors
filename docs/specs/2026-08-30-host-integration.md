@@ -169,8 +169,8 @@ never lists, subscribes on, or removes another's triggers:
 
 A connection is refused (`ConnectionNotOwned`) unless the entity is known to
 own it: another user's account, a failed owner lookup and an account naming no
-owner all fail closed, as is removing a subscription that is not the entity's
-(`TriggerNotOwned`). `ListGithubRepos` stays refused. The capability matrix's
+owner all fail closed. Removing a subscription that is not the entity's is
+refused too (`TriggerNotOwned`). `ListGithubRepos` stays refused. The capability matrix's
 `trigger_webhooks` is unchanged: it describes the compiled build, while
 delivery depends on the route and the host.
 
