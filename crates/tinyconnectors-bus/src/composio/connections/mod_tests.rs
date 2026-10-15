@@ -251,3 +251,33 @@ fn signing_out_is_a_route_of_its_own_rather_than_an_absent_field() {
         serde_json::from_value(serde_json::json!({ "route": "none" })).expect("decode");
     assert!(matches!(decoded, ComposioConfigureRequest::None));
 }
+
+#[test]
+fn a_direct_configuration_opts_into_webhooks_only_when_it_says_so() {
+    // Absent is off: a host that predates the flag keeps the trigger refusal.
+    let older = serde_json::json!({ "route": "direct", "api_key": "sk" });
+    match serde_json::from_value(older).expect("decode") {
+        ComposioConfigureRequest::Direct { webhooks, .. } => assert!(!webhooks),
+        other => panic!("decoded as the wrong route: {other:?}"),
+    }
+
+    let wire = serde_json::json!({ "route": "direct", "api_key": "sk", "webhooks": true });
+    let request: ComposioConfigureRequest = serde_json::from_value(wire.clone()).expect("decode");
+    match &request {
+        ComposioConfigureRequest::Direct { webhooks, .. } => assert!(*webhooks),
+        other => panic!("decoded as the wrong route: {other:?}"),
+    }
+    assert_eq!(serde_json::to_value(&request).expect("serialize"), wire);
+
+    // Off is left off the wire, so a host that does not opt in sends the same
+    // blob as before.
+    let off = serde_json::to_value(ComposioConfigureRequest::Direct {
+        api_key: "sk".to_string(),
+        entity_id: None,
+        base_url: None,
+        transport: None,
+        webhooks: false,
+    })
+    .expect("serialize");
+    assert!(off.get("webhooks").is_none());
+}
