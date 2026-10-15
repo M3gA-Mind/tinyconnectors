@@ -658,11 +658,11 @@ impl Route for DirectRoute {
                     .collect(),
                 Err(error) => {
                     tracing::debug!(%error, "[connectors][direct] toolkit lookup failed");
-                    Default::default()
+                    std::collections::HashMap::default()
                 }
             }
         } else {
-            Default::default()
+            std::collections::HashMap::default()
         };
 
         Ok(ComposioActiveTriggersResponse {
