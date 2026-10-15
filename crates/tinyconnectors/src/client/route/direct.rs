@@ -302,8 +302,8 @@ impl DirectRoute {
 
     /// Every row of a cursor-paged v3 listing.
     ///
-    /// Stops at the last page or at a cursor that does not advance. A listing
-    /// still advancing after [`MAX_PAGES`] is an
+    /// Stops at the last page. A cursor that does not advance, or a listing
+    /// still going after [`MAX_PAGES`], is an
     /// [`Error::ListingIncomplete`]: a partial list would make later rows look
     /// absent.
     async fn list_pages(&self, path: &str) -> Result<Vec<serde_json::Value>> {
@@ -317,8 +317,12 @@ impl DirectRoute {
             let value = self.call(self.transport.get(&page_path)).await?;
             rows.extend(triggers::rows_of(&value));
             let next = triggers::next_cursor(&value);
-            if next.is_none() || next == cursor {
+            if next.is_none() {
                 return Ok(rows);
+            }
+            // A cursor that repeats would never reach the last page.
+            if next == cursor {
+                break;
             }
             cursor = next;
         }

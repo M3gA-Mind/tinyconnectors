@@ -222,7 +222,7 @@ async fn follows_the_catalog_cursor_to_its_last_page() {
 }
 
 #[tokio::test]
-async fn stops_paging_when_the_cursor_repeats() {
+async fn a_repeated_cursor_is_an_incomplete_listing_not_a_finished_one() {
     // A cursor that does not advance would otherwise loop forever.
     let transport = ScriptedTransport::new()
         .expect(
@@ -236,12 +236,12 @@ async fn stops_paging_when_the_cursor_repeats() {
             json!({ "items": [{ "slug": "SLACK_B" }], "next_cursor": "c" }),
         );
 
-    let response = route(&transport)
+    let error = route(&transport)
         .list_available_triggers("slack", None)
         .await
-        .unwrap();
+        .unwrap_err();
 
-    assert_eq!(response.triggers.len(), 2);
+    assert!(matches!(error, Error::ListingIncomplete { .. }), "{error}");
     transport.assert_script_done();
 }
 
