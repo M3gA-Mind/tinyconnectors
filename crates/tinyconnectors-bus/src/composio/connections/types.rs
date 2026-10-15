@@ -117,6 +117,13 @@ pub enum ComposioConfigureRequest {
         /// no proxy and bundled roots, as before. Added in contract 1.10.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         transport: Option<crate::composio::direct::ComposioTransportConfig>,
+        /// Whether the host receives Composio's webhook deliveries at an
+        /// endpoint of its own, which lets the direct route serve the trigger
+        /// members. Absent means `false`, and every trigger member refuses: a
+        /// subscription whose deliveries reach nobody is worse than none.
+        /// Added in contract 1.22.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        webhooks: bool,
     },
 }
 
