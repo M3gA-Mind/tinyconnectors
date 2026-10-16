@@ -20,10 +20,10 @@
 //! body with exactly that one field always means "wrapped" and the encoding
 //! loses nothing.
 
-use serde_json::{Map, Value, json};
+use serde_json::{Value, json};
 use tinyconnectors_sync::{LEGACY_PREFS_NAMESPACE, PREFS_NAMESPACE};
 use tinystoragedrivers_core::schema::{Owner, Schema, ScopeClass, SourceRecord, Step, TargetRecord};
-use tinystoragedrivers_core::{Key, Result, SealPolicy, SealWhen, StorageError};
+use tinystoragedrivers_core::{Key, Result, SealPolicy, SealWhen};
 
 use crate::triggers::{LEGACY_STREAM_PREFIX, STREAM_NAME, STREAM_PREFIX};
 
@@ -47,9 +47,8 @@ const DAY_STREAM_IDLE_MS: u64 = 2 * 24 * 60 * 60 * 1000;
 /// Never in practice: the owner name is a constant that satisfies the owner
 /// rules, which a test pins.
 #[must_use]
-#[allow(clippy::missing_panics_doc)]
+#[allow(clippy::expect_used)]
 pub fn storage_schema() -> Schema {
-    #[allow(clippy::expect_used)]
     let owner = Owner::new(OWNER).expect("`connectors` is a valid owner name");
     Schema::new(owner)
         .collection(PREFS_NAMESPACE, PREFS_SCHEMA_VERSION, ScopeClass::Module)
@@ -120,8 +119,7 @@ fn unwrap_user_scopes(batch: Vec<SourceRecord>) -> Result<Vec<TargetRecord>> {
             }
             Ok(target)
         })
-        .collect::<Result<Vec<_>>>()
-        .map_err(|error: StorageError| error)
+        .collect()
 }
 
 /// Step `triggers_rename`: `triggers/<day>` becomes `connectors.triggers/<day>`.
@@ -131,9 +129,6 @@ fn rename_trigger_stream(source: &str, entries: Vec<Value>) -> Option<(String, V
     let day = source.strip_prefix(LEGACY_STREAM_PREFIX)?;
     Some((format!("{STREAM_PREFIX}{day}"), entries))
 }
-
-#[allow(dead_code)]
-fn _assert_object(_: Map<String, Value>) {}
 
 #[cfg(test)]
 #[path = "schema_tests.rs"]
