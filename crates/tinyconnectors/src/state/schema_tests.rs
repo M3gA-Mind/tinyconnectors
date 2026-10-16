@@ -8,9 +8,7 @@ use serde_json::{Value, json};
 use tinyconnectors_bus::vocabulary::UserScopePref;
 use tinyconnectors_sync::{LEGACY_PREFS_NAMESPACE, PREFS_NAMESPACE, PrefsStore, ScopePrefStore};
 use tinystoragedrivers_core::schema::{Item, MigrateOptions, Registry, ScopeClass};
-use tinystoragedrivers_core::{
-    DocumentStore, MemoryStorage, Precondition, Scope, ScopedStorage, StorageBackend, StreamStore,
-};
+use tinystoragedrivers_core::{MemoryStorage, Precondition, Scope, ScopedStorage, StorageBackend};
 
 use super::storage_schema;
 use crate::state::{DocumentPrefsStore, storage_needs};
