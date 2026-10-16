@@ -12,7 +12,8 @@ use tinystoragedrivers_core::{
     DocumentStore, MemoryStorage, Precondition, Scope, ScopedStorage, StorageBackend, StreamStore,
 };
 
-use super::{DocumentPrefsStore, storage_needs, storage_schema};
+use super::storage_schema;
+use crate::state::{DocumentPrefsStore, storage_needs};
 use crate::triggers::TriggerArchive;
 
 const LEGACY_STREAM: &str = "triggers/2026-10-15";
