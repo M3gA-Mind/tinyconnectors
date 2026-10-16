@@ -15,9 +15,11 @@
 
 mod document_store;
 mod needs;
+mod schema;
 
 pub use document_store::DocumentPrefsStore;
-pub use needs::{STORAGE_NEEDS, StorageNeeds};
+pub use needs::{StorageNeeds, storage_needs};
+pub use schema::storage_schema;
 
 #[cfg(test)]
 #[path = "mod_tests.rs"]
