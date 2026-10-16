@@ -22,7 +22,9 @@
 
 use serde_json::{Value, json};
 use tinyconnectors_sync::{LEGACY_PREFS_NAMESPACE, PREFS_NAMESPACE};
-use tinystoragedrivers_core::schema::{Owner, Schema, ScopeClass, SourceRecord, Step, TargetRecord};
+use tinystoragedrivers_core::schema::{
+    Owner, Schema, ScopeClass, SourceRecord, Step, TargetRecord,
+};
 use tinystoragedrivers_core::{Key, Result, SealPolicy, SealWhen};
 
 use crate::triggers::{LEGACY_STREAM_PREFIX, STREAM_NAME, STREAM_PREFIX};
@@ -68,13 +70,9 @@ pub fn storage_schema() -> Schema {
             .source(LEGACY_PREFS_NAMESPACE),
         )
         .step(
-            Step::stream(
-                "triggers_rename",
-                STREAM_NAME,
-                1,
-                2,
-                |source, entries| Ok(rename_trigger_stream(&source, entries)),
-            )
+            Step::stream("triggers_rename", STREAM_NAME, 1, 2, |source, entries| {
+                Ok(rename_trigger_stream(&source, entries))
+            })
             .source_prefix(LEGACY_STREAM_PREFIX),
         )
 }

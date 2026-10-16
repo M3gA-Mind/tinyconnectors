@@ -159,7 +159,11 @@ fn the_declared_grant_matches_what_the_stores_write() {
 async fn a_preference_is_stored_as_the_bare_object_with_its_schema_version() {
     let (documents, store) = store();
     store.set("gmail", &json!({ "read": true })).await.unwrap();
-    let found = documents.get(PREFS_NAMESPACE, "gmail").await.unwrap().unwrap();
+    let found = documents
+        .get(PREFS_NAMESPACE, "gmail")
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(found.doc, json!({ "read": true }));
     assert_eq!(found.meta.schema, 2);
 }

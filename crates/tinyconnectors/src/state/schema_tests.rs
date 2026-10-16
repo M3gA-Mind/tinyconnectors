@@ -112,9 +112,7 @@ async fn a_migrated_preference_reads_through_the_store_with_its_choice_intact() 
     migrated(&storage, &backend).await;
 
     let store = DocumentPrefsStore::new(Arc::clone(storage.documents()));
-    let pref = UserScopePref::load(&store, "slack")
-        .await
-        .unwrap();
+    let pref = UserScopePref::load(&store, "slack").await.unwrap();
     assert!(pref.read);
     assert!(!pref.write);
 }
@@ -222,7 +220,14 @@ async fn trigger_day_streams_move_to_the_v2_name_with_their_entries_untouched() 
     let moved = storage.streams().read_window(STREAM, 0, 10).await.unwrap();
     let values: Vec<&Value> = moved.iter().map(|record| &record.value).collect();
     assert_eq!(values, [&entry("evt-1"), &entry("evt-2")]);
-    assert!(storage.streams().streams("triggers/").await.unwrap().is_empty());
+    assert!(
+        storage
+            .streams()
+            .streams("triggers/")
+            .await
+            .unwrap()
+            .is_empty()
+    );
 
     // The archive reads the migrated history back through its public API.
     let history = TriggerArchive::new(Arc::clone(storage.streams()))

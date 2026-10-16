@@ -23,8 +23,8 @@
 
 mod archive;
 
-pub(crate) use archive::{LEGACY_STREAM_PREFIX, STREAM_NAME, STREAM_PREFIX};
 pub use archive::{DEFAULT_HISTORY_LIMIT, TriggerArchive};
+pub(crate) use archive::{LEGACY_STREAM_PREFIX, STREAM_NAME, STREAM_PREFIX};
 
 #[cfg(test)]
 #[path = "mod_tests.rs"]
