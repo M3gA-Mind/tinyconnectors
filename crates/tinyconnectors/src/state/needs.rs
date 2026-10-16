@@ -8,7 +8,7 @@
 //! `ScopeClass::Module` is granted, nothing else is. Only the host declares
 //! collections (`Registry::prepare`); the module never creates one.
 
-use tinystoragedrivers_core::schema::{Item, ScopeClass};
+use tinystoragedrivers_core::schema::{Item, Schema, ScopeClass};
 
 use super::storage_schema;
 
@@ -25,11 +25,16 @@ pub struct StorageNeeds {
 /// The grant the host gives this module, generated from [`storage_schema`](super::storage_schema).
 #[must_use]
 pub fn storage_needs() -> StorageNeeds {
+    needs_of(storage_schema())
+}
+
+/// The module-scoped collections and stream prefixes `schema` declares.
+fn needs_of(schema: Schema) -> StorageNeeds {
     let mut needs = StorageNeeds {
         collections: Vec::new(),
         stream_prefixes: Vec::new(),
     };
-    for item in storage_schema().items {
+    for item in schema.items {
         if item.scope() != ScopeClass::Module {
             continue;
         }
@@ -41,3 +46,7 @@ pub fn storage_needs() -> StorageNeeds {
     }
     needs
 }
+
+#[cfg(test)]
+#[path = "needs_tests.rs"]
+mod tests;
