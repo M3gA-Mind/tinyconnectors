@@ -5,13 +5,14 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
+use tinyconnectors_bus::vocabulary::UserScopePref;
 use tinyconnectors_sync::{LEGACY_PREFS_NAMESPACE, PREFS_NAMESPACE, PrefsStore, ScopePrefStore};
 use tinystoragedrivers_core::schema::{Item, MigrateOptions, Registry, ScopeClass};
 use tinystoragedrivers_core::{
     DocumentStore, MemoryStorage, Precondition, Scope, ScopedStorage, StorageBackend, StreamStore,
 };
 
-use super::{DocumentPrefsStore, UserScopePrefExt as _, storage_needs, storage_schema};
+use super::{DocumentPrefsStore, storage_needs, storage_schema};
 use crate::triggers::TriggerArchive;
 
 const LEGACY_STREAM: &str = "triggers/2026-10-15";
@@ -111,7 +112,7 @@ async fn a_migrated_preference_reads_through_the_store_with_its_choice_intact() 
     migrated(&storage, &backend).await;
 
     let store = DocumentPrefsStore::new(Arc::clone(storage.documents()));
-    let pref = tinyconnectors_bus::vocabulary::UserScopePref::load(&store, "slack")
+    let pref = UserScopePref::load(&store, "slack")
         .await
         .unwrap();
     assert!(pref.read);
@@ -160,7 +161,7 @@ async fn a_v1_document_without_a_value_stays_an_unreadable_preference_not_a_defa
     migrated(&storage, &backend).await;
 
     let store = DocumentPrefsStore::new(Arc::clone(storage.documents()));
-    let loaded = tinyconnectors_bus::vocabulary::UserScopePref::load(&store, "gmail").await;
+    let loaded = UserScopePref::load(&store, "gmail").await;
     assert!(loaded.is_err(), "a corrupt row must not read as defaults");
 }
 
