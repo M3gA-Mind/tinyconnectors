@@ -1,21 +1,19 @@
-//! Unit tests for the module's storage schema and its v1 to v2 steps.
+//! A migrated store reads back through the module's own preference store and
+//! trigger archive. The steps themselves are tested in `tinyconnectors-bus`.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::sync::Arc;
 
 use serde_json::{Value, json};
+use tinyconnectors_bus::storage::{LEGACY_PREFS_NAMESPACE, storage_schema};
 use tinyconnectors_bus::vocabulary::UserScopePref;
-use tinyconnectors_sync::{LEGACY_PREFS_NAMESPACE, PREFS_NAMESPACE, PrefsStore, ScopePrefStore};
-use tinystoragedrivers_core::schema::{Item, MigrateOptions, Registry, ScopeClass};
+use tinyconnectors_sync::{PrefsStore, ScopePrefStore};
+use tinystoragedrivers_core::schema::{MigrateOptions, Registry};
 use tinystoragedrivers_core::{MemoryStorage, Precondition, Scope, ScopedStorage, StorageBackend};
 
-use super::storage_schema;
-use crate::state::{DocumentPrefsStore, storage_needs};
+use crate::state::DocumentPrefsStore;
 use crate::triggers::TriggerArchive;
-
-const LEGACY_STREAM: &str = "triggers/2026-10-15";
-const STREAM: &str = "connectors.triggers/2026-10-15";
 
 fn module_storage(backend: &MemoryStorage) -> ScopedStorage {
     backend
@@ -38,63 +36,6 @@ async fn seed_v1(storage: &ScopedStorage, id: &str, body: Value) {
         .put(LEGACY_PREFS_NAMESPACE, id, body, Precondition::None)
         .await
         .unwrap();
-}
-
-#[test]
-fn the_schema_composes_and_everything_in_it_is_module_scoped() {
-    let schema = storage_schema();
-    assert_eq!(schema.owner.as_str(), "connectors");
-    assert!(Registry::compose([schema.clone()]).is_ok());
-    assert!(
-        schema
-            .items
-            .iter()
-            .all(|item| item.scope() == ScopeClass::Module)
-    );
-    let names: Vec<&str> = schema.items.iter().map(Item::name).collect();
-    assert_eq!(names, ["connectors.user_scopes", "connectors.triggers"]);
-}
-
-#[test]
-fn the_grant_is_generated_from_the_schema() {
-    let needs = storage_needs();
-    assert_eq!(needs.collections, [PREFS_NAMESPACE]);
-    assert_eq!(needs.stream_prefixes, ["connectors.triggers/"]);
-}
-
-#[tokio::test]
-async fn an_object_preference_loses_its_value_wrapper() {
-    let backend = MemoryStorage::new();
-    let storage = module_storage(&backend);
-    seed_v1(
-        &storage,
-        "gmail",
-        json!({ "value": { "read": true, "write": false, "admin": false } }),
-    )
-    .await;
-
-    migrated(&storage, &backend).await;
-
-    let found = storage
-        .documents()
-        .get(PREFS_NAMESPACE, "gmail")
-        .await
-        .unwrap()
-        .expect("the preference moved to the v2 collection");
-    assert_eq!(
-        found.doc,
-        json!({ "read": true, "write": false, "admin": false })
-    );
-    assert_eq!(found.meta.schema, 2);
-    // The v1 document is gone once the step completes.
-    assert!(
-        storage
-            .documents()
-            .get(LEGACY_PREFS_NAMESPACE, "gmail")
-            .await
-            .unwrap()
-            .is_none()
-    );
 }
 
 #[tokio::test]
@@ -162,35 +103,10 @@ async fn a_v1_document_without_a_value_stays_an_unreadable_preference_not_a_defa
     assert!(loaded.is_err(), "a corrupt row must not read as defaults");
 }
 
-#[tokio::test]
-async fn the_step_keeps_the_creation_time_and_is_idempotent() {
-    let backend = MemoryStorage::new();
-    let storage = module_storage(&backend);
-    seed_v1(&storage, "gmail", json!({ "value": { "read": false } })).await;
-    let created = storage
-        .documents()
-        .get(LEGACY_PREFS_NAMESPACE, "gmail")
-        .await
-        .unwrap()
-        .unwrap()
-        .meta
-        .created_ms;
-
-    migrated(&storage, &backend).await;
-    migrated(&storage, &backend).await;
-
-    let found = storage
-        .documents()
-        .get(PREFS_NAMESPACE, "gmail")
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(found.doc, json!({ "read": false }));
-    assert_eq!(found.meta.created_ms, created);
-}
+const LEGACY_STREAM: &str = "triggers/2026-10-15";
 
 #[tokio::test]
-async fn trigger_day_streams_move_to_the_v2_name_with_their_entries_untouched() {
+async fn migrated_trigger_history_reads_back_through_the_archive() {
     let backend = MemoryStorage::new();
     let storage = module_storage(&backend);
     let entry = |id: &str| {
@@ -203,30 +119,14 @@ async fn trigger_day_streams_move_to_the_v2_name_with_their_entries_untouched() 
             "payload": { "subject": "hi" },
         })
     };
-    storage
-        .streams()
-        .append(LEGACY_STREAM, entry("evt-1"))
-        .await
-        .unwrap();
-    storage
-        .streams()
-        .append(LEGACY_STREAM, entry("evt-2"))
-        .await
-        .unwrap();
-
-    migrated(&storage, &backend).await;
-
-    let moved = storage.streams().read_window(STREAM, 0, 10).await.unwrap();
-    let values: Vec<&Value> = moved.iter().map(|record| &record.value).collect();
-    assert_eq!(values, [&entry("evt-1"), &entry("evt-2")]);
-    assert!(
+    for id in ["evt-1", "evt-2"] {
         storage
             .streams()
-            .streams("triggers/")
+            .append(LEGACY_STREAM, entry(id))
             .await
-            .unwrap()
-            .is_empty()
-    );
+            .unwrap();
+    }
+    migrated(&storage, &backend).await;
 
     // The archive reads the migrated history back through its public API.
     let history = TriggerArchive::new(Arc::clone(storage.streams()))
