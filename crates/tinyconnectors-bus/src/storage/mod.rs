@@ -10,8 +10,8 @@
 //! the grant need the storage ports and sit behind the `storage` feature, off
 //! by default.
 //!
-//! - [`storage_schema`] — every collection and stream, plus the steps.
-//! - [`storage_needs`] — the grant generated from that schema.
+//! - `storage_schema` — every collection and stream, plus the steps.
+//! - `storage_needs` — the grant generated from that schema.
 //! - the name constants and the preference body encoding the document store
 //!   in the module crate shares with the steps.
 
