@@ -92,7 +92,7 @@ chrono = { version = "0.4", default-features = false, features = ["std", "clock"
 # The storage ports (documents, streams) the scope preferences and the trigger
 # archive are written through. Ports only: no driver crate, no database client.
 # A tag so a host that vendors tinystoragedrivers once can `[patch]` it.
-tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0" }
+tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0", default-features = false }
 # The module's side of the storage bus: `connect_storage` hands back the same
 # port traits over the module's TinyBus connection, so the host's backend (not a
 # process-local registry) is what the cdylib reads and writes. The host side of
