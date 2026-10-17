@@ -7,7 +7,7 @@ use serde_json::Value;
 use tinyconnectors_sync::{Error as SyncError, PREFS_NAMESPACE, PrefsStore, Result as SyncResult};
 use tinystoragedrivers_core::{DocumentStore, Key, Precondition, StorageError, WriteOptions};
 
-use super::schema::{PREFS_SCHEMA_VERSION, decode_preference, encode_preference};
+use tinyconnectors_bus::storage::{PREFS_SCHEMA_VERSION, decode_preference, encode_preference};
 
 /// Scope preferences persisted through a [`DocumentStore`] port.
 ///

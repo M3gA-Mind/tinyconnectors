@@ -109,6 +109,7 @@ pub use processing::{
     RecordTriggerRequest,
 };
 pub mod names;
+pub mod storage;
 pub mod version;
 
 pub use composio::{
