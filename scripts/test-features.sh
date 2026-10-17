@@ -9,8 +9,10 @@ cargo test --locked --workspace --all-features
 cargo run -p tinyconnectors --example basic
 
 set -euo pipefail
+# tokio is allowed only as `tinystoragedrivers-core` (ports) pulls it with the
+# io-util and time features; no runtime is started or required by the contract.
 forbidden="$(cargo tree -p tinyconnectors-bus -e normal,build --prefix none \
-  | grep -Ei 'tinybus|tokio|reqwest|ureq|hyper|rusqlite|git2' || true)"
+  | grep -Ei 'tinybus|reqwest|ureq|hyper|rusqlite|git2' || true)"
 if [ -n "$forbidden" ]; then
   echo "tinyconnectors-bus pulled in a dependency its manifest forbids:" >&2
   echo "$forbidden" >&2
