@@ -13,30 +13,22 @@
 //! | collection `composio-user-scopes`, id = toolkit, body `{ "value": … }` | collection `connectors.user_scopes`, id = `Key::of([toolkit])` | the `value` wrapper is removed |
 //! | streams `triggers/<YYYY-MM-DD>` | streams `connectors.triggers/<YYYY-MM-DD>` | renamed, entries unchanged |
 //!
-//! A document body must be a JSON object, but a preference is any JSON value.
-//! An object value becomes the body as it is. Any other value is stored under
-//! the reserved field [`NON_OBJECT_FIELD`]: `{ "non_object_value": <value> }`.
-//! An object value that itself uses that field is wrapped the same way, so a
-//! body with exactly that one field always means "wrapped" and the encoding
-//! loses nothing.
+//! The preference body encoding is in [`encode_preference`](super::encode_preference).
 
-use serde_json::{Value, json};
-use tinyconnectors_sync::{LEGACY_PREFS_NAMESPACE, PREFS_NAMESPACE};
+use serde_json::Value;
 use tinystoragedrivers_core::schema::{
     Owner, Schema, ScopeClass, SourceRecord, Step, TargetRecord,
 };
 use tinystoragedrivers_core::{Key, Result, SealPolicy, SealWhen};
 
-use crate::triggers::{LEGACY_STREAM_PREFIX, STREAM_NAME, STREAM_PREFIX};
+use super::names::{
+    LEGACY_PREFS_NAMESPACE, LEGACY_STREAM_PREFIX, PREFS_NAMESPACE, PREFS_SCHEMA_VERSION,
+    STREAM_NAME, STREAM_PREFIX,
+};
+use super::preference::encode_preference;
 
 /// The owner prefix every v2 name of this module starts with.
 const OWNER: &str = "connectors";
-
-/// The body version [`PREFS_NAMESPACE`] documents are written at.
-pub(super) const PREFS_SCHEMA_VERSION: u32 = 2;
-
-/// Reserved field holding a preference that is not a plain object.
-pub(super) const NON_OBJECT_FIELD: &str = "non_object_value";
 
 /// A finished day's stream is sealed once it has been idle this long. Nothing
 /// appends to a day after its UTC midnight, so two days is a wide margin.
@@ -75,24 +67,6 @@ pub fn storage_schema() -> Schema {
             })
             .source_prefix(LEGACY_STREAM_PREFIX),
         )
-}
-
-/// The v2 body for a preference value.
-pub(super) fn encode_preference(value: &Value) -> Value {
-    match value {
-        Value::Object(fields) if !fields.contains_key(NON_OBJECT_FIELD) => value.clone(),
-        other => json!({ NON_OBJECT_FIELD: other }),
-    }
-}
-
-/// The preference value a v2 body holds: the inverse of [`encode_preference`].
-pub(super) fn decode_preference(body: Value) -> Value {
-    match body {
-        Value::Object(mut fields) if fields.len() == 1 && fields.contains_key(NON_OBJECT_FIELD) => {
-            fields.remove(NON_OBJECT_FIELD).unwrap_or(Value::Null)
-        }
-        other => other,
-    }
 }
 
 /// Step `user_scopes_unwrap_value`: `{ "value": v }` becomes the encoding of `v`.

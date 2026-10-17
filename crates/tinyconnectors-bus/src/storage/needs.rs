@@ -10,7 +10,7 @@
 
 use tinystoragedrivers_core::schema::{Item, Schema, ScopeClass};
 
-use super::storage_schema;
+use super::schema::storage_schema;
 
 /// Collections and stream prefixes the module reads and writes.
 #[derive(Debug, Clone, PartialEq, Eq)]

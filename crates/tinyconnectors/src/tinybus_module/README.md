@@ -21,8 +21,8 @@ module shutdown drops the table. Hosts close the old user's lease when switching
 identity. Existing load-time `ListTriggerHistory` remains compatible. Records
 live in the host's tinystoragedrivers stream and document stores, reached over
 the storage bus (`tinystoragedrivers-busproxy::connect_storage`); the grant the
-host must give is generated from `tinyconnectors::storage_schema()` (everything
-in it is `ScopeClass::Module`; `tinyconnectors::state::storage_needs()` lists
+host must give is generated from `tinyconnectors_bus::storage::storage_schema()` (everything
+in it is `ScopeClass::Module`; `tinyconnectors_bus::storage::storage_needs()` lists
 it: collection `connectors.user_scopes`, stream prefix `connectors.triggers/`).
 The schema also carries the v1 to v2 migration steps the host runs with
 `Registry::migrate`; existing

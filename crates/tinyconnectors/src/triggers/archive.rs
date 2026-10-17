@@ -10,15 +10,10 @@ use crate::{ComposioTriggerHistoryEntry, ComposioTriggerHistoryResult, Error, Re
 /// Deliveries returned when a caller does not say how many it wants.
 pub const DEFAULT_HISTORY_LIMIT: usize = 50;
 
-/// The stream family (schema v2). Each day's stream is `connectors.triggers/<YYYY-MM-DD>`.
-pub(crate) const STREAM_NAME: &str = "connectors.triggers";
-
-/// Prefix of every day's stream: [`STREAM_NAME`] and a slash.
-pub(crate) const STREAM_PREFIX: &str = "connectors.triggers/";
-
-/// Prefix of the v1 day streams, `triggers/<YYYY-MM-DD>`. Only the migration
-/// step reads it.
-pub(crate) const LEGACY_STREAM_PREFIX: &str = "triggers/";
+/// Each day's stream is `STREAM_PREFIX` and the UTC date. The names are
+/// declared once, in the contract crate, beside the migration that renames
+/// them.
+pub(crate) use tinyconnectors_bus::storage::STREAM_PREFIX;
 
 /// A daily-rotated record of webhook deliveries, one stream per UTC day.
 #[derive(Debug, Clone)]
