@@ -18,7 +18,7 @@ Scope preferences and the trigger archive no longer write files.
   statics, so a host registry never reached it. The configuration's `state_dir`
   and `OpenArchiveRequest.state_dir` are accepted and ignored for wire
   compatibility.
-- The host grant is generated from `tinyconnectors::storage_schema()` (schema
+- The host grant is generated from `tinyconnectors_bus::storage::storage_schema()` (schema
   v2, owner `connectors`, every item `ScopeClass::Module`): collection
   `connectors.user_scopes` (id `Key::of([toolkit])`, body the preference itself;
   a non-object preference sits under `non_object_value`), stream prefix
