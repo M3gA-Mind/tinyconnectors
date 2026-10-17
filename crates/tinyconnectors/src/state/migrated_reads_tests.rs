@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use tinyconnectors_bus::storage::{LEGACY_PREFS_NAMESPACE, storage_schema};
+use tinyconnectors_bus::storage::{LEGACY_PREFS_NAMESPACE, PREFS_NAMESPACE, storage_schema};
 use tinyconnectors_bus::vocabulary::UserScopePref;
 use tinyconnectors_sync::{PrefsStore, ScopePrefStore};
 use tinystoragedrivers_core::schema::{MigrateOptions, Registry};
