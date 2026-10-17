@@ -3,16 +3,8 @@
 use super::store::PrefsStore;
 use crate::{Error, Result};
 
-/// The collection holding one document per toolkit (schema v2).
-///
-/// Durable: changing it strands every user's saved choices, and each toolkit
-/// silently reads as the default again. Pinned by a test. A rename needs a
-/// migration step from the old name, as [`LEGACY_PREFS_NAMESPACE`] has one.
-pub const PREFS_NAMESPACE: &str = "connectors.user_scopes";
-
-/// The v1 name of [`PREFS_NAMESPACE`], whose documents wrapped the preference
-/// as `{ "value": … }`. Only the migration step reads it.
-pub const LEGACY_PREFS_NAMESPACE: &str = "composio-user-scopes";
+// Declared once, in the contract crate beside the storage schema that uses them.
+pub use tinyconnectors_bus::storage::{LEGACY_PREFS_NAMESPACE, PREFS_NAMESPACE};
 
 pub use tinyconnectors_bus::vocabulary::UserScopePref;
 

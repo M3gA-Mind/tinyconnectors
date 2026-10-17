@@ -138,8 +138,14 @@ async fn a_non_object_preference_moves_under_a_named_field_and_reads_back_whole(
         .unwrap();
     assert_eq!(found.doc, json!({ "non_object_value": [1, 2] }));
 
-    assert_eq!(stored_preference(&storage, "slack").await.unwrap(), json!([1, 2]));
-    assert_eq!(stored_preference(&storage, "notion").await.unwrap(), json!("x"));
+    assert_eq!(
+        stored_preference(&storage, "slack").await.unwrap(),
+        json!([1, 2])
+    );
+    assert_eq!(
+        stored_preference(&storage, "notion").await.unwrap(),
+        json!("x")
+    );
 }
 
 #[tokio::test]
