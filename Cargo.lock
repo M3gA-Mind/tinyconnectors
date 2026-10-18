@@ -1399,7 +1399,7 @@ dependencies = [
  "tinyconnectors-sync",
  "tinystoragedrivers-busproxy",
  "tinystoragedrivers-client",
- "tinystoragedrivers-core",
+ "tinystoragedrivers-core 0.11.0",
  "tokio",
  "tracing",
  "ureq",
@@ -1416,7 +1416,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "thiserror",
- "tinystoragedrivers-core",
+ "tinystoragedrivers-core 0.11.0",
  "tokio",
 ]
 
@@ -1453,7 +1453,7 @@ dependencies = [
  "tinybus",
  "tinystoragedrivers-bus",
  "tinystoragedrivers-client",
- "tinystoragedrivers-core",
+ "tinystoragedrivers-core 1.0.0",
  "tokio",
 ]
 
@@ -1466,8 +1466,20 @@ dependencies = [
  "serde",
  "serde_json",
  "tinystoragedrivers-bus",
- "tinystoragedrivers-core",
+ "tinystoragedrivers-core 1.0.0",
  "tinystoragedrivers-secrets",
+ "tokio",
+]
+
+[[package]]
+name = "tinystoragedrivers-core"
+version = "0.11.0"
+source = "git+https://github.com/tinyhumansai/tinystoragedrivers?tag=v0.11.0#9eeef54aea403ac07461a612189bdf4982782823"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror",
  "tokio",
 ]
 
@@ -1502,7 +1514,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "tinystoragedrivers-core",
+ "tinystoragedrivers-core 1.0.0",
  "tokio",
  "winapi-util",
  "windows-permissions",
