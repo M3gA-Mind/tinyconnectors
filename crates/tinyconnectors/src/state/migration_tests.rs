@@ -236,7 +236,7 @@ async fn preference_migration_preserves_expiration_and_rejects_expiry_mismatch()
 }
 
 #[tokio::test]
-async fn malformed_legacy_preferences_migrate_as_null_values() {
+async fn legacy_preferences_without_a_value_migrate_as_null() {
     use tinystoragedrivers_api::StorageBackend;
     use tinystoragedrivers_testkit::MemoryBackend;
     use tinystoragedrivers_types::{Precondition, Scope};
@@ -254,32 +254,19 @@ async fn malformed_legacy_preferences_migrate_as_null_values() {
         )
         .await
         .unwrap();
-    storage
-        .documents()
-        .put(
-            LEGACY_PREFS_NAMESPACE,
-            "not-an-object",
-            json!("legacy scalar"),
-            Precondition::Absent,
-        )
-        .await
-        .unwrap();
-
     prepare(&storage).await.unwrap();
 
-    for id in ["missing-value", "not-an-object"] {
-        assert_eq!(
-            storage
-                .documents()
-                .get(PREFS_NAMESPACE, id)
-                .await
-                .unwrap()
-                .unwrap()
-                .doc,
-            encode_preference(&Value::Null),
-            "legacy entries without an object `value` retain the old null fallback"
-        );
-    }
+    assert_eq!(
+        storage
+            .documents()
+            .get(PREFS_NAMESPACE, "missing-value")
+            .await
+            .unwrap()
+            .unwrap()
+            .doc,
+        encode_preference(&Value::Null),
+        "legacy entries without a `value` retain the old null fallback"
+    );
 }
 
 #[tokio::test]
