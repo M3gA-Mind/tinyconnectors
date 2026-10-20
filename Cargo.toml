@@ -100,7 +100,6 @@ tinystoragedrivers-api = { git = "https://github.com/senamakel/tinystoragedriver
 tinystoragedrivers-busproxy = { git = "https://github.com/senamakel/tinystoragedrivers", tag = "v2.0.0" }
 # Test-only backend factories and decorators; never part of a published normal tree.
 tinystoragedrivers-testkit = { git = "https://github.com/senamakel/tinystoragedrivers", tag = "v2.0.0" }
-tinystoragedrivers-document = { git = "https://github.com/senamakel/tinystoragedrivers", tag = "v2.0.0" }
 
 # Lints apply to every member that opts in with `[lints] workspace = true`, and
 # to every target of that member. CI runs clippy with `-D warnings`, so anything

@@ -34,7 +34,6 @@ tinystoragedrivers-types = { workspace = true, optional = true }
 [dev-dependencies]
 # The contract crate tests its pure declarations without selecting an engine.
 tokio = { workspace = true }
-tinystoragedrivers-testkit = { workspace = true }
 
 [features]
 # `storage::{collections, storage_needs}`: collection declarations and the

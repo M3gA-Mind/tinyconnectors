@@ -1235,6 +1235,34 @@ async fn scope_preferences_persist_in_the_hosts_documents_across_instances() -> 
 }
 
 #[tokio::test]
+async fn first_storage_open_migrates_legacy_preferences_before_serving_reads() -> tinybus::Result<()> {
+    let (_serving, proxy, host) = serve_with_storage(ModuleConfig::default()).await?;
+    host.scoped
+        .documents()
+        .put(
+            "composio-user-scopes",
+            "gmail",
+            json!({"value": {"read": true, "write": false, "admin": false}}),
+            tinystoragedrivers_types::Precondition::None,
+        )
+        .await
+        .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+
+    let read_back: ComposioUserScopesResponse = proxy
+        .call(
+            names::methods::GET_USER_SCOPES,
+            (ComposioGetUserScopesRequest {
+                toolkit: "gmail".into(),
+            },),
+        )
+        .await?;
+    assert!(read_back.scopes.read);
+    assert!(!read_back.scopes.write);
+    assert!(!read_back.scopes.admin);
+    Ok(())
+}
+
+#[tokio::test]
 async fn without_served_storage_preferences_fail_instead_of_being_forgotten() {
     let store = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
     assert!(

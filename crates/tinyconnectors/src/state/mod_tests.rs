@@ -147,6 +147,11 @@ fn the_declared_grant_matches_what_the_stores_write() {
     // another collection or stream prefix without it, every call would be
     // refused by the grant.
     let needs = storage_needs();
+    assert_eq!(
+        super::collections(),
+        tinyconnectors_bus::storage::collections(),
+        "host collection declarations and owner-open migration declarations must agree"
+    );
     assert!(needs.collections.contains(&PREFS_NAMESPACE.to_owned()));
     assert_eq!(needs.stream_prefixes, ["connectors.triggers/"]);
     let archive = crate::triggers::TriggerArchive::new(scoped("grant").streams().clone());
