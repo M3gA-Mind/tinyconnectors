@@ -124,7 +124,9 @@ async fn migrate_preferences(
                 Ok(_) => {}
                 Err(error) if error.kind() == tinystoragedrivers_types::ErrorKind::Conflict => {
                     let current = documents.get(PREFS_NAMESPACE, id.as_str()).await?;
-                    if current.is_none_or(|current| current.doc != body) {
+                    if current.is_none_or(|current| {
+                        current.doc != body || current.meta.expires_ms != record.meta.expires_ms
+                    }) {
                         return Err(error);
                     }
                 }
@@ -158,7 +160,8 @@ async fn migrate_streams(streams: &dyn StreamStore) -> tinystoragedrivers_types:
         // target contains the same events.
         let mut verified = 0;
         while verified < target_len {
-            let limit = (target_len - verified).min(PAGE_SIZE as u64) as usize;
+            let limit = usize::try_from((target_len - verified).min(PAGE_SIZE as u64))
+                .map_err(|_| StorageError::invalid_input("stream page exceeds addressable size"))?;
             let source_entries = streams.read_window(&source, verified, limit).await?;
             let target_entries = streams.read_window(&target, verified, limit).await?;
             if source_entries.len() != limit

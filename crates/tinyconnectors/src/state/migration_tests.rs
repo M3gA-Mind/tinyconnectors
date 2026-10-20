@@ -103,6 +103,139 @@ async fn preference_collision_preserves_the_legacy_source_and_refuses_open() {
 }
 
 #[tokio::test]
+async fn preference_migration_resumes_matching_targets_across_pages() {
+    use tinystoragedrivers_api::StorageBackend;
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::{Precondition, Scope};
+
+    let storage = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-preference-pagination").unwrap())
+        .unwrap();
+    for index in 0..(PAGE_SIZE + 3) {
+        let id = format!("preference-{index:03}");
+        let value = json!({"enabled": index % 2 == 0, "index": index});
+        storage
+            .documents()
+            .put(
+                LEGACY_PREFS_NAMESPACE,
+                &id,
+                json!({"value": value}),
+                Precondition::Absent,
+            )
+            .await
+            .unwrap();
+    }
+
+    // A previous interrupted opener may have written this exact destination
+    // before advancing the query cursor. It is safe to accept and continue.
+    let first = encode_preference(&json!({"enabled": true, "index": 0}));
+    storage
+        .documents()
+        .put(
+            PREFS_NAMESPACE,
+            "preference-000",
+            first,
+            Precondition::Absent,
+        )
+        .await
+        .unwrap();
+
+    prepare(&storage).await.unwrap();
+
+    for index in 0..(PAGE_SIZE + 3) {
+        let id = format!("preference-{index:03}");
+        let expected = encode_preference(&json!({"enabled": index % 2 == 0, "index": index}));
+        assert_eq!(
+            storage
+                .documents()
+                .get(PREFS_NAMESPACE, &id)
+                .await
+                .unwrap()
+                .unwrap()
+                .doc,
+            expected
+        );
+    }
+    assert!(
+        done(storage.documents().as_ref(), PREFS_STEP)
+            .await
+            .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn preference_migration_preserves_expiration_and_rejects_expiry_mismatch() {
+    use tinystoragedrivers_api::StorageBackend;
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::{Precondition, Scope, WriteOptions};
+
+    let expires_ms = 4_000_000_000_000;
+    let value = json!({"enabled": true});
+    let body = encode_preference(&value);
+
+    let collision = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-preference-expiry-conflict").unwrap())
+        .unwrap();
+    collision
+        .documents()
+        .put_with(
+            LEGACY_PREFS_NAMESPACE,
+            "gmail",
+            json!({"value": value}),
+            Precondition::Absent,
+            WriteOptions::new().expires_ms(expires_ms),
+        )
+        .await
+        .unwrap();
+    // The payload matches, but accepting this destination would silently
+    // remove the source's absolute expiration.
+    collision
+        .documents()
+        .put(PREFS_NAMESPACE, "gmail", body.clone(), Precondition::Absent)
+        .await
+        .unwrap();
+    let error = prepare(&collision)
+        .await
+        .expect_err("matching payload with different expiry is a collision");
+    assert_eq!(error.kind(), tinystoragedrivers_types::ErrorKind::Conflict);
+    assert_eq!(
+        collision
+            .documents()
+            .get(LEGACY_PREFS_NAMESPACE, "gmail")
+            .await
+            .unwrap()
+            .unwrap()
+            .meta
+            .expires_ms,
+        Some(expires_ms)
+    );
+
+    let migrated = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-preference-expiry-copy").unwrap())
+        .unwrap();
+    migrated
+        .documents()
+        .put_with(
+            LEGACY_PREFS_NAMESPACE,
+            "gmail",
+            json!({"value": value}),
+            Precondition::Absent,
+            WriteOptions::new().expires_ms(expires_ms),
+        )
+        .await
+        .unwrap();
+    prepare(&migrated).await.unwrap();
+    let target = migrated
+        .documents()
+        .get(PREFS_NAMESPACE, "gmail")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(target.doc, body);
+    assert_eq!(target.meta.expires_ms, Some(expires_ms));
+}
+
+#[tokio::test]
 async fn stream_migration_refuses_a_target_longer_than_its_source() {
     use tinystoragedrivers_api::StorageBackend;
     use tinystoragedrivers_testkit::MemoryBackend;
@@ -171,6 +304,53 @@ async fn stream_migration_refuses_same_length_target_with_different_events() {
         storage.streams().len("triggers/2026-10-16").await.unwrap(),
         1,
         "the source is preserved when target verification fails"
+    );
+}
+
+#[tokio::test]
+async fn stream_migration_resumes_a_matching_partial_target() {
+    use tinystoragedrivers_api::StorageBackend;
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::Scope;
+
+    let storage = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-stream-resume").unwrap())
+        .unwrap();
+    let source = "triggers/2026-10-17";
+    let target = "connectors.triggers/2026-10-17";
+    for index in 0..3 {
+        storage
+            .streams()
+            .append(source, json!({"event": index}))
+            .await
+            .unwrap();
+    }
+    for index in 0..2 {
+        storage
+            .streams()
+            .append(target, json!({"event": index}))
+            .await
+            .unwrap();
+    }
+
+    prepare(&storage).await.unwrap();
+
+    assert_eq!(storage.streams().len(source).await.unwrap(), 0);
+    assert_eq!(storage.streams().len(target).await.unwrap(), 3);
+    assert_eq!(
+        storage
+            .streams()
+            .read_window(target, 0, 3)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|entry| entry.value)
+            .collect::<Vec<_>>(),
+        vec![
+            json!({"event": 0}),
+            json!({"event": 1}),
+            json!({"event": 2})
+        ]
     );
 }
 

@@ -608,33 +608,60 @@ async fn verify_direct_and_routed_members(
 }
 
 async fn verify_archive_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
-    let history_unavailable = proxy
+    let history = proxy
         .call::<tinyconnectors_bus::ComposioTriggerHistoryResult>(
             methods::LIST_TRIGGER_HISTORY,
             (tinyconnectors_bus::ComposioListTriggerHistoryRequest { limit: Some(1) },),
         )
-        .await;
-    if !matches!(history_unavailable, Err(error) if error.to_string().contains("does not serve storage"))
-    {
-        return Err(
-            io::Error::other("ListTriggerHistory did not explain its missing archive").into(),
-        );
+        .await?;
+    if !history.entries.is_empty() {
+        return Err(io::Error::other("new archive unexpectedly contained trigger history").into());
     }
-    // The loaded module writes through the host storage bus; this
-    // verifier serves none, so opening a lease must be refused rather than
-    // silently writing somewhere the host never chose.
-    let state_dir = std::env::current_dir()?.join("target/module-e2e-archive");
-    let refused = proxy
-        .call::<tinyconnectors_bus::ArchiveHandle>(
+    // Archive state is backed by the explicit TSD storage host connected to
+    // this module. Verify the complete open/write/read/close path.
+    let handle: tinyconnectors_bus::ArchiveHandle = proxy
+        .call(
             methods::OPEN_ARCHIVE,
             (tinyconnectors_bus::OpenArchiveRequest {
-                state_dir: state_dir.to_string_lossy().into_owned(),
+                state_dir: "ignored".into(),
             },),
         )
-        .await;
-    if !matches!(refused, Err(error) if error.to_string().contains("storage unavailable")) {
-        return Err(io::Error::other("OpenArchive did not refuse missing host storage").into());
+        .await?;
+    let event = tinyconnectors_bus::ComposioTriggerEvent {
+        toolkit: "gmail".into(),
+        trigger: "GMAIL_NEW_GMAIL_MESSAGE".into(),
+        payload: serde_json::json!({"module_e2e": true}),
+        metadata: tinyconnectors_bus::ComposioTriggerMetadata {
+            id: "module-e2e-event".into(),
+            uuid: "module-e2e-uuid".into(),
+            ..Default::default()
+        },
+    };
+    proxy
+        .call::<tinyconnectors_bus::ComposioTriggerHistoryEntry>(
+            methods::RECORD_TRIGGER,
+            (tinyconnectors_bus::RecordTriggerRequest {
+                handle: handle.clone(),
+                event,
+            },),
+        )
+        .await?;
+    let recorded: tinyconnectors_bus::ComposioTriggerHistoryResult = proxy
+        .call(
+            methods::READ_ARCHIVE,
+            (tinyconnectors_bus::ReadArchiveRequest {
+                handle: handle.clone(),
+                limit: None,
+            },),
+        )
+        .await?;
+    if recorded.entries.len() != 1
+        || recorded.entries[0].metadata_id != "module-e2e-event"
+        || recorded.entries[0].payload != serde_json::json!({"module_e2e": true})
+    {
+        return Err(io::Error::other("archive storage did not preserve the recorded event").into());
     }
+    proxy.call::<()>(methods::CLOSE_ARCHIVE, (handle,)).await?;
     Ok(())
 }
 
