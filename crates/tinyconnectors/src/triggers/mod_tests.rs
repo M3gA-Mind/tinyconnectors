@@ -4,16 +4,18 @@
 
 use std::sync::Arc;
 
-use async_trait::async_trait;
 use serde_json::{Value, json};
-use tinystoragedrivers_core::{
-    MemoryStorage, Scope, StorageBackend, StorageError, StreamEntry, StreamStore,
+use async_trait::async_trait;
+use tinystoragedrivers_api::{StorageBackend, StreamStore};
+use tinystoragedrivers_testkit::{Failing, MemoryBackend};
+use tinystoragedrivers_types::{
+    Capabilities, ErrorKind, Result as StorageResult, Scope, StreamEntry,
 };
 
 use super::{DEFAULT_HISTORY_LIMIT, TriggerArchive};
 
 fn streams() -> Arc<dyn StreamStore> {
-    MemoryStorage::new()
+    MemoryBackend::new()
         .for_scope(&Scope::new("alice").unwrap())
         .unwrap()
         .streams()
@@ -251,35 +253,38 @@ async fn concurrent_deliveries_are_all_kept() {
 }
 
 #[derive(Debug)]
-struct Broken;
+struct FailingStreams(Failing<dyn StreamStore>);
 
 #[async_trait]
-impl StreamStore for Broken {
-    async fn append(&self, _: &str, _: Value) -> tinystoragedrivers_core::Result<u64> {
-        Err(StorageError::invalid_input("down"))
+impl StreamStore for FailingStreams {
+    fn capabilities(&self) -> Capabilities {
+        self.0.inner.capabilities()
     }
-    async fn append_batch(&self, _: &str, _: Vec<Value>) -> tinystoragedrivers_core::Result<u64> {
-        Err(StorageError::invalid_input("down"))
+    async fn append(&self, stream: &str, value: Value) -> StorageResult<u64> {
+        self.0.call("append", self.0.inner.append(stream, value)).await
+    }
+    async fn append_batch(&self, stream: &str, values: Vec<Value>) -> StorageResult<u64> {
+        self.0.call("append_batch", self.0.inner.append_batch(stream, values)).await
     }
     async fn read_window(
         &self,
-        _: &str,
-        _: u64,
-        _: usize,
-    ) -> tinystoragedrivers_core::Result<Vec<StreamEntry>> {
-        Err(StorageError::invalid_input("down"))
+        stream: &str,
+        from: u64,
+        limit: usize,
+    ) -> StorageResult<Vec<StreamEntry>> {
+        self.0.call("read_window", self.0.inner.read_window(stream, from, limit)).await
     }
-    async fn len(&self, _: &str) -> tinystoragedrivers_core::Result<u64> {
-        Err(StorageError::invalid_input("down"))
+    async fn len(&self, stream: &str) -> StorageResult<u64> {
+        self.0.call("len", self.0.inner.len(stream)).await
     }
-    async fn truncate_before(&self, _: &str, _: u64) -> tinystoragedrivers_core::Result<u64> {
-        Err(StorageError::invalid_input("down"))
+    async fn truncate_before(&self, stream: &str, offset: u64) -> StorageResult<u64> {
+        self.0.call("truncate_before", self.0.inner.truncate_before(stream, offset)).await
     }
-    async fn delete_stream(&self, _: &str) -> tinystoragedrivers_core::Result<bool> {
-        Err(StorageError::invalid_input("down"))
+    async fn delete_stream(&self, stream: &str) -> StorageResult<bool> {
+        self.0.call("delete_stream", self.0.inner.delete_stream(stream)).await
     }
-    async fn streams(&self, _: &str) -> tinystoragedrivers_core::Result<Vec<String>> {
-        Err(StorageError::invalid_input("down"))
+    async fn streams(&self, prefix: &str) -> StorageResult<Vec<String>> {
+        self.0.call("streams", self.0.inner.streams(prefix)).await
     }
 }
 
@@ -287,11 +292,18 @@ impl StreamStore for Broken {
 async fn storage_failures_are_reported_not_swallowed() {
     // A delivery that cannot be archived is still delivered, but the failure
     // must not be silent.
-    let archive = TriggerArchive::new(Arc::new(Broken));
+    let streams = streams();
+    let failing = Failing::new(streams);
+    failing.faults.fail_operation_nth("append", 1, ErrorKind::Unavailable);
+    let adapter = Arc::new(FailingStreams(failing.clone()));
+    let archive = TriggerArchive::new(adapter);
     let error = archive
         .record("gmail", "T", "evt-0", "u", &json!({}))
         .await
         .expect_err("must report");
     assert!(matches!(error, crate::Error::Archive { .. }));
+    failing
+        .faults
+        .fail_operation_nth("streams", 1, ErrorKind::Unavailable);
     assert!(archive.list_recent(None).await.is_err());
 }

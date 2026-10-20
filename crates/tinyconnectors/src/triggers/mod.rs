@@ -13,8 +13,9 @@
 //! migration.
 //!
 //! Splitting by day rather than one growing stream means a read for the last
-//! twenty entries touches one small stream instead of the tail of a large one,
-//! and retention is a matter of deleting old streams.
+//! twenty entries touches one small stream instead of the tail of a large one.
+//! Once a day is beyond the idle window, the archive asks the stream port to
+//! seal it so the driver can apply its configured retention policy.
 //!
 //! # Concurrency
 //!
