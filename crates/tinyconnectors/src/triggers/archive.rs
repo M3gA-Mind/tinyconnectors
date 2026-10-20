@@ -3,7 +3,8 @@
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tinystoragedrivers_core::StreamStore;
+use tinystoragedrivers_api::StreamStore;
+use tinystoragedrivers_types::Capability;
 
 use crate::{ComposioTriggerHistoryEntry, ComposioTriggerHistoryResult, Error, Result};
 
@@ -79,6 +80,12 @@ impl TriggerArchive {
             .await
             .map_err(|error| failed(format!("could not append to the archive: {error}")))?;
 
+        if self.streams.capabilities().contains(Capability::StreamSeal)
+            && let Err(error) = self.seal_idle_days().await
+        {
+            tracing::warn!(%error, "[connectors][triggers] could not seal idle archive streams");
+        }
+
         tracing::debug!(
             toolkit = %entry.toolkit,
             trigger = %entry.trigger,
@@ -99,6 +106,14 @@ impl TriggerArchive {
     ///
     /// Returns [`Error::Archive`] when the archive cannot be listed or read.
     pub async fn list_recent(&self, limit: Option<usize>) -> Result<ComposioTriggerHistoryResult> {
+        if self.streams.capabilities().contains(Capability::StreamSeal) {
+            self.seal_idle_days()
+                .await
+                .map_err(|error| Error::Archive {
+                    path: STREAM_PREFIX.to_owned(),
+                    message: format!("could not apply archive retention: {error}"),
+                })?;
+        }
         let limit = limit.unwrap_or(DEFAULT_HISTORY_LIMIT).max(1);
         let failed = |stream: &str, message: String| Error::Archive {
             path: stream.to_string(),
@@ -157,6 +172,38 @@ impl TriggerArchive {
             entries,
         })
     }
+
+    async fn seal_idle_days(&self) -> tinystoragedrivers_types::Result<()> {
+        let now = i64::try_from(now_ms()).unwrap_or(i64::MAX);
+        for stream in self.streams.streams(STREAM_PREFIX).await? {
+            if let Some(info) = self.streams.info(&stream).await?
+                && RETENTION.should_seal(now, info.last_append_ms)
+            {
+                self.streams.seal(&stream).await?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// An archive day is immutable after its UTC day plus this idle margin.
+const DAY_STREAM_IDLE_MS: u64 = 2 * 24 * 60 * 60 * 1000;
+
+/// Connector-owned retention trigger for completed UTC-day streams.
+#[derive(Debug, Clone, Copy)]
+struct ArchiveRetention {
+    idle_ms: u64,
+}
+
+const RETENTION: ArchiveRetention = ArchiveRetention {
+    idle_ms: DAY_STREAM_IDLE_MS,
+};
+
+impl ArchiveRetention {
+    fn should_seal(self, now_ms: i64, last_append_ms: Option<i64>) -> bool {
+        let idle_ms = i64::try_from(self.idle_ms).unwrap_or(i64::MAX);
+        last_append_ms.is_some_and(|last| last <= now_ms.saturating_sub(idle_ms))
+    }
 }
 
 fn day_stream(day: &str) -> String {
@@ -182,3 +229,7 @@ fn now_ms() -> u64 {
 fn utc_day() -> String {
     chrono::Utc::now().format("%Y-%m-%d").to_string()
 }
+
+#[cfg(test)]
+#[path = "archive_tests.rs"]
+mod tests;

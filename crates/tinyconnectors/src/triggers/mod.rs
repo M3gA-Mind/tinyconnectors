@@ -13,8 +13,12 @@
 //! migration.
 //!
 //! Splitting by day rather than one growing stream means a read for the last
-//! twenty entries touches one small stream instead of the tail of a large one,
-//! and retention is a matter of deleting old streams.
+//! twenty entries touches one small stream instead of the tail of a large one.
+//! The owner seals days after the idle window. `list_recent` reports failures
+//! from that retention pass; `record` logs a maintenance failure after its
+//! append has committed, so callers do not retry an already-persisted delivery.
+//! This is the module-local replacement for the former host-composed
+//! `SealPolicy` maintenance declaration.
 //!
 //! # Concurrency
 //!

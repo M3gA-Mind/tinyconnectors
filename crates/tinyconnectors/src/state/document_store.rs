@@ -5,7 +5,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use serde_json::Value;
 use tinyconnectors_sync::{Error as SyncError, PREFS_NAMESPACE, PrefsStore, Result as SyncResult};
-use tinystoragedrivers_core::{DocumentStore, Key, Precondition, StorageError, WriteOptions};
+use tinystoragedrivers_api::DocumentStore;
+use tinystoragedrivers_types::{Key, Precondition, StorageError, WriteOptions};
 
 use tinyconnectors_bus::storage::{PREFS_SCHEMA_VERSION, decode_preference, encode_preference};
 
@@ -14,7 +15,7 @@ use tinyconnectors_bus::storage::{PREFS_SCHEMA_VERSION, decode_preference, encod
 /// The collection is [`PREFS_NAMESPACE`] and the document id is
 /// `Key::of([toolkit])`. The body is the preference itself: an object is stored
 /// as it is, and any other value under a reserved field (see
-/// [`storage_schema`](super::storage_schema)). The port is already bound to the caller's scope, so one user's
+/// [`super::migration::collections`]). The port is already bound to the caller's scope, so one user's
 /// preferences are never visible to another.
 #[derive(Debug, Clone)]
 pub struct DocumentPrefsStore {
@@ -39,7 +40,8 @@ fn failed(key: &str, action: &str, error: &StorageError) -> SyncError {
 
 /// The document id for a toolkit key.
 fn document_id(key: &str) -> SyncResult<Key> {
-    Key::of([key]).map_err(|error| failed(key, "address the preference", &error))
+    super::migration::legacy_key([key])
+        .map_err(|error| failed(key, "address the preference", &error))
 }
 
 #[async_trait]

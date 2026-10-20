@@ -5,12 +5,12 @@ Status: accepted (tinyhumansai/openhuman#7522, #7641)
 Scope preferences and the trigger archive no longer write files.
 
 - Preferences: `DocumentPrefsStore` over a `DocumentStore`, collection
-  `composio-user-scopes`, document id = toolkit key, body `{ "value": <pref> }`.
+  `connectors.user_scopes`, document id = legacy composite key, body the preference.
 - Trigger archive: `TriggerArchive` over a `StreamStore`, one stream per UTC day
   named `connectors.triggers/<YYYY-MM-DD>` (`triggers/<YYYY-MM-DD>` before schema v2). The port assigns offsets atomically, so the
   file lock (and `fs4`) is gone.
-- The crate depends on `tinystoragedrivers-core` only (no driver, no database
-  client).
+- The crate's normal storage dependencies are `tinystoragedrivers-types` and
+  `tinystoragedrivers-api` (plus `tinystoragedrivers-busproxy` for its module).
 - The module reaches the ports over the host's storage bus
   (`tinystoragedrivers-busproxy::connect_storage`, as tinychannels does), lazily
   and scoped by the host from the authenticated caller. The process-local
@@ -18,15 +18,16 @@ Scope preferences and the trigger archive no longer write files.
   statics, so a host registry never reached it. The configuration's `state_dir`
   and `OpenArchiveRequest.state_dir` are accepted and ignored for wire
   compatibility.
-- The host grant is generated from `tinyconnectors_bus::storage::storage_schema()` (schema
-  v2, owner `connectors`, every item `ScopeClass::Module`): collection
-  `connectors.user_scopes` (id `Key::of([toolkit])`, body the preference itself;
-  a non-object preference sits under `non_object_value`), stream prefix
-  `connectors.triggers/`. The schema's steps move v1 data
-  (`composio-user-scopes` with its `value` wrapper, streams `triggers/<day>`)
-  forward. The module never calls `ensure_collection`.
-- With no storage served, preferences stay in memory (each fall-back is logged)
-  and trigger history / archive leases report storage unavailable.
+- The host provisions the pure `collections()` declarations and grants the
+  names returned by `tinyconnectors_bus::storage::storage_needs()`, including
+  the legacy source names needed for migration. On its first bound storage
+  open, the module runs its own idempotent migration of v1 preferences and
+  trigger streams. Preferences live in `connectors.user_scopes` (id uses the
+  legacy composite-key encoding; non-object values sit under
+  `non_object_value`), and trigger streams use `connectors.triggers/`.
+- With no storage served, preference operations fail with an unavailable-store
+  error and trigger history reports storage unavailable; no in-memory fallback
+  can make a choice appear saved.
 
 Deferred: importing the legacy `<state_dir>/composio-user-scopes/*.json` and
 `<state_dir>/triggers/*.jsonl` files and the host-side grant are in OpenHuman

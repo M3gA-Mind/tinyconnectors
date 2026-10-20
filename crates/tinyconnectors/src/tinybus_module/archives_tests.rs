@@ -3,9 +3,9 @@
 use super::*;
 
 fn streams() -> Arc<dyn StreamStore> {
-    use tinystoragedrivers_core::StorageBackend;
-    tinystoragedrivers_core::MemoryStorage::new()
-        .for_scope(&tinystoragedrivers_core::Scope::new("lease").expect("scope"))
+    use tinystoragedrivers_api::StorageBackend;
+    tinystoragedrivers_testkit::MemoryBackend::new()
+        .for_scope(&tinystoragedrivers_types::Scope::new("lease").expect("scope"))
         .expect("scoped")
         .streams()
         .clone()

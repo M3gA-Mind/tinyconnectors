@@ -1042,19 +1042,23 @@ async fn setup_on(
 /// broker-authenticated module caller would be.
 struct StorageHost {
     /// The scope the host binds the module to, for seeding and inspection.
-    scoped: tinystoragedrivers_core::ScopedStorage,
+    scoped: tinystoragedrivers_api::Storage,
     _host: Connection,
     _served: tinystoragedrivers_busproxy::ServedStorage,
 }
 
 async fn serve_storage(bus: &MemoryBus) -> tinybus::Result<StorageHost> {
-    use tinystoragedrivers_core::{MemoryStorage, Scope, StorageBackend};
-    let scoped = MemoryStorage::new()
-        .for_scope(&Scope::new("user").expect("scope"))
+    use tinystoragedrivers_api::StorageBackend;
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::Scope;
+    let scoped = MemoryBackend::new()
+        .for_scope(&Scope::new("user/connectors").expect("scope"))
         .expect("scoped");
     let bound = scoped.clone();
     let endpoint = tinystoragedrivers_busproxy::PerCallerEndpoint::new(move |_sender| {
-        Some(tinystoragedrivers_client::StorageServer::new(bound.clone()))
+        Some(tinystoragedrivers_busproxy::StorageServer::new(
+            bound.clone(),
+        ))
     });
     let host = Connection::connect(bus.connect().await?).await?;
     let served = tinystoragedrivers_busproxy::serve(&host, Arc::new(endpoint)).await?;
@@ -1231,28 +1235,112 @@ async fn scope_preferences_persist_in_the_hosts_documents_across_instances() -> 
 }
 
 #[tokio::test]
-async fn without_served_storage_preferences_stay_in_this_instance() {
-    // Documented, not accidental: with no host storage the choice lives only as
-    // long as the module.
-    let store = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
-    tinyconnectors_sync::UserScopePref {
-        read: true,
-        write: false,
-        admin: false,
-    }
-    .save(&store, "gmail")
-    .await
-    .expect("saves");
-    let kept = tinyconnectors_sync::UserScopePref::load(&store, "gmail")
+async fn first_storage_open_migrates_legacy_preferences_before_serving_reads() -> tinybus::Result<()>
+{
+    let (_serving, proxy, host) = serve_with_storage(ModuleConfig::default()).await?;
+    host.scoped
+        .documents()
+        .put_with(
+            "composio-user-scopes",
+            "gmail",
+            json!({"value": {"read": true, "write": false, "admin": false}}),
+            tinystoragedrivers_types::Precondition::None,
+            tinystoragedrivers_types::WriteOptions::new().expires_ms(4_000_000_000_000),
+        )
         .await
-        .expect("loads");
-    assert!(!kept.write, "kept in memory for the life of the instance");
+        .map_err(|error| tinybus::Error::failed(error.to_string()))?;
 
-    let fresh = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
-    let pref = tinyconnectors_sync::UserScopePref::load(&fresh, "gmail")
+    let read_back: ComposioUserScopesResponse = proxy
+        .call(
+            names::methods::GET_USER_SCOPES,
+            (ComposioGetUserScopesRequest {
+                toolkit: "gmail".into(),
+            },),
+        )
+        .await?;
+    assert!(read_back.scopes.read);
+    assert!(!read_back.scopes.write);
+    assert!(!read_back.scopes.admin);
+    let migrated = host
+        .scoped
+        .documents()
+        .get("connectors.user_scopes", "gmail")
         .await
-        .expect("loads");
-    assert!(pref.write, "a new instance starts from the default");
+        .map_err(|error| tinybus::Error::failed(error.to_string()))?
+        .expect("migration wrote the current preference");
+    assert_eq!(
+        migrated.doc,
+        json!({"read": true, "write": false, "admin": false})
+    );
+    assert_eq!(migrated.meta.schema, 2);
+    assert_eq!(migrated.meta.expires_ms, Some(4_000_000_000_000));
+    assert!(
+        migrated.meta.created_ms > 0,
+        "the host assigns creation time"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn previous_release_preferences_read_after_module_open_migrations() -> tinybus::Result<()> {
+    use serde_json::Value;
+    use tinystoragedrivers_types::{Precondition, Versioned, WriteOptions};
+
+    let bus = MemoryBus::new();
+    Broker::new().spawn(bus.clone());
+    let host = serve_storage(&bus).await?;
+    let fixture: Versioned<Value> =
+        serde_json::from_str(include_str!("../state/fixtures/v0.21.0-gmail-pref.json"))
+            .expect("the public v0.21.0 writer fixture parses");
+    host.scoped
+        .documents()
+        .put_with(
+            "connectors.user_scopes",
+            &fixture.id,
+            fixture.doc.clone(),
+            Precondition::Absent,
+            WriteOptions::new()
+                .schema(fixture.meta.schema)
+                .created_ms(fixture.meta.created_ms),
+        )
+        .await
+        .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+
+    let (_serving, proxy) = setup_on(&bus, ModuleConfig::default()).await?;
+    let scopes: ComposioUserScopesResponse = proxy
+        .call(
+            names::methods::GET_USER_SCOPES,
+            (ComposioGetUserScopesRequest {
+                toolkit: "gmail".into(),
+            },),
+        )
+        .await?;
+    assert_eq!(fixture.id, "gmail");
+    assert!(scopes.scopes.read);
+    assert!(!scopes.scopes.write);
+    assert!(!scopes.scopes.admin);
+
+    let stored = host
+        .scoped
+        .documents()
+        .get("connectors.user_scopes", "gmail")
+        .await
+        .map_err(|error| tinybus::Error::failed(error.to_string()))?
+        .expect("the prior-release record remains in place");
+    assert_eq!(stored.doc, fixture.doc);
+    assert_eq!(stored.meta.schema, fixture.meta.schema);
+    assert_eq!(stored.meta.created_ms, fixture.meta.created_ms);
+    Ok(())
+}
+
+#[tokio::test]
+async fn without_served_storage_preferences_fail_instead_of_being_forgotten() {
+    let store = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
+    assert!(
+        tinyconnectors_sync::UserScopePref::load(&store, "gmail")
+            .await
+            .is_err()
+    );
 }
 
 // ── reconfiguring the route ──────────────────────────────────────────
@@ -1749,7 +1837,7 @@ async fn curated_catalog_is_served_without_a_route() -> tinybus::Result<()> {
 
 #[tokio::test]
 async fn visible_tools_use_the_stored_preference_unless_one_is_supplied() -> tinybus::Result<()> {
-    let (_serving, proxy) = serve_via_setup(ModuleConfig::default()).await?;
+    let (_serving, proxy, _storage) = serve_with_storage(ModuleConfig::default()).await?;
     let slugs = |reply: &serde_json::Value| -> Vec<String> {
         reply["tools"]
             .as_array()

@@ -17,6 +17,7 @@ use tinyconnectors_bus::vocabulary::{
     ActionVocabularyResponse, NormalizeIdentitiesResponse, PreparedTaskFilter, VocabularyRequest,
     VocabularyResponse,
 };
+use tinystoragedrivers_api::StorageBackend;
 
 /// Verify classic behavior and then restricted behavior in a fresh process.
 #[tokio::main]
@@ -27,6 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let (module_host, client, broker_task) = tinybus::test_support::start_bus().await?;
+    let _storage = serve_test_storage(&client).await?;
     let info = tinybus::test_support::admit_module(
         &module_host,
         "TINYCONNECTORS_TEST_MODULE",
@@ -74,12 +76,13 @@ async fn verify_restricted_surface(
     let broker = Broker::new();
     let task = broker.clone().spawn(bus.clone());
     let host = ModuleHost::new(broker);
+    let client = Connection::connect(bus.connect().await?).await?;
+    let _storage = serve_test_storage(&client).await?;
     host.load_file_with_config(
         module,
         serde_json::json!({"runtime_mode":"routed_read_only"}),
     )
     .map_err(|error| io::Error::other(format!("restricted initialization: {error}")))?;
-    let client = Connection::connect(bus.connect().await?).await?;
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             if client
@@ -137,6 +140,23 @@ async fn verify_restricted_surface(
     }
     task.abort();
     Ok(())
+}
+
+/// Bind the same six-port storage service used by the production module
+/// boundary, backed by the explicit in-memory test host for this verifier.
+async fn serve_test_storage(
+    connection: &Connection,
+) -> Result<tinystoragedrivers_busproxy::ServedStorage, Box<dyn std::error::Error>> {
+    use tinystoragedrivers_busproxy::{PerCallerEndpoint, StorageServer};
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::Scope;
+
+    let backend = MemoryBackend::new();
+    let scope = Scope::new("verify/tinyconnectors")?;
+    let endpoint = PerCallerEndpoint::new(move |_sender| {
+        backend.for_scope(&scope).ok().map(StorageServer::new)
+    });
+    Ok(tinystoragedrivers_busproxy::serve(connection, std::sync::Arc::new(endpoint)).await?)
 }
 
 /// Wait until the module claims its bus name, then check that its manifest
@@ -588,33 +608,60 @@ async fn verify_direct_and_routed_members(
 }
 
 async fn verify_archive_members(proxy: &tinybus::Proxy) -> Result<(), Box<dyn std::error::Error>> {
-    let history_unavailable = proxy
+    let history = proxy
         .call::<tinyconnectors_bus::ComposioTriggerHistoryResult>(
             methods::LIST_TRIGGER_HISTORY,
             (tinyconnectors_bus::ComposioListTriggerHistoryRequest { limit: Some(1) },),
         )
-        .await;
-    if !matches!(history_unavailable, Err(error) if error.to_string().contains("does not serve storage"))
-    {
-        return Err(
-            io::Error::other("ListTriggerHistory did not explain its missing archive").into(),
-        );
+        .await?;
+    if !history.entries.is_empty() {
+        return Err(io::Error::other("new archive unexpectedly contained trigger history").into());
     }
-    // The loaded module writes through the host storage bus; this
-    // verifier serves none, so opening a lease must be refused rather than
-    // silently writing somewhere the host never chose.
-    let state_dir = std::env::current_dir()?.join("target/module-e2e-archive");
-    let refused = proxy
-        .call::<tinyconnectors_bus::ArchiveHandle>(
+    // Archive state is backed by the explicit TSD storage host connected to
+    // this module. Verify the complete open/write/read/close path.
+    let handle: tinyconnectors_bus::ArchiveHandle = proxy
+        .call(
             methods::OPEN_ARCHIVE,
             (tinyconnectors_bus::OpenArchiveRequest {
-                state_dir: state_dir.to_string_lossy().into_owned(),
+                state_dir: "ignored".into(),
             },),
         )
-        .await;
-    if !matches!(refused, Err(error) if error.to_string().contains("storage unavailable")) {
-        return Err(io::Error::other("OpenArchive did not refuse missing host storage").into());
+        .await?;
+    let event = tinyconnectors_bus::ComposioTriggerEvent {
+        toolkit: "gmail".into(),
+        trigger: "GMAIL_NEW_GMAIL_MESSAGE".into(),
+        payload: serde_json::json!({"module_e2e": true}),
+        metadata: tinyconnectors_bus::ComposioTriggerMetadata {
+            id: "module-e2e-event".into(),
+            uuid: "module-e2e-uuid".into(),
+            ..Default::default()
+        },
+    };
+    proxy
+        .call::<tinyconnectors_bus::ComposioTriggerHistoryEntry>(
+            methods::RECORD_TRIGGER,
+            (tinyconnectors_bus::RecordTriggerRequest {
+                handle: handle.clone(),
+                event,
+            },),
+        )
+        .await?;
+    let recorded: tinyconnectors_bus::ComposioTriggerHistoryResult = proxy
+        .call(
+            methods::READ_ARCHIVE,
+            (tinyconnectors_bus::ReadArchiveRequest {
+                handle: handle.clone(),
+                limit: None,
+            },),
+        )
+        .await?;
+    if recorded.entries.len() != 1
+        || recorded.entries[0].metadata_id != "module-e2e-event"
+        || recorded.entries[0].payload != serde_json::json!({"module_e2e": true})
+    {
+        return Err(io::Error::other("archive storage did not preserve the recorded event").into());
     }
+    proxy.call::<()>(methods::CLOSE_ARCHIVE, (handle,)).await?;
     Ok(())
 }
 

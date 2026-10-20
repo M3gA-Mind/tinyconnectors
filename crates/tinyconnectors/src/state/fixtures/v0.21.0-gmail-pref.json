@@ -1,0 +1,14 @@
+{
+  "id": "gmail",
+  "version": 1,
+  "doc": {
+    "admin": false,
+    "read": true,
+    "write": false
+  },
+  "meta": {
+    "schema": 2,
+    "created_ms": 1792510414798,
+    "updated_ms": 1792510414798
+  }
+}
