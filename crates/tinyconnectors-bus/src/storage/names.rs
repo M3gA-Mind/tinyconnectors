@@ -7,6 +7,9 @@
 /// migration step from the old name, as [`LEGACY_PREFS_NAMESPACE`] has one.
 pub const PREFS_NAMESPACE: &str = "connectors.user_scopes";
 
+/// The owner-local progress documents for connector data migrations.
+pub const MIGRATIONS_NAMESPACE: &str = "connectors.migrations";
+
 /// The v1 name of [`PREFS_NAMESPACE`], whose documents wrapped the preference
 /// as `{ "value": … }`. Only the migration step reads it.
 pub const LEGACY_PREFS_NAMESPACE: &str = "composio-user-scopes";

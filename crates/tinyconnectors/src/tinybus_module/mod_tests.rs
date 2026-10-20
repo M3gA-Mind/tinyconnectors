@@ -1042,19 +1042,21 @@ async fn setup_on(
 /// broker-authenticated module caller would be.
 struct StorageHost {
     /// The scope the host binds the module to, for seeding and inspection.
-    scoped: tinystoragedrivers_core::ScopedStorage,
+    scoped: tinystoragedrivers_api::Storage,
     _host: Connection,
     _served: tinystoragedrivers_busproxy::ServedStorage,
 }
 
 async fn serve_storage(bus: &MemoryBus) -> tinybus::Result<StorageHost> {
-    use tinystoragedrivers_core::{MemoryStorage, Scope, StorageBackend};
-    let scoped = MemoryStorage::new()
-        .for_scope(&Scope::new("user").expect("scope"))
+    use tinystoragedrivers_api::StorageBackend;
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::Scope;
+    let scoped = MemoryBackend::new()
+        .for_scope(&Scope::new("user/connectors").expect("scope"))
         .expect("scoped");
     let bound = scoped.clone();
     let endpoint = tinystoragedrivers_busproxy::PerCallerEndpoint::new(move |_sender| {
-        Some(tinystoragedrivers_client::StorageServer::new(bound.clone()))
+        Some(tinystoragedrivers_busproxy::StorageServer::new(bound.clone()))
     });
     let host = Connection::connect(bus.connect().await?).await?;
     let served = tinystoragedrivers_busproxy::serve(&host, Arc::new(endpoint)).await?;
@@ -1231,28 +1233,9 @@ async fn scope_preferences_persist_in_the_hosts_documents_across_instances() -> 
 }
 
 #[tokio::test]
-async fn without_served_storage_preferences_stay_in_this_instance() {
-    // Documented, not accidental: with no host storage the choice lives only as
-    // long as the module.
+async fn without_served_storage_preferences_fail_instead_of_being_forgotten() {
     let store = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
-    tinyconnectors_sync::UserScopePref {
-        read: true,
-        write: false,
-        admin: false,
-    }
-    .save(&store, "gmail")
-    .await
-    .expect("saves");
-    let kept = tinyconnectors_sync::UserScopePref::load(&store, "gmail")
-        .await
-        .expect("loads");
-    assert!(!kept.write, "kept in memory for the life of the instance");
-
-    let fresh = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
-    let pref = tinyconnectors_sync::UserScopePref::load(&fresh, "gmail")
-        .await
-        .expect("loads");
-    assert!(pref.write, "a new instance starts from the default");
+    assert!(tinyconnectors_sync::UserScopePref::load(&store, "gmail").await.is_err());
 }
 
 // ── reconfiguring the route ──────────────────────────────────────────

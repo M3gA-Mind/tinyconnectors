@@ -4,8 +4,8 @@ mod names;
 mod preference;
 
 pub use names::{
-    LEGACY_PREFS_NAMESPACE, LEGACY_STREAM_PREFIX, NON_OBJECT_FIELD, PREFS_NAMESPACE,
-    PREFS_SCHEMA_VERSION, STREAM_NAME, STREAM_PREFIX,
+    LEGACY_PREFS_NAMESPACE, LEGACY_STREAM_PREFIX, MIGRATIONS_NAMESPACE, NON_OBJECT_FIELD,
+    PREFS_NAMESPACE, PREFS_SCHEMA_VERSION, STREAM_NAME, STREAM_PREFIX,
 };
 pub use preference::{decode_preference, encode_preference};
 
@@ -30,7 +30,7 @@ pub struct StorageNeeds {
 #[must_use]
 pub fn storage_needs() -> StorageNeeds {
     StorageNeeds {
-        collections: vec![PREFS_NAMESPACE.to_owned()],
+        collections: vec![PREFS_NAMESPACE.to_owned(), MIGRATIONS_NAMESPACE.to_owned()],
         stream_prefixes: vec![STREAM_PREFIX.to_owned()],
     }
 }

@@ -3,7 +3,8 @@
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tinystoragedrivers_core::StreamStore;
+use tinystoragedrivers_api::StreamStore;
+use tinystoragedrivers_types::Capability;
 
 use crate::{ComposioTriggerHistoryEntry, ComposioTriggerHistoryResult, Error, Result};
 
@@ -78,6 +79,12 @@ impl TriggerArchive {
             .append(&stream, value)
             .await
             .map_err(|error| failed(format!("could not append to the archive: {error}")))?;
+
+        if self.streams.capabilities().contains(Capability::StreamSeal) {
+            if let Err(error) = self.seal_idle_days().await {
+                tracing::warn!(%error, "[connectors][triggers] could not seal idle archive streams");
+            }
+        }
 
         tracing::debug!(
             toolkit = %entry.toolkit,
@@ -157,7 +164,22 @@ impl TriggerArchive {
             entries,
         })
     }
+
+    async fn seal_idle_days(&self) -> tinystoragedrivers_types::Result<()> {
+        let cutoff = i64::try_from(now_ms()).unwrap_or(i64::MAX) - DAY_STREAM_IDLE_MS as i64;
+        for stream in self.streams.streams(STREAM_PREFIX).await? {
+            if let Some(info) = self.streams.info(&stream).await?
+                && info.last_append_ms.is_some_and(|last| last <= cutoff)
+            {
+                self.streams.seal(&stream).await?;
+            }
+        }
+        Ok(())
+    }
 }
+
+/// An archive day is immutable after its UTC day plus this idle margin.
+const DAY_STREAM_IDLE_MS: u64 = 2 * 24 * 60 * 60 * 1000;
 
 fn day_stream(day: &str) -> String {
     format!("{STREAM_PREFIX}{day}")

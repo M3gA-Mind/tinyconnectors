@@ -14,11 +14,11 @@
 //! the ports only and never chooses a backend.
 
 mod document_store;
+pub(crate) mod migration;
 
 pub use document_store::DocumentPrefsStore;
-// The schema and the grant are part of the contract; re-exported so existing
-// paths keep working. There is one definition, in `tinyconnectors-bus`.
-pub use tinyconnectors_bus::storage::{StorageNeeds, storage_needs, storage_schema};
+pub use migration::collections;
+pub use tinyconnectors_bus::storage::{StorageNeeds, storage_needs};
 
 #[cfg(test)]
 #[path = "mod_tests.rs"]

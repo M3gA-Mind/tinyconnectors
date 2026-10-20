@@ -14,10 +14,8 @@ use async_trait::async_trait;
 use serde_json::Value;
 use tinybus::Connection;
 use tinyconnectors_sync::PrefsStore;
-use tinystoragedrivers_core::{
-    DocumentStore, Result as StorageResult, ScopedStorage, StorageBackend, StorageError,
-    StreamStore,
-};
+use tinystoragedrivers_api::{DocumentStore, Storage, StreamStore};
+use tinystoragedrivers_types::Result as StorageResult;
 use tokio::sync::Mutex;
 
 use crate::state::DocumentPrefsStore;
@@ -30,7 +28,7 @@ use crate::state::DocumentPrefsStore;
 #[derive(Clone)]
 pub(super) struct StorageLink {
     connection: Option<Connection>,
-    slot: Arc<Mutex<Option<ScopedStorage>>>,
+    slot: Arc<Mutex<Option<Storage>>>,
 }
 
 impl std::fmt::Debug for StorageLink {
@@ -59,7 +57,7 @@ impl StorageLink {
         }
     }
 
-    async fn scoped(&self) -> StorageResult<ScopedStorage> {
+    async fn scoped(&self) -> StorageResult<Storage> {
         let Some(connection) = self.connection.as_ref() else {
             return Err(StorageError::unavailable("no storage bus connection"));
         };
@@ -68,10 +66,10 @@ impl StorageLink {
             return Ok(scoped.clone());
         }
         tracing::debug!("[connectors][storage] connecting to the host storage bus");
-        let bus = tinystoragedrivers_busproxy::connect_storage(connection.clone()).await?;
-        let scoped = bus.for_scope(&tinystoragedrivers_busproxy::module_scope_label())?;
-        *slot = Some(scoped.clone());
-        Ok(scoped)
+        let storage = tinystoragedrivers_busproxy::connect_storage(connection.clone()).await?;
+        crate::state::migration::prepare(&storage).await?;
+        *slot = Some(storage.clone());
+        Ok(storage)
     }
 
     /// The scoped document store (scope preferences).
@@ -85,47 +83,42 @@ impl StorageLink {
     }
 }
 
-/// Scope preferences on the host's documents, or in memory while the host
-/// serves no storage.
-///
-/// The in-memory fallback keeps the members that need no persistence working
-/// (and keeps a module loaded before the host's storage is up usable), at the
-/// cost of forgetting the choice at restart; each fall-back is logged.
+/// Scope preferences on the host's documents.
 #[derive(Debug)]
 pub(super) struct LinkedPrefsStore {
     link: StorageLink,
-    fallback: super::EphemeralPrefsStore,
 }
 
 impl LinkedPrefsStore {
     pub(super) fn new(link: StorageLink) -> Self {
-        Self {
-            link,
-            fallback: super::EphemeralPrefsStore::default(),
-        }
+        Self { link }
     }
 }
 
 #[async_trait]
 impl PrefsStore for LinkedPrefsStore {
     async fn get(&self, key: &str) -> tinyconnectors_sync::Result<Option<Value>> {
-        match self.link.documents().await {
-            Ok(documents) => DocumentPrefsStore::new(documents).get(key).await,
-            Err(error) => {
-                tracing::warn!(%error, "[connectors][prefs] host storage unavailable; reading in-memory preferences");
-                self.fallback.get(key).await
-            }
-        }
+        let documents =
+            self.link
+                .documents()
+                .await
+                .map_err(|error| tinyconnectors_sync::Error::Store {
+                    key: key.to_owned(),
+                    message: format!("could not connect to host storage: {error}"),
+                })?;
+        DocumentPrefsStore::new(documents).get(key).await
     }
 
     async fn set(&self, key: &str, value: &Value) -> tinyconnectors_sync::Result<()> {
-        match self.link.documents().await {
-            Ok(documents) => DocumentPrefsStore::new(documents).set(key, value).await,
-            Err(error) => {
-                tracing::warn!(%error, "[connectors][prefs] host storage unavailable; keeping preference in memory only");
-                self.fallback.set(key, value).await
-            }
-        }
+        let documents =
+            self.link
+                .documents()
+                .await
+                .map_err(|error| tinyconnectors_sync::Error::Store {
+                    key: key.to_owned(),
+                    message: format!("could not connect to host storage: {error}"),
+                })?;
+        DocumentPrefsStore::new(documents).set(key, value).await
     }
 }
 

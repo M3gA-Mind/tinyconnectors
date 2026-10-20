@@ -61,6 +61,8 @@ percent-encoding = { workspace = true }
 # are written through.
 tinystoragedrivers-types = { workspace = true }
 tinystoragedrivers-api = { workspace = true }
+sha2 = { workspace = true }
+data-encoding = { workspace = true }
 # The module's connection to the host's storage bus (`connect_storage`). Tied to
 # the `module` feature because it needs the TinyBus `Connection` that feature
 # provides.

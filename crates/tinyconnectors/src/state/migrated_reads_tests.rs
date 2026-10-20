@@ -1,36 +1,32 @@
-//! A migrated store reads back through the module's own preference store and
-//! trigger archive. The steps themselves are tested in `tinyconnectors-bus`.
+//! Owner migration tests through the same bound-storage preparation path used
+//! when the TinyBus module first connects to host storage.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::sync::Arc;
 
 use serde_json::{Value, json};
-use tinyconnectors_bus::storage::{LEGACY_PREFS_NAMESPACE, PREFS_NAMESPACE, storage_schema};
+use tinyconnectors_bus::storage::{LEGACY_PREFS_NAMESPACE, PREFS_NAMESPACE, STREAM_PREFIX};
 use tinyconnectors_bus::vocabulary::UserScopePref;
 use tinyconnectors_sync::{PrefsStore, ScopePrefStore};
-use tinystoragedrivers_core::schema::{MigrateOptions, Registry};
-use tinystoragedrivers_core::{MemoryStorage, Precondition, Scope, ScopedStorage, StorageBackend};
+use tinystoragedrivers_api::{Storage, StorageBackend};
+use tinystoragedrivers_testkit::MemoryBackend;
+use tinystoragedrivers_types::{Precondition, Scope};
 
-use crate::state::DocumentPrefsStore;
+use crate::state::{DocumentPrefsStore, migration};
 use crate::triggers::TriggerArchive;
 
-fn module_storage(backend: &MemoryStorage) -> ScopedStorage {
+fn module_storage(backend: &MemoryBackend) -> Storage {
     backend
-        .for_scope(&Scope::local().module("connectors").unwrap())
+        .for_scope(&Scope::new("connectors").unwrap())
         .unwrap()
 }
 
-async fn migrated(storage: &ScopedStorage, backend: &MemoryStorage) {
-    let registry = Registry::compose([storage_schema()]).unwrap();
-    registry.prepare(backend).await.unwrap();
-    registry
-        .migrate(storage, &MigrateOptions::new())
-        .await
-        .unwrap();
+async fn migrated(storage: &Storage) {
+    migration::prepare(storage).await.unwrap();
 }
 
-async fn seed_v1(storage: &ScopedStorage, id: &str, body: Value) {
+async fn seed_v1(storage: &Storage, id: &str, body: Value) {
     storage
         .documents()
         .put(LEGACY_PREFS_NAMESPACE, id, body, Precondition::None)
@@ -40,16 +36,15 @@ async fn seed_v1(storage: &ScopedStorage, id: &str, body: Value) {
 
 #[tokio::test]
 async fn a_migrated_preference_reads_through_the_store_with_its_choice_intact() {
-    let backend = MemoryStorage::new();
+    let backend = MemoryBackend::new();
     let storage = module_storage(&backend);
-    // A denied write must stay denied: it is the case a lossy step would flip.
     seed_v1(
         &storage,
         "slack",
-        json!({ "value": { "read": true, "write": false, "admin": false } }),
+        json!({"value": {"read": true, "write": false, "admin": false}}),
     )
     .await;
-    migrated(&storage, &backend).await;
+    migrated(&storage).await;
 
     let store = DocumentPrefsStore::new(Arc::clone(storage.documents()));
     let pref = UserScopePref::load(&store, "slack").await.unwrap();
@@ -58,12 +53,12 @@ async fn a_migrated_preference_reads_through_the_store_with_its_choice_intact() 
 }
 
 #[tokio::test]
-async fn a_non_object_preference_moves_under_a_named_field_and_reads_back_whole() {
-    let backend = MemoryStorage::new();
+async fn non_object_preferences_move_under_the_reserved_field_and_read_back() {
+    let backend = MemoryBackend::new();
     let storage = module_storage(&backend);
-    seed_v1(&storage, "slack", json!({ "value": [1, 2] })).await;
-    seed_v1(&storage, "notion", json!({ "value": "x" })).await;
-    migrated(&storage, &backend).await;
+    seed_v1(&storage, "slack", json!({"value": [1, 2]})).await;
+    seed_v1(&storage, "notion", json!({"value": "x"})).await;
+    migrated(&storage).await;
 
     let found = storage
         .documents()
@@ -71,43 +66,54 @@ async fn a_non_object_preference_moves_under_a_named_field_and_reads_back_whole(
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(found.doc, json!({ "non_object_value": [1, 2] }));
-
+    assert_eq!(found.doc, json!({"non_object_value": [1, 2]}));
     let store = DocumentPrefsStore::new(Arc::clone(storage.documents()));
     assert_eq!(store.get("slack").await.unwrap().unwrap(), json!([1, 2]));
     assert_eq!(store.get("notion").await.unwrap().unwrap(), json!("x"));
 }
 
 #[tokio::test]
-async fn an_object_preference_that_uses_the_reserved_field_is_not_confused_with_a_wrapper() {
-    let backend = MemoryStorage::new();
+async fn a_reserved_field_inside_an_object_remains_an_object() {
+    let backend = MemoryBackend::new();
     let storage = module_storage(&backend);
-    let tricky = json!({ "non_object_value": 7 });
-    seed_v1(&storage, "gmail", json!({ "value": tricky })).await;
-    migrated(&storage, &backend).await;
-
+    let tricky = json!({"non_object_value": 7});
+    seed_v1(&storage, "gmail", json!({"value": tricky})).await;
+    migrated(&storage).await;
     let store = DocumentPrefsStore::new(Arc::clone(storage.documents()));
     assert_eq!(store.get("gmail").await.unwrap().unwrap(), tricky);
 }
 
 #[tokio::test]
-async fn a_v1_document_without_a_value_stays_an_unreadable_preference_not_a_default() {
-    // Defaulting it would silently re-enable a write the user denied.
-    let backend = MemoryStorage::new();
+async fn missing_legacy_value_does_not_turn_into_default_permissions() {
+    let backend = MemoryBackend::new();
     let storage = module_storage(&backend);
-    seed_v1(&storage, "gmail", json!({ "other": 1 })).await;
-    migrated(&storage, &backend).await;
-
+    seed_v1(&storage, "gmail", json!({"other": 1})).await;
+    migrated(&storage).await;
     let store = DocumentPrefsStore::new(Arc::clone(storage.documents()));
-    let loaded = UserScopePref::load(&store, "gmail").await;
-    assert!(loaded.is_err(), "a corrupt row must not read as defaults");
+    assert!(UserScopePref::load(&store, "gmail").await.is_err());
+}
+
+#[tokio::test]
+async fn migration_can_be_retried_after_the_target_was_written() {
+    let backend = MemoryBackend::new();
+    let storage = module_storage(&backend);
+    seed_v1(&storage, "gmail", json!({"value": {"read": true}})).await;
+    migrated(&storage).await;
+    migrated(&storage).await;
+    let found = storage
+        .documents()
+        .get(PREFS_NAMESPACE, "gmail")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(found.doc, json!({"read": true}));
 }
 
 const LEGACY_STREAM: &str = "triggers/2026-10-15";
 
 #[tokio::test]
 async fn migrated_trigger_history_reads_back_through_the_archive() {
-    let backend = MemoryStorage::new();
+    let backend = MemoryBackend::new();
     let storage = module_storage(&backend);
     let entry = |id: &str| {
         json!({
@@ -116,7 +122,7 @@ async fn migrated_trigger_history_reads_back_through_the_archive() {
             "trigger": "GMAIL_NEW_GMAIL_MESSAGE",
             "metadata_id": id,
             "metadata_uuid": "u",
-            "payload": { "subject": "hi" },
+            "payload": {"subject": "hi"},
         })
     };
     for id in ["evt-1", "evt-2"] {
@@ -126,9 +132,7 @@ async fn migrated_trigger_history_reads_back_through_the_archive() {
             .await
             .unwrap();
     }
-    migrated(&storage, &backend).await;
-
-    // The archive reads the migrated history back through its public API.
+    migrated(&storage).await;
     let history = TriggerArchive::new(Arc::clone(storage.streams()))
         .list_recent(None)
         .await
@@ -139,4 +143,8 @@ async fn migrated_trigger_history_reads_back_through_the_archive() {
         .map(|entry| entry.metadata_id.as_str())
         .collect();
     assert_eq!(ids, ["evt-2", "evt-1"]);
+    assert_eq!(
+        storage.streams().streams(STREAM_PREFIX).await.unwrap(),
+        ["connectors.triggers/2026-10-15"]
+    );
 }
