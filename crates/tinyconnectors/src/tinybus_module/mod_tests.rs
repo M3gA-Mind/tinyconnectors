@@ -1056,7 +1056,9 @@ async fn serve_storage(bus: &MemoryBus) -> tinybus::Result<StorageHost> {
         .expect("scoped");
     let bound = scoped.clone();
     let endpoint = tinystoragedrivers_busproxy::PerCallerEndpoint::new(move |_sender| {
-        Some(tinystoragedrivers_busproxy::StorageServer::new(bound.clone()))
+        Some(tinystoragedrivers_busproxy::StorageServer::new(
+            bound.clone(),
+        ))
     });
     let host = Connection::connect(bus.connect().await?).await?;
     let served = tinystoragedrivers_busproxy::serve(&host, Arc::new(endpoint)).await?;
@@ -1235,7 +1237,11 @@ async fn scope_preferences_persist_in_the_hosts_documents_across_instances() -> 
 #[tokio::test]
 async fn without_served_storage_preferences_fail_instead_of_being_forgotten() {
     let store = super::storage::LinkedPrefsStore::new(super::storage::StorageLink::none());
-    assert!(tinyconnectors_sync::UserScopePref::load(&store, "gmail").await.is_err());
+    assert!(
+        tinyconnectors_sync::UserScopePref::load(&store, "gmail")
+            .await
+            .is_err()
+    );
 }
 
 // ── reconfiguring the route ──────────────────────────────────────────

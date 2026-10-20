@@ -34,9 +34,6 @@ pub fn collections() -> Vec<CollectionSpec> {
 pub(crate) async fn prepare(storage: &Storage) -> tinystoragedrivers_types::Result<()> {
     let documents = storage.documents();
     let streams = storage.streams();
-    for collection in collections() {
-        documents.ensure_collection(&collection).await?;
-    }
     if !done(documents.as_ref(), PREFS_STEP).await? {
         migrate_preferences(documents.as_ref()).await?;
         mark_done(documents.as_ref(), PREFS_STEP).await?;
@@ -49,7 +46,19 @@ pub(crate) async fn prepare(storage: &Storage) -> tinystoragedrivers_types::Resu
 }
 
 async fn done(documents: &dyn DocumentStore, step: &str) -> tinystoragedrivers_types::Result<bool> {
-    Ok(documents.get(MIGRATIONS, step).await?.is_some())
+    let Some(record) = documents.get(MIGRATIONS, step).await? else {
+        return Ok(false);
+    };
+    if record.doc["owner"] == "connectors"
+        && record.doc["step"] == step
+        && record.doc["done"] == true
+    {
+        Ok(true)
+    } else {
+        Err(StorageError::conflict(format!(
+            "invalid connector migration marker for `{step}`"
+        )))
+    }
 }
 
 async fn mark_done(
@@ -225,3 +234,7 @@ pub(super) fn legacy_key(
     }
     Key::new(escaped)
 }
+
+#[cfg(test)]
+#[path = "migration_tests.rs"]
+mod tests;

@@ -30,7 +30,15 @@ pub struct StorageNeeds {
 #[must_use]
 pub fn storage_needs() -> StorageNeeds {
     StorageNeeds {
-        collections: vec![PREFS_NAMESPACE.to_owned(), MIGRATIONS_NAMESPACE.to_owned()],
-        stream_prefixes: vec![STREAM_PREFIX.to_owned()],
+        collections: vec![
+            PREFS_NAMESPACE.to_owned(),
+            MIGRATIONS_NAMESPACE.to_owned(),
+            LEGACY_PREFS_NAMESPACE.to_owned(),
+        ],
+        stream_prefixes: vec![STREAM_PREFIX.to_owned(), LEGACY_STREAM_PREFIX.to_owned()],
     }
 }
+
+#[cfg(test)]
+#[path = "mod_tests.rs"]
+mod tests;

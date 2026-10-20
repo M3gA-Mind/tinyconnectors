@@ -106,6 +106,11 @@ impl TriggerArchive {
     ///
     /// Returns [`Error::Archive`] when the archive cannot be listed or read.
     pub async fn list_recent(&self, limit: Option<usize>) -> Result<ComposioTriggerHistoryResult> {
+        if self.streams.capabilities().contains(Capability::StreamSeal) {
+            if let Err(error) = self.seal_idle_days().await {
+                tracing::warn!(%error, "[connectors][triggers] could not seal idle archive streams");
+            }
+        }
         let limit = limit.unwrap_or(DEFAULT_HISTORY_LIMIT).max(1);
         let failed = |stream: &str, message: String| Error::Archive {
             path: stream.to_string(),

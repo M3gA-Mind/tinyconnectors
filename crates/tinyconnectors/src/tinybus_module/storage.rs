@@ -15,7 +15,7 @@ use serde_json::Value;
 use tinybus::Connection;
 use tinyconnectors_sync::PrefsStore;
 use tinystoragedrivers_api::{DocumentStore, Storage, StreamStore};
-use tinystoragedrivers_types::Result as StorageResult;
+use tinystoragedrivers_types::{Result as StorageResult, StorageError};
 use tokio::sync::Mutex;
 
 use crate::state::DocumentPrefsStore;
