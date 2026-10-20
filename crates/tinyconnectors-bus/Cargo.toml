@@ -32,14 +32,14 @@ thiserror = { workspace = true, optional = true }
 tinystoragedrivers-types = { workspace = true, optional = true }
 
 [dev-dependencies]
-# `MemoryStorage` runs the v1 to v2 steps over real documents and streams.
+# The contract crate tests its pure declarations without selecting an engine.
 tokio = { workspace = true }
 tinystoragedrivers-testkit = { workspace = true }
 
 [features]
 # `storage::{collections, storage_needs}`: collection declarations and the
-# storage grant as pure data. A host that
-# composes schemas enables this; a host that only makes calls does not.
+# storage grant as pure data. Hosts enable this feature when they provision or
+# authorize module storage.
 storage = ["dep:tinystoragedrivers-types"]
 # `composio::triggers::webhook`: verify a delivery's signature and decode its
 # body into a `ComposioTriggerEvent`. Pure functions over bytes — no transport,
