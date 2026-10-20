@@ -17,6 +17,7 @@ use tinyconnectors_bus::vocabulary::{
     ActionVocabularyResponse, NormalizeIdentitiesResponse, PreparedTaskFilter, VocabularyRequest,
     VocabularyResponse,
 };
+use tinystoragedrivers_api::StorageBackend;
 
 /// Verify classic behavior and then restricted behavior in a fresh process.
 #[tokio::main]
@@ -27,6 +28,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     let (module_host, client, broker_task) = tinybus::test_support::start_bus().await?;
+    let _storage = serve_test_storage(&client).await?;
     let info = tinybus::test_support::admit_module(
         &module_host,
         "TINYCONNECTORS_TEST_MODULE",
@@ -74,12 +76,13 @@ async fn verify_restricted_surface(
     let broker = Broker::new();
     let task = broker.clone().spawn(bus.clone());
     let host = ModuleHost::new(broker);
+    let client = Connection::connect(bus.connect().await?).await?;
+    let _storage = serve_test_storage(&client).await?;
     host.load_file_with_config(
         module,
         serde_json::json!({"runtime_mode":"routed_read_only"}),
     )
     .map_err(|error| io::Error::other(format!("restricted initialization: {error}")))?;
-    let client = Connection::connect(bus.connect().await?).await?;
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
             if client
@@ -137,6 +140,23 @@ async fn verify_restricted_surface(
     }
     task.abort();
     Ok(())
+}
+
+/// Bind the same six-port storage service used by the production module
+/// boundary, backed by the explicit in-memory test host for this verifier.
+async fn serve_test_storage(
+    connection: &Connection,
+) -> Result<tinystoragedrivers_busproxy::ServedStorage, Box<dyn std::error::Error>> {
+    use tinystoragedrivers_busproxy::{PerCallerEndpoint, StorageServer};
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::Scope;
+
+    let backend = MemoryBackend::new();
+    let scope = Scope::new("verify/tinyconnectors")?;
+    let endpoint = PerCallerEndpoint::new(move |_sender| {
+        backend.for_scope(&scope).ok().map(StorageServer::new)
+    });
+    Ok(tinystoragedrivers_busproxy::serve(connection, std::sync::Arc::new(endpoint)).await?)
 }
 
 /// Wait until the module claims its bus name, then check that its manifest

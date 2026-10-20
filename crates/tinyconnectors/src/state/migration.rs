@@ -151,6 +151,29 @@ async fn migrate_streams(streams: &dyn StreamStore) -> tinystoragedrivers_types:
                 "migration target `{target}` is longer than source `{source}`"
             )));
         }
+
+        // A prior opener may have copied some or all of this stream before it
+        // failed to record completion. Verify that prefix before appending or
+        // deleting the source; equal lengths alone do not prove that the
+        // target contains the same events.
+        let mut verified = 0;
+        while verified < target_len {
+            let limit = (target_len - verified).min(PAGE_SIZE as u64) as usize;
+            let source_entries = streams.read_window(&source, verified, limit).await?;
+            let target_entries = streams.read_window(&target, verified, limit).await?;
+            if source_entries.len() != limit
+                || target_entries.len() != limit
+                || source_entries
+                    .iter()
+                    .zip(&target_entries)
+                    .any(|(source, target)| source.value != target.value)
+            {
+                return Err(StorageError::conflict(format!(
+                    "migration target `{target}` differs from source `{source}`"
+                )));
+            }
+            verified += limit as u64;
+        }
         let mut offset = target_len;
         while offset < source_len {
             let entries = streams.read_window(&source, offset, PAGE_SIZE).await?;

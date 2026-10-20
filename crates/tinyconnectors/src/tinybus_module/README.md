@@ -27,6 +27,10 @@ ensures the current collections returned by
 On the first bound open, the module migrates v1 preferences and trigger streams
 and records progress in its owner-scoped `connectors.migrations` collection;
 the host does not compose or execute migration registries.
+Before opening a new module version, the host must stop and drain any older
+module instance that can still write the legacy collections. Older writers do
+not participate in this owner's migration progress, so the migration cannot
+atomically fence them out while copying and retiring legacy rows.
 
 The dynamic verifier exercises preparation and filtering with local payloads.
 Hosts must wait for a published compatible artifact with a verified digest
