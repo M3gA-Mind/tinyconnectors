@@ -171,10 +171,10 @@ impl TriggerArchive {
     }
 
     async fn seal_idle_days(&self) -> tinystoragedrivers_types::Result<()> {
-        let cutoff = i64::try_from(now_ms()).unwrap_or(i64::MAX) - DAY_STREAM_IDLE_MS as i64;
+        let now = i64::try_from(now_ms()).unwrap_or(i64::MAX);
         for stream in self.streams.streams(STREAM_PREFIX).await? {
             if let Some(info) = self.streams.info(&stream).await?
-                && info.last_append_ms.is_some_and(|last| last <= cutoff)
+                && RETENTION.should_seal(now, info.last_append_ms)
             {
                 self.streams.seal(&stream).await?;
             }
@@ -185,6 +185,22 @@ impl TriggerArchive {
 
 /// An archive day is immutable after its UTC day plus this idle margin.
 const DAY_STREAM_IDLE_MS: u64 = 2 * 24 * 60 * 60 * 1000;
+
+/// Connector-owned retention trigger for completed UTC-day streams.
+#[derive(Debug, Clone, Copy)]
+struct ArchiveRetention {
+    idle_ms: u64,
+}
+
+const RETENTION: ArchiveRetention = ArchiveRetention {
+    idle_ms: DAY_STREAM_IDLE_MS,
+};
+
+impl ArchiveRetention {
+    fn should_seal(self, now_ms: i64, last_append_ms: Option<i64>) -> bool {
+        last_append_ms.is_some_and(|last| last <= now_ms.saturating_sub(self.idle_ms as i64))
+    }
+}
 
 fn day_stream(day: &str) -> String {
     format!("{STREAM_PREFIX}{day}")
@@ -209,3 +225,7 @@ fn now_ms() -> u64 {
 fn utc_day() -> String {
     chrono::Utc::now().format("%Y-%m-%d").to_string()
 }
+
+#[cfg(test)]
+#[path = "archive_tests.rs"]
+mod tests;

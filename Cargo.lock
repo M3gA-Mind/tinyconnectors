@@ -1355,7 +1355,6 @@ dependencies = [
  "tinyconnectors-sync",
  "tinystoragedrivers-api",
  "tinystoragedrivers-busproxy",
- "tinystoragedrivers-document",
  "tinystoragedrivers-testkit",
  "tinystoragedrivers-types",
  "tokio",
@@ -1374,7 +1373,6 @@ dependencies = [
  "serde_json",
  "sha2",
  "thiserror",
- "tinystoragedrivers-testkit",
  "tinystoragedrivers-types",
  "tokio",
 ]

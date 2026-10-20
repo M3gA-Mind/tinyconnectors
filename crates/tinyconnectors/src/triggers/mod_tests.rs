@@ -4,8 +4,8 @@
 
 use std::sync::Arc;
 
-use serde_json::{Value, json};
 use async_trait::async_trait;
+use serde_json::{Value, json};
 use tinystoragedrivers_api::{StorageBackend, StreamStore};
 use tinystoragedrivers_testkit::{Failing, MemoryBackend};
 use tinystoragedrivers_types::{
@@ -261,10 +261,14 @@ impl StreamStore for FailingStreams {
         self.0.inner.capabilities()
     }
     async fn append(&self, stream: &str, value: Value) -> StorageResult<u64> {
-        self.0.call("append", self.0.inner.append(stream, value)).await
+        self.0
+            .call("append", self.0.inner.append(stream, value))
+            .await
     }
     async fn append_batch(&self, stream: &str, values: Vec<Value>) -> StorageResult<u64> {
-        self.0.call("append_batch", self.0.inner.append_batch(stream, values)).await
+        self.0
+            .call("append_batch", self.0.inner.append_batch(stream, values))
+            .await
     }
     async fn read_window(
         &self,
@@ -272,16 +276,25 @@ impl StreamStore for FailingStreams {
         from: u64,
         limit: usize,
     ) -> StorageResult<Vec<StreamEntry>> {
-        self.0.call("read_window", self.0.inner.read_window(stream, from, limit)).await
+        self.0
+            .call("read_window", self.0.inner.read_window(stream, from, limit))
+            .await
     }
     async fn len(&self, stream: &str) -> StorageResult<u64> {
         self.0.call("len", self.0.inner.len(stream)).await
     }
     async fn truncate_before(&self, stream: &str, offset: u64) -> StorageResult<u64> {
-        self.0.call("truncate_before", self.0.inner.truncate_before(stream, offset)).await
+        self.0
+            .call(
+                "truncate_before",
+                self.0.inner.truncate_before(stream, offset),
+            )
+            .await
     }
     async fn delete_stream(&self, stream: &str) -> StorageResult<bool> {
-        self.0.call("delete_stream", self.0.inner.delete_stream(stream)).await
+        self.0
+            .call("delete_stream", self.0.inner.delete_stream(stream))
+            .await
     }
     async fn streams(&self, prefix: &str) -> StorageResult<Vec<String>> {
         self.0.call("streams", self.0.inner.streams(prefix)).await
@@ -294,7 +307,9 @@ async fn storage_failures_are_reported_not_swallowed() {
     // must not be silent.
     let streams = streams();
     let failing = Failing::new(streams);
-    failing.faults.fail_operation_nth("append", 1, ErrorKind::Unavailable);
+    failing
+        .faults
+        .fail_operation_nth("append", 1, ErrorKind::Unavailable);
     let adapter = Arc::new(FailingStreams(failing.clone()));
     let archive = TriggerArchive::new(adapter);
     let error = archive

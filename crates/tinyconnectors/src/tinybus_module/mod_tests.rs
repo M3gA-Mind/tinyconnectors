@@ -1235,7 +1235,8 @@ async fn scope_preferences_persist_in_the_hosts_documents_across_instances() -> 
 }
 
 #[tokio::test]
-async fn first_storage_open_migrates_legacy_preferences_before_serving_reads() -> tinybus::Result<()> {
+async fn first_storage_open_migrates_legacy_preferences_before_serving_reads() -> tinybus::Result<()>
+{
     let (_serving, proxy, host) = serve_with_storage(ModuleConfig::default()).await?;
     host.scoped
         .documents()
