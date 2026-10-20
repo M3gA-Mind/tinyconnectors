@@ -2,6 +2,205 @@
 
 use super::*;
 
+#[derive(Debug)]
+struct CommitThenConflictStreams {
+    inner: std::sync::Arc<dyn tinystoragedrivers_api::StreamStore>,
+    raced: std::sync::atomic::AtomicBool,
+    append_to_source: Option<String>,
+}
+
+#[derive(Debug)]
+struct CommitThenConflictMarker {
+    inner: std::sync::Arc<dyn tinystoragedrivers_api::DocumentStore>,
+    pending: std::sync::atomic::AtomicBool,
+}
+
+#[tinystoragedrivers_api::async_trait]
+impl tinystoragedrivers_api::DocumentStore for CommitThenConflictMarker {
+    fn capabilities(&self) -> tinystoragedrivers_types::Capabilities {
+        self.inner.capabilities()
+    }
+
+    async fn ensure_collection(
+        &self,
+        spec: &tinystoragedrivers_types::CollectionSpec,
+    ) -> tinystoragedrivers_types::Result<()> {
+        self.inner.ensure_collection(spec).await
+    }
+
+    async fn get(
+        &self,
+        collection: &str,
+        id: &str,
+    ) -> tinystoragedrivers_types::Result<Option<tinystoragedrivers_types::Versioned<Value>>> {
+        self.inner.get(collection, id).await
+    }
+
+    async fn put(
+        &self,
+        collection: &str,
+        id: &str,
+        value: Value,
+        precondition: tinystoragedrivers_types::Precondition,
+    ) -> tinystoragedrivers_types::Result<tinystoragedrivers_types::Version> {
+        let version = self.inner.put(collection, id, value, precondition).await?;
+        if collection == MIGRATIONS
+            && id == PREFS_STEP
+            && self
+                .pending
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            return Err(tinystoragedrivers_types::StorageError::conflict(
+                "marker committed by a competing opener",
+            ));
+        }
+        Ok(version)
+    }
+
+    async fn delete(
+        &self,
+        collection: &str,
+        id: &str,
+        precondition: tinystoragedrivers_types::Precondition,
+    ) -> tinystoragedrivers_types::Result<bool> {
+        self.inner.delete(collection, id, precondition).await
+    }
+
+    async fn query(
+        &self,
+        collection: &str,
+        query: &tinystoragedrivers_types::Query,
+    ) -> tinystoragedrivers_types::Result<
+        tinystoragedrivers_types::Page<tinystoragedrivers_types::Versioned<Value>>,
+    > {
+        self.inner.query(collection, query).await
+    }
+
+    async fn count(
+        &self,
+        collection: &str,
+        filter: &tinystoragedrivers_types::Filter,
+    ) -> tinystoragedrivers_types::Result<u64> {
+        self.inner.count(collection, filter).await
+    }
+
+    async fn delete_where(
+        &self,
+        collection: &str,
+        filter: &tinystoragedrivers_types::Filter,
+    ) -> tinystoragedrivers_types::Result<u64> {
+        self.inner.delete_where(collection, filter).await
+    }
+
+    async fn claim(
+        &self,
+        collection: &str,
+        filter: &tinystoragedrivers_types::Filter,
+        sort: &[tinystoragedrivers_types::Sort],
+        patch: &Value,
+    ) -> tinystoragedrivers_types::Result<Option<tinystoragedrivers_types::Versioned<Value>>> {
+        self.inner.claim(collection, filter, sort, patch).await
+    }
+
+    async fn drop_collection(&self, collection: &str) -> tinystoragedrivers_types::Result<()> {
+        self.inner.drop_collection(collection).await
+    }
+}
+
+#[tinystoragedrivers_api::async_trait]
+impl tinystoragedrivers_api::StreamStore for CommitThenConflictStreams {
+    fn capabilities(&self) -> tinystoragedrivers_types::Capabilities {
+        self.inner.capabilities()
+    }
+
+    async fn append(&self, stream: &str, value: Value) -> tinystoragedrivers_types::Result<u64> {
+        self.inner.append(stream, value).await
+    }
+
+    async fn append_batch(
+        &self,
+        stream: &str,
+        values: Vec<Value>,
+    ) -> tinystoragedrivers_types::Result<u64> {
+        self.inner.append_batch(stream, values).await
+    }
+
+    async fn append_batch_if_offset(
+        &self,
+        stream: &str,
+        expected: u64,
+        values: Vec<Value>,
+    ) -> tinystoragedrivers_types::Result<u64> {
+        if !self.raced.swap(true, std::sync::atomic::Ordering::SeqCst) {
+            self.inner
+                .append_batch_if_offset(stream, expected, values)
+                .await?;
+            if let Some(source) = &self.append_to_source {
+                self.inner
+                    .append(source, serde_json::json!({"event": "concurrent"}))
+                    .await?;
+            }
+            return Err(tinystoragedrivers_types::StorageError::conflict(
+                "competing opener committed the identical page",
+            ));
+        }
+        self.inner
+            .append_batch_if_offset(stream, expected, values)
+            .await
+    }
+
+    async fn read_window(
+        &self,
+        stream: &str,
+        from: u64,
+        limit: usize,
+    ) -> tinystoragedrivers_types::Result<Vec<tinystoragedrivers_types::StreamEntry>> {
+        self.inner.read_window(stream, from, limit).await
+    }
+
+    async fn len(&self, stream: &str) -> tinystoragedrivers_types::Result<u64> {
+        self.inner.len(stream).await
+    }
+
+    async fn truncate_before(
+        &self,
+        stream: &str,
+        offset: u64,
+    ) -> tinystoragedrivers_types::Result<u64> {
+        self.inner.truncate_before(stream, offset).await
+    }
+
+    async fn delete_stream(&self, stream: &str) -> tinystoragedrivers_types::Result<bool> {
+        self.inner.delete_stream(stream).await
+    }
+
+    async fn streams(&self, prefix: &str) -> tinystoragedrivers_types::Result<Vec<String>> {
+        self.inner.streams(prefix).await
+    }
+
+    async fn seal(
+        &self,
+        stream: &str,
+    ) -> tinystoragedrivers_types::Result<tinystoragedrivers_types::SealOutcome> {
+        self.inner.seal(stream).await
+    }
+
+    async fn delete_sealed_stream(
+        &self,
+        stream: &str,
+        sealed_ms: i64,
+    ) -> tinystoragedrivers_types::Result<bool> {
+        self.inner.delete_sealed_stream(stream, sealed_ms).await
+    }
+
+    async fn info(
+        &self,
+        stream: &str,
+    ) -> tinystoragedrivers_types::Result<Option<tinystoragedrivers_types::StreamInfo>> {
+        self.inner.info(stream).await
+    }
+}
+
 fn storage() -> tinystoragedrivers_api::Storage {
     use tinystoragedrivers_api::StorageBackend;
     use tinystoragedrivers_testkit::MemoryBackend;
@@ -53,6 +252,41 @@ async fn migration_refuses_an_invalid_owner_marker() {
         .await
         .expect_err("foreign marker is refused");
     assert_eq!(error.kind(), tinystoragedrivers_types::ErrorKind::Conflict);
+}
+
+#[tokio::test]
+async fn completion_marker_conflict_accepts_the_valid_marker_written_by_a_racer() {
+    use tinystoragedrivers_api::{Storage, StorageBackend};
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::Scope;
+
+    let base = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-marker-race").unwrap())
+        .unwrap();
+    let documents = std::sync::Arc::new(CommitThenConflictMarker {
+        inner: base.documents().clone(),
+        pending: std::sync::atomic::AtomicBool::new(true),
+    });
+    let storage = Storage::new(
+        documents,
+        base.streams().clone(),
+        base.kv().clone(),
+        base.blobs().clone(),
+        base.queues().clone(),
+        base.secrets().clone(),
+    );
+
+    prepare(&storage).await.unwrap();
+    assert!(
+        done(storage.documents().as_ref(), PREFS_STEP)
+            .await
+            .unwrap()
+    );
+    assert!(
+        done(storage.documents().as_ref(), STREAMS_STEP)
+            .await
+            .unwrap()
+    );
 }
 
 #[tokio::test]
@@ -305,6 +539,215 @@ async fn preference_query_failure_is_returned_without_marking_the_step_done() {
             .is_none(),
         "failed reads must not persist a completed migration marker"
     );
+}
+
+#[tokio::test]
+async fn preference_write_failure_keeps_the_source_and_step_retryable() {
+    use std::sync::Arc;
+    use tinystoragedrivers_api::{DocumentStore, Storage, StorageBackend};
+    use tinystoragedrivers_testkit::{Failing, FaultPlan, MemoryBackend};
+    use tinystoragedrivers_types::{ErrorKind, Precondition, Scope};
+
+    let base = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-preference-write-failure").unwrap())
+        .unwrap();
+    base.documents()
+        .put(
+            LEGACY_PREFS_NAMESPACE,
+            "gmail",
+            json!({"value": {"enabled": true}}),
+            Precondition::Absent,
+        )
+        .await
+        .unwrap();
+    let faults = FaultPlan::new();
+    faults.fail_operation_nth("documents.put_with", 1, ErrorKind::Backend);
+    let documents: Arc<dyn DocumentStore> =
+        Arc::new(Failing::with_plan(base.documents().clone(), faults));
+    let storage = Storage::new(
+        documents,
+        base.streams().clone(),
+        base.kv().clone(),
+        base.blobs().clone(),
+        base.queues().clone(),
+        base.secrets().clone(),
+    );
+
+    let error = prepare(&storage)
+        .await
+        .expect_err("destination write errors stop migration before completion");
+    assert_eq!(error.kind(), ErrorKind::Backend);
+    assert!(
+        base.documents()
+            .get(LEGACY_PREFS_NAMESPACE, "gmail")
+            .await
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        base.documents()
+            .get(MIGRATIONS, PREFS_STEP)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn stream_discovery_failure_does_not_complete_stream_migration() {
+    use std::sync::Arc;
+    use tinystoragedrivers_api::{Storage, StorageBackend, StreamStore};
+    use tinystoragedrivers_testkit::{Failing, FaultPlan, MemoryBackend};
+    use tinystoragedrivers_types::{ErrorKind, Scope};
+
+    let base = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-stream-discovery-failure").unwrap())
+        .unwrap();
+    base.streams()
+        .append("triggers/2026-10-20", json!({"event": 1}))
+        .await
+        .unwrap();
+    let faults = FaultPlan::new();
+    faults.fail_operation_nth("streams.streams", 1, ErrorKind::Backend);
+    let streams: Arc<dyn StreamStore> =
+        Arc::new(Failing::with_plan(base.streams().clone(), faults));
+    let storage = Storage::new(
+        base.documents().clone(),
+        streams,
+        base.kv().clone(),
+        base.blobs().clone(),
+        base.queues().clone(),
+        base.secrets().clone(),
+    );
+
+    let error = prepare(&storage)
+        .await
+        .expect_err("stream discovery errors are returned to the opener");
+    assert_eq!(error.kind(), ErrorKind::Backend);
+    assert_eq!(base.streams().len("triggers/2026-10-20").await.unwrap(), 1);
+    assert!(
+        base.documents()
+            .get(MIGRATIONS, STREAMS_STEP)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
+async fn stream_copy_conflict_without_matching_raced_data_preserves_source() {
+    use std::sync::Arc;
+    use tinystoragedrivers_api::{Storage, StorageBackend, StreamStore};
+    use tinystoragedrivers_testkit::{Failing, FaultPlan, MemoryBackend};
+    use tinystoragedrivers_types::{ErrorKind, Scope};
+
+    let base = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-stream-race-conflict").unwrap())
+        .unwrap();
+    let source = "triggers/2026-10-21";
+    let target = "connectors.triggers/2026-10-21";
+    base.streams()
+        .append(source, json!({"event": "source"}))
+        .await
+        .unwrap();
+
+    // This testkit fault models an append rejected by the host after the
+    // source snapshot but before any competing page became visible.
+    let faults = FaultPlan::new();
+    faults.fail_operation_nth("streams.append_batch_if_offset", 1, ErrorKind::Conflict);
+    let streams: Arc<dyn StreamStore> =
+        Arc::new(Failing::with_plan(base.streams().clone(), faults));
+    let storage = Storage::new(
+        base.documents().clone(),
+        streams,
+        base.kv().clone(),
+        base.blobs().clone(),
+        base.queues().clone(),
+        base.secrets().clone(),
+    );
+
+    let error = prepare(&storage)
+        .await
+        .expect_err("an append conflict without the expected raced page is not accepted");
+    assert_eq!(error.kind(), ErrorKind::Conflict);
+    assert_eq!(base.streams().len(source).await.unwrap(), 1);
+    assert_eq!(base.streams().len(target).await.unwrap(), 0);
+}
+
+#[tokio::test]
+async fn stream_copy_accepts_conflict_after_an_identical_page_was_committed() {
+    use tinystoragedrivers_api::{Storage, StorageBackend};
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::Scope;
+
+    let base = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-stream-identical-race").unwrap())
+        .unwrap();
+    let source = "triggers/2026-10-22";
+    let target = "connectors.triggers/2026-10-22";
+    base.streams()
+        .append(source, json!({"event": "same-page"}))
+        .await
+        .unwrap();
+
+    let streams = std::sync::Arc::new(CommitThenConflictStreams {
+        inner: base.streams().clone(),
+        raced: std::sync::atomic::AtomicBool::new(false),
+        append_to_source: None,
+    });
+    let storage = Storage::new(
+        base.documents().clone(),
+        streams,
+        base.kv().clone(),
+        base.blobs().clone(),
+        base.queues().clone(),
+        base.secrets().clone(),
+    );
+
+    prepare(&storage).await.unwrap();
+    assert_eq!(base.streams().len(source).await.unwrap(), 0);
+    assert_eq!(base.streams().len(target).await.unwrap(), 1);
+    assert_eq!(
+        base.streams().read_window(target, 0, 1).await.unwrap()[0].value,
+        json!({"event": "same-page"})
+    );
+}
+
+#[tokio::test]
+async fn stream_copy_refuses_to_delete_a_source_that_grows_during_the_copy() {
+    use tinystoragedrivers_api::{Storage, StorageBackend};
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::{ErrorKind, Scope};
+
+    let base = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-stream-source-growth").unwrap())
+        .unwrap();
+    let source = "triggers/2026-10-23";
+    let target = "connectors.triggers/2026-10-23";
+    base.streams()
+        .append(source, json!({"event": "original"}))
+        .await
+        .unwrap();
+    let streams = std::sync::Arc::new(CommitThenConflictStreams {
+        inner: base.streams().clone(),
+        raced: std::sync::atomic::AtomicBool::new(false),
+        append_to_source: Some(source.to_owned()),
+    });
+    let storage = Storage::new(
+        base.documents().clone(),
+        streams,
+        base.kv().clone(),
+        base.blobs().clone(),
+        base.queues().clone(),
+        base.secrets().clone(),
+    );
+
+    let error = prepare(&storage)
+        .await
+        .expect_err("source growth during copy must abort deletion");
+    assert_eq!(error.kind(), ErrorKind::Conflict);
+    assert_eq!(base.streams().len(source).await.unwrap(), 2);
+    assert_eq!(base.streams().len(target).await.unwrap(), 1);
 }
 
 #[tokio::test]

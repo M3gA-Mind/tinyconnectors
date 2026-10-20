@@ -142,9 +142,11 @@ async fn migrate_preferences(
 async fn migrate_streams(streams: &dyn StreamStore) -> tinystoragedrivers_types::Result<()> {
     let names = streams.streams(LEGACY_STREAM_PREFIX).await?;
     for source in names {
-        let Some(day) = source.strip_prefix(LEGACY_STREAM_PREFIX) else {
-            continue;
-        };
+        // `StreamStore::streams(prefix)` returns only names with this prefix;
+        // surface a contract violation without risking deletion under a bad key.
+        let day = source.strip_prefix(LEGACY_STREAM_PREFIX).ok_or_else(|| {
+            StorageError::invalid_input("stream listing returned a name outside its prefix")
+        })?;
         let target = format!("{STREAM_PREFIX}{day}");
         let source_len = streams.len(&source).await?;
         let target_len = streams.len(&target).await?;
@@ -193,12 +195,8 @@ async fn migrate_streams(streams: &dyn StreamStore) -> tinystoragedrivers_types:
                 .append_batch_if_offset(&target, offset, values.clone())
                 .await
             {
-                Ok(copied) if copied == offset => {}
-                Ok(_) => {
-                    return Err(StorageError::conflict(format!(
-                        "migration target `{target}` changed while it was copied"
-                    )));
-                }
+                // The port returns the first appended offset by contract.
+                Ok(_) => {}
                 Err(error) if error.kind() == tinystoragedrivers_types::ErrorKind::Conflict => {
                     // Another opener may have copied this same page. Accept
                     // only an exact match at the expected offsets.
