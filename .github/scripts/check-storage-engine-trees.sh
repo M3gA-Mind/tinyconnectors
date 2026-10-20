@@ -7,8 +7,17 @@ has_blocked_dependency() {
   awk '{print $1}' | grep -xE "$blocked"
 }
 
+normalize_text_output() {
+  tr -d '\r'
+}
+
 self_test() {
-  local benign engine fixture selected
+  local benign engine fixture normalized selected
+  normalized=$(printf 'native-lib\r\n' | normalize_text_output)
+  [[ "$normalized" == 'native-lib' ]] || {
+    printf 'storage-engine dependency check failed CRLF normalization self-test: %q\n' "$normalized" >&2
+    return 1
+  }
   benign=$(printf '%s\n' \
     'tinyconnectors v0.21.0' \
     'tinystoragedrivers-api v2.0.1' \
@@ -42,7 +51,7 @@ self_test() {
     | select(.id as $id | $members | index($id))
     | select(any(.targets[]; any(.kind[]; IN("lib", "rlib", "dylib", "cdylib", "staticlib", "proc-macro"))))
     | .name
-  ' <<<"$fixture" | sort)
+  ' <<<"$fixture" | sed 's/$/\r/' | normalize_text_output | sort)
   [[ "$selected" == $'native-cdylib\nnative-dylib\nnative-lib\nnative-proc-macro\nnative-rlib\nnative-staticlib' ]] || {
     printf 'workspace library target selection failed self-test: %s\n' "$selected" >&2
     return 1
@@ -58,7 +67,7 @@ packages=$(jq -r '
   | select(.id as $id | $metadata.workspace_members | index($id))
   | select(any(.targets[]; any(.kind[]; IN("lib", "rlib", "dylib", "cdylib", "staticlib", "proc-macro"))))
   | .name
-' <<<"$metadata" | sort -u)
+' <<<"$metadata" | normalize_text_output | sort -u)
 
 if [[ -z "$packages" ]]; then
   echo 'no TinyConnectors library targets found in workspace metadata' >&2
