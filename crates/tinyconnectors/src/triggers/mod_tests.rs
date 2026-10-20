@@ -9,7 +9,7 @@ use serde_json::{Value, json};
 use tinystoragedrivers_api::{StorageBackend, StreamStore};
 use tinystoragedrivers_testkit::{Failing, MemoryBackend};
 use tinystoragedrivers_types::{
-    Capabilities, ErrorKind, Result as StorageResult, Scope, StreamEntry,
+    Capabilities, ErrorKind, Result as StorageResult, Scope, SealOutcome, StreamEntry, StreamInfo,
 };
 
 use super::{DEFAULT_HISTORY_LIMIT, TriggerArchive};
@@ -296,6 +296,20 @@ impl StreamStore for FailingStreams {
             .call("delete_stream", self.0.inner.delete_stream(stream))
             .await
     }
+    async fn seal(&self, stream: &str) -> StorageResult<SealOutcome> {
+        self.0.call("seal", self.0.inner.seal(stream)).await
+    }
+    async fn delete_sealed_stream(&self, stream: &str, sealed_ms: i64) -> StorageResult<bool> {
+        self.0
+            .call(
+                "delete_sealed_stream",
+                self.0.inner.delete_sealed_stream(stream, sealed_ms),
+            )
+            .await
+    }
+    async fn info(&self, stream: &str) -> StorageResult<Option<StreamInfo>> {
+        self.0.call("info", self.0.inner.info(stream)).await
+    }
     async fn streams(&self, prefix: &str) -> StorageResult<Vec<String>> {
         self.0.call("streams", self.0.inner.streams(prefix)).await
     }
@@ -317,8 +331,56 @@ async fn storage_failures_are_reported_not_swallowed() {
         .await
         .expect_err("must report");
     assert!(matches!(error, crate::Error::Archive { .. }));
+    archive
+        .record("gmail", "T", "evt-1", "u", &json!({}))
+        .await
+        .expect("a later delivery can be archived");
+    failing
+        .faults
+        .fail_operation_nth("len", 1, ErrorKind::Unavailable);
+    assert!(archive.list_recent(None).await.is_err());
+}
+
+#[tokio::test]
+async fn history_reads_report_retention_failures() {
+    let streams = streams();
+    let failing = Failing::new(streams);
+    let adapter = Arc::new(FailingStreams(failing.clone()));
+    let archive = TriggerArchive::new(adapter);
+    archive
+        .record("gmail", "T", "evt-0", "u", &json!({}))
+        .await
+        .expect("the delivery is archived before retention runs");
+
+    // `list_recent` runs the owner's due-retention policy before it returns
+    // history. Backend errors are visible, as they are from TSD maintenance.
     failing
         .faults
         .fail_operation_nth("streams", 1, ErrorKind::Unavailable);
     assert!(archive.list_recent(None).await.is_err());
+}
+
+#[tokio::test]
+async fn post_append_retention_failure_does_not_report_a_persisted_delivery_as_failed() {
+    let streams = streams();
+    let failing = Failing::new(streams);
+    let adapter = Arc::new(FailingStreams(failing.clone()));
+    let archive = TriggerArchive::new(adapter);
+
+    // The record is committed before the opportunistic idle-seal pass. A
+    // maintenance failure must not make the delivery caller retry a record
+    // that is already durable.
+    failing
+        .faults
+        .fail_operation_nth("streams", 1, ErrorKind::Unavailable);
+    archive
+        .record("gmail", "T", "evt-0", "u", &json!({}))
+        .await
+        .expect("the committed delivery remains successful");
+
+    let history = archive
+        .list_recent(None)
+        .await
+        .expect("history is readable");
+    assert_eq!(ids(&history), ["evt-0"]);
 }

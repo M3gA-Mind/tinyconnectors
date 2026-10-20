@@ -14,7 +14,10 @@ use tinystoragedrivers_types::CollectionSpec;
 /// The collections a host should provision for this module.
 #[must_use]
 pub fn collections() -> Vec<CollectionSpec> {
-    vec![CollectionSpec::new(PREFS_NAMESPACE)]
+    vec![
+        CollectionSpec::new(PREFS_NAMESPACE),
+        CollectionSpec::new(MIGRATIONS_NAMESPACE),
+    ]
 }
 
 /// Collections and stream prefixes the module may access through its storage grant.

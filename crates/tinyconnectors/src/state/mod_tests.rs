@@ -153,7 +153,11 @@ fn the_declared_grant_matches_what_the_stores_write() {
         "host collection declarations and owner-open migration declarations must agree"
     );
     assert!(needs.collections.contains(&PREFS_NAMESPACE.to_owned()));
-    assert_eq!(needs.stream_prefixes, ["connectors.triggers/"]);
+    assert_eq!(
+        needs.stream_prefixes,
+        ["connectors.triggers/", "triggers/"],
+        "owner migrations still need the source stream prefix"
+    );
     let archive = crate::triggers::TriggerArchive::new(scoped("grant").streams().clone());
     assert!(
         archive

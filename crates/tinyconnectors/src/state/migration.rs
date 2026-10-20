@@ -103,19 +103,21 @@ async fn migrate_preferences(
                 _ => Value::Null,
             };
             let body = encode_preference(&value);
+            // Expiration is application-significant and is carried over the
+            // module storage bus. `created_ms` is host-owned, so the target
+            // receives the host's creation time for this new cross-collection
+            // record instead of impersonating the legacy record's timestamp.
+            let mut options = WriteOptions::new().schema(PREFS_SCHEMA_VERSION);
+            if let Some(expires_ms) = record.meta.expires_ms {
+                options = options.expires_ms(expires_ms);
+            }
             match documents
                 .put_with(
                     PREFS_NAMESPACE,
                     id.as_str(),
                     body.clone(),
                     Precondition::Absent,
-                    if record.meta.created_ms > 0 {
-                        WriteOptions::new()
-                            .schema(PREFS_SCHEMA_VERSION)
-                            .created_ms(record.meta.created_ms)
-                    } else {
-                        WriteOptions::new().schema(PREFS_SCHEMA_VERSION)
-                    },
+                    options,
                 )
                 .await
             {
