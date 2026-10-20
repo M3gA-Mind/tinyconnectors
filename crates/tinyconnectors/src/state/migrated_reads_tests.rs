@@ -1,5 +1,5 @@
 //! Owner migration tests through the same bound-storage preparation path used
-//! when the TinyBus module first connects to host storage.
+//! when the `TinyBus` module first connects to host storage.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 

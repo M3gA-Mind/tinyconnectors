@@ -29,7 +29,7 @@ pub struct StorageNeeds {
     pub stream_prefixes: Vec<String>,
 }
 
-/// The storage names required by TinyConnectors.
+/// The storage names required by `TinyConnectors`.
 #[must_use]
 pub fn storage_needs() -> StorageNeeds {
     StorageNeeds {

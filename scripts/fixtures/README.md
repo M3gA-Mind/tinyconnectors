@@ -2,9 +2,11 @@
 
 `v0.21.0-gmail-pref.json` is output from the public `DocumentPrefsStore` and
 `PrefsStore::set` APIs in TinyConnectors tag `v0.21.0` at
-`36456935ba86b683e1e56871e975c4c3bd014a2a`. That source pinned
-`tinystoragedrivers-core` and its storage bus crates to `v1.0.0`. The artifact
-contains the prior release's current preference record; the separate migration
+`36456935ba86b683e1e56871e975c4c3bd014a2a`. Its TinyBus gitlink is
+`1f33d1be1901a2d44bfe674cd7cf294cf3848821`, and its lockfile pins TSD
+`v1.0.0` to `141fd9ed0ad5d14a8fb5a1b3e837a719e81ac08d`. The artifact SHA-256
+is `11c9c8c63cb1703cb5daea1819c52f1a34d9a35ac31e4556117665e8f4110d25`. It
+contains the prior release's current preference record; separate migration
 tests cover older legacy-schema transformations.
 
 The module-open compatibility test loads this record through the actual module
@@ -27,4 +29,6 @@ cargo run --locked --no-default-features -p tinyconnectors \
 
 The example is compiled with the archived workspace lockfile and the archived
 TSD `v1.0.0` dependency. Its JSON output is the fixture bytes. No current
-TinyConnectors or TSD implementation writes the artifact.
+TinyConnectors or TSD implementation writes the artifact. `created_ms` and
+`updated_ms` come from the old writer's host clock, so regeneration at another
+time changes those values and the fixture hash.

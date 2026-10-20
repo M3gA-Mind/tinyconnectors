@@ -25,7 +25,7 @@ pub fn collections() -> Vec<CollectionSpec> {
     ]
 }
 
-/// Run TinyConnectors' migrations against its already-bound storage ports.
+/// Run `TinyConnectors`' migrations against its already-bound storage ports.
 ///
 /// # Errors
 /// Returns the first storage or migration error. A later open can safely retry

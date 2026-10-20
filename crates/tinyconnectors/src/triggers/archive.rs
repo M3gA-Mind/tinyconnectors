@@ -80,10 +80,10 @@ impl TriggerArchive {
             .await
             .map_err(|error| failed(format!("could not append to the archive: {error}")))?;
 
-        if self.streams.capabilities().contains(Capability::StreamSeal) {
-            if let Err(error) = self.seal_idle_days().await {
-                tracing::warn!(%error, "[connectors][triggers] could not seal idle archive streams");
-            }
+        if self.streams.capabilities().contains(Capability::StreamSeal)
+            && let Err(error) = self.seal_idle_days().await
+        {
+            tracing::warn!(%error, "[connectors][triggers] could not seal idle archive streams");
         }
 
         tracing::debug!(
@@ -201,7 +201,8 @@ const RETENTION: ArchiveRetention = ArchiveRetention {
 
 impl ArchiveRetention {
     fn should_seal(self, now_ms: i64, last_append_ms: Option<i64>) -> bool {
-        last_append_ms.is_some_and(|last| last <= now_ms.saturating_sub(self.idle_ms as i64))
+        let idle_ms = i64::try_from(self.idle_ms).unwrap_or(i64::MAX);
+        last_append_ms.is_some_and(|last| last <= now_ms.saturating_sub(idle_ms))
     }
 }
 
