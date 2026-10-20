@@ -111,6 +111,7 @@ pub use processing::{
     RecordTriggerRequest,
 };
 pub mod names;
+#[cfg(feature = "storage")]
 pub mod storage;
 pub mod version;
 

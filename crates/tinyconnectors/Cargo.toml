@@ -59,7 +59,8 @@ url = { workspace = true }
 percent-encoding = { workspace = true }
 # The storage ports the preferences (documents) and trigger archive (streams)
 # are written through.
-tinystoragedrivers-core = { workspace = true }
+tinystoragedrivers-types = { workspace = true }
+tinystoragedrivers-api = { workspace = true }
 # The module's connection to the host's storage bus (`connect_storage`). Tied to
 # the `module` feature because it needs the TinyBus `Connection` that feature
 # provides.
@@ -81,7 +82,8 @@ tinybus = { workspace = true, features = ["test-support"] }
 # The loopback storage host the module tests connect to: `serve` over a
 # `StorageServer` bound to an in-memory backend.
 tinystoragedrivers-busproxy = { workspace = true }
-tinystoragedrivers-client = { workspace = true }
+tinystoragedrivers-testkit = { workspace = true }
+tinystoragedrivers-document = { workspace = true, features = ["memory"] }
 
 # The bundled examples drive the loaded module through TinyBus.
 [[example]]
