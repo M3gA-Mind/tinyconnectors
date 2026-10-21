@@ -19,6 +19,7 @@ class PackageTests(unittest.TestCase):
         target = ROOT / "target"; target.mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=target) as directory:
             fixture = Path(directory); home = fixture/"home"; home.mkdir()
+            bash_env = fixture/"bash-env"; bash_env.write_text("umask 0002\n")
             bindir = fixture/"bin"; bindir.mkdir()
             uname = bindir/"uname"
             uname.write_text("#!/usr/bin/env bash\nprintf '%s\\n' Darwin\n")
@@ -35,6 +36,7 @@ class PackageTests(unittest.TestCase):
                 "Path(os.environ['RECORDED_MODULE_PATH']+'.exists').write_text(str(Path(module).is_file()))\n")
             cargo.chmod(0o755)
             env = dict(os.environ, HOME=str(home), PATH=str(bindir)+os.pathsep+os.environ["PATH"],
+                BASH_ENV=str(bash_env),
                 RECORDED_MODULE_PATH=str(fixture/"loaded-module-path"),
                 TINYJUICE_TEST_MODULE=str(fixture/"inherited-module"),
                 TINYCHANNELS_MODULE_ARTIFACT=str(fixture/"inherited-channels-module"))
@@ -44,6 +46,7 @@ class PackageTests(unittest.TestCase):
             result = subprocess.run(["bash", str(ROOT/"scripts/verify-module.sh"),
                 "--archive", str(archive)], cwd=ROOT, env=env, text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((home/".cache").stat().st_mode & 0o777, 0o700)
             module_path = Path((fixture/"loaded-module-path").read_text())
             self.assertTrue(module_path.is_relative_to(home/".cache"), module_path)
             self.assertEqual(Path(str(fixture/"loaded-module-path")+".exists").read_text(), "True")
