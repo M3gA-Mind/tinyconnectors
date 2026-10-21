@@ -32,7 +32,7 @@ reject_symlink_components() {
 }
 reject_symlink_components "$HOME"
 stage_parent="$HOME/.cache"
-mkdir -p "$stage_parent"
+mkdir -p -m 700 "$stage_parent"
 reject_symlink_components "$stage_parent"
 [[ -O "$stage_parent" ]] || {
   echo "verification cache is not owned by the current user: $stage_parent" >&2
