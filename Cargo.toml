@@ -99,7 +99,7 @@ tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedr
 # the same crate (`serve`) is what the loopback tests stand up.
 tinystoragedrivers-busproxy = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0" }
 # `StorageServer` binds a scope to a backend; dev-only, for the loopback host.
-tinystoragedrivers-client = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v0.11.0" }
+tinystoragedrivers-client = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0" }
 
 # Lints apply to every member that opts in with `[lints] workspace = true`, and
 # to every target of that member. CI runs clippy with `-D warnings`, so anything
