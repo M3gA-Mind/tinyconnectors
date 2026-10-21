@@ -75,7 +75,7 @@ ureq = { version = "3", features = ["json", "platform-verifier", "socks-proxy"] 
 # are pure Rust with no I/O, so the contract crate stays transport-free, and
 # the versions match what the lockfile already carries through other crates.
 hmac = { version = "0.13", default-features = false }
-sha2 = { version = "0.10", default-features = false }
+sha2 = { version = "0.11", default-features = false }
 base64 = { version = "0.23", default-features = false, features = ["alloc"] }
 # Base-URL validation in the HTTP transport. A parser, not a prefix match: a
 # `starts_with("http://127.0.0.1")` check is fooled by userinfo smuggling like
