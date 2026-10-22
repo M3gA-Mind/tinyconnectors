@@ -421,6 +421,33 @@ impl ConnectorService {
         })
     }
 
+    /// The preference governing `action`: the one saved under the longest
+    /// toolkit name its slug starts with, or the default if none is.
+    ///
+    /// Matched against what was saved rather than guessed from the slug: a
+    /// toolkit whose own name contains `_` (`zoho_books`) would otherwise be
+    /// read under its first segment (`zoho`), and its read-only preference
+    /// never consulted. A store or decode failure still refuses.
+    async fn pref_for(&self, action: &str) -> TinyBusResult<UserScopePref> {
+        let failed = |error: tinyconnectors_sync::Error| tinybus::Error::failed(error.to_string());
+        let slug = action.trim().to_ascii_lowercase();
+        for (end, _) in slug.rmatch_indices('_') {
+            let toolkit = &slug[..end];
+            if self
+                .prefs
+                .get(&UserScopePref::key(toolkit))
+                .await
+                .map_err(failed)?
+                .is_some()
+            {
+                return UserScopePref::load(self.prefs.as_ref(), toolkit)
+                    .await
+                    .map_err(failed);
+            }
+        }
+        Ok(UserScopePref::default())
+    }
+
     /// Whether the user's preference permits `action`.
     ///
     /// The scope comes from the toolkit's curated catalog when it lists the
@@ -435,9 +462,7 @@ impl ConnectorService {
         let Some(toolkit) = tinyconnectors_sync::toolkit_from_slug(action) else {
             return Ok(true);
         };
-        let pref = UserScopePref::load(self.prefs.as_ref(), &toolkit)
-            .await
-            .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+        let pref = self.pref_for(action).await?;
 
         let scope = self
             .registry
@@ -458,12 +483,10 @@ impl ConnectorService {
     /// catalog offers only the actions in it, so the agent never sees an action
     /// the catalog does not vouch for. Execution keeps the preference-only rule.
     async fn listed(&self, action: &str) -> TinyBusResult<bool> {
-        let Some(toolkit) = tinyconnectors_sync::toolkit_from_slug(action) else {
+        if tinyconnectors_sync::toolkit_from_slug(action).is_none() {
             return Ok(true);
-        };
-        let pref = UserScopePref::load(self.prefs.as_ref(), &toolkit)
-            .await
-            .map_err(|error| tinybus::Error::failed(error.to_string()))?;
+        }
+        let pref = self.pref_for(action).await?;
         Ok(crate::vocabulary_impl::catalogs::is_action_visible_with_pref(action, pref))
     }
 
