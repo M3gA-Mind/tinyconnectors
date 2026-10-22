@@ -303,7 +303,10 @@ async fn migrate_streams(streams: &dyn StreamStore) -> tinystoragedrivers_types:
                 "migration source `{source}` changed while it was copied"
             )));
         }
-        streams.delete_stream(&source).await?;
+        // Keep the legacy source after copying. StreamStore has no
+        // compare-and-delete operation, so a legacy writer could append after
+        // the final length check and before deletion. Trigger history reads
+        // both prefixes and deduplicates the copied entries by event identity.
     }
     Ok(())
 }
