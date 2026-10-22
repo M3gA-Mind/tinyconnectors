@@ -276,7 +276,7 @@ async fn authorize_reports_a_link_response_with_no_url() {
 
 #[tokio::test]
 async fn gates_a_key_composio_keeps_rejecting() {
-    let transport = FakeTransport::failing("401 invalid api key");
+    let transport = FakeTransport::failing("HTTP 401: Invalid API key");
     let direct = route(transport.clone());
 
     // Every attempt up to the threshold reaches Composio; the next is refused
@@ -310,8 +310,25 @@ async fn does_not_gate_on_failures_that_say_nothing_about_the_key() {
 }
 
 #[tokio::test]
+async fn does_not_gate_on_a_tool_error_that_mentions_an_api_key() {
+    // The provider's own text is not the key verdict: only a 401 from
+    // Composio is. A downstream tool's 400 must not lock the user out.
+    let transport = FakeTransport::failing("HTTP 400: Invalid API key for Stripe");
+    let direct = route(transport.clone());
+
+    for _ in 0..INVALID_API_KEY_THRESHOLD + 2 {
+        assert!(direct.list_connections().await.is_err());
+    }
+    assert_eq!(
+        transport.calls(),
+        INVALID_API_KEY_THRESHOLD + 2,
+        "every attempt must still be made"
+    );
+}
+
+#[tokio::test]
 async fn a_success_clears_the_failure_count() {
-    let transport = FakeTransport::failing("401 invalid api key");
+    let transport = FakeTransport::failing("HTTP 401: Invalid API key");
     let direct = route(transport.clone());
 
     for _ in 0..2 {
@@ -324,7 +341,7 @@ async fn a_success_clears_the_failure_count() {
     assert!(direct.list_connections().await.is_ok());
 
     // The old tally must not carry over and gate the working key.
-    *transport.fail.lock().unwrap() = Some("401 invalid api key".to_string());
+    *transport.fail.lock().unwrap() = Some("HTTP 401: Invalid API key".to_string());
     for _ in 0..INVALID_API_KEY_THRESHOLD {
         assert!(direct.list_connections().await.is_err());
     }
@@ -410,6 +427,18 @@ async fn carries_a_v3_failure_through() {
         "successful": false,
         "error": "insufficient scope"
     }));
+    let response = route(transport)
+        .execute("GMAIL_SEND_EMAIL", &json!({}), None)
+        .await
+        .unwrap();
+
+    assert!(!response.successful);
+    assert_eq!(response.error.as_deref(), Some("insufficient scope"));
+}
+
+#[tokio::test]
+async fn treats_a_v3_result_with_an_error_and_no_verdict_as_failed() {
+    let transport = FakeTransport::replying(json!({ "error": "insufficient scope" }));
     let response = route(transport)
         .execute("GMAIL_SEND_EMAIL", &json!({}), None)
         .await
@@ -555,7 +584,7 @@ async fn execute_keeps_the_configured_entity_when_the_owner_is_unknown() {
 
 #[tokio::test]
 async fn a_rejected_key_in_the_owner_lookup_counts_toward_the_gate() {
-    let transport = FakeTransport::failing("401 invalid api key");
+    let transport = FakeTransport::failing("HTTP 401: Invalid API key");
     let direct = route(transport.clone());
 
     // The lookup is the one request per execute: its rejection is returned,
