@@ -13,8 +13,8 @@ use async_trait::async_trait;
 use serde_json::json;
 
 use super::{ProxyRoute, Route};
-use crate::Result;
 use crate::client::Transport;
+use crate::{Error, Result};
 
 #[derive(Debug, Default)]
 struct FakeTransport {
@@ -100,4 +100,16 @@ async fn a_successful_envelope_with_no_data_is_an_error_rather_than_an_empty_ans
 
     let error = route.list_toolkits().await.unwrap_err().to_string();
     assert!(error.contains("no data"), "{error}");
+}
+
+#[tokio::test]
+async fn a_dot_segment_id_is_refused_before_it_can_retarget_the_request() {
+    // `/connections/..` resolves to the parent path, so a delete aimed at one
+    // connection would address another endpoint.
+    let route = ProxyRoute::new(FakeTransport::replying(json!({ "success": true })));
+
+    let error = route.delete_connection("..").await.unwrap_err();
+    assert!(matches!(error, Error::InvalidArguments { .. }), "{error}");
+    let error = route.disable_trigger(".").await.unwrap_err();
+    assert!(matches!(error, Error::InvalidArguments { .. }), "{error}");
 }

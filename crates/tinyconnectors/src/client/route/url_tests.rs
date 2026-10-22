@@ -2,7 +2,7 @@
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use super::{comma_joined, encode};
+use super::{comma_joined, encode, segment};
 
 #[test]
 fn leaves_unreserved_characters_alone() {
@@ -52,4 +52,19 @@ fn omits_the_parameter_entirely_when_nothing_survives() {
 fn encodes_each_joined_value_but_not_the_commas() {
     let values = vec!["a b".to_string(), "c&d".to_string()];
     assert_eq!(comma_joined(&values).as_deref(), Some("a%20b,c%26d"));
+}
+
+#[test]
+fn refuses_a_dot_or_empty_path_segment() {
+    // `..` would be resolved by the URL parser and re-target the request at
+    // the parent collection; an empty segment drops out the same way.
+    for value in [".", "..", " .. ", "...", "", "  "] {
+        let error = segment(value, "connection_id").unwrap_err();
+        assert!(
+            matches!(error, crate::Error::InvalidArguments { .. }),
+            "{value:?}: {error}"
+        );
+    }
+    assert_eq!(segment(" a.b ", "connection_id").unwrap(), "a.b");
+    assert_eq!(segment("..a", "connection_id").unwrap(), "..a");
 }
