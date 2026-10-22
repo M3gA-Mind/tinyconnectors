@@ -799,6 +799,51 @@ async fn preference_write_failure_keeps_the_source_and_step_retryable() {
 }
 
 #[tokio::test]
+async fn a_preference_write_conflict_without_a_target_stops_migration() {
+    use std::sync::Arc;
+    use tinystoragedrivers_api::{DocumentStore, Storage, StorageBackend};
+    use tinystoragedrivers_testkit::{Failing, FaultPlan, MemoryBackend};
+    use tinystoragedrivers_types::{ErrorKind, Precondition, Scope};
+
+    let base = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-preference-disappearing-target").unwrap())
+        .unwrap();
+    base.documents()
+        .put(
+            LEGACY_PREFS_NAMESPACE,
+            "gmail",
+            json!({"value": {"read": true}}),
+            Precondition::Absent,
+        )
+        .await
+        .unwrap();
+    let faults = FaultPlan::new();
+    faults.fail_operation_nth("documents.put_with", 1, ErrorKind::Conflict);
+    let documents: Arc<dyn DocumentStore> =
+        Arc::new(Failing::with_plan(base.documents().clone(), faults));
+    let storage = Storage::new(
+        documents,
+        base.streams().clone(),
+        base.kv().clone(),
+        base.blobs().clone(),
+        base.queues().clone(),
+        base.secrets().clone(),
+    );
+
+    let error = prepare(&storage)
+        .await
+        .expect_err("a racing target that vanished cannot be treated as migrated");
+    assert_eq!(error.kind(), ErrorKind::Conflict);
+    assert!(
+        base.documents()
+            .get(PREFS_NAMESPACE, "gmail")
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+#[tokio::test]
 async fn stream_discovery_failure_does_not_complete_stream_migration() {
     use std::sync::Arc;
     use tinystoragedrivers_api::{Storage, StorageBackend, StreamStore};
