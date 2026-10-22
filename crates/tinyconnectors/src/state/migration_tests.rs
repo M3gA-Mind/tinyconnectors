@@ -88,6 +88,48 @@ impl tinystoragedrivers_api::DocumentStore for CommitThenConflictMarker {
         Ok(version)
     }
 
+    async fn put_with(
+        &self,
+        collection: &str,
+        id: &str,
+        value: Value,
+        precondition: tinystoragedrivers_types::Precondition,
+        options: tinystoragedrivers_types::WriteOptions,
+    ) -> tinystoragedrivers_types::Result<tinystoragedrivers_types::Version> {
+        let version = self
+            .inner
+            .put_with(collection, id, value, precondition, options)
+            .await?;
+        if collection == PREFS_NAMESPACE
+            && self
+                .update_legacy_after_target_write
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            self.inner
+                .put(
+                    LEGACY_PREFS_NAMESPACE,
+                    id,
+                    json!({"value": {"updated_during_migration": true}}),
+                    tinystoragedrivers_types::Precondition::None,
+                )
+                .await?;
+        }
+        if collection == PREFS_NAMESPACE
+            && self
+                .delete_legacy_after_target_write
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            self.inner
+                .delete(
+                    LEGACY_PREFS_NAMESPACE,
+                    id,
+                    tinystoragedrivers_types::Precondition::None,
+                )
+                .await?;
+        }
+        Ok(version)
+    }
+
     async fn delete(
         &self,
         collection: &str,
