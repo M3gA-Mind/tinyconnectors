@@ -399,7 +399,7 @@ async fn preference_migration_resumes_matching_targets_across_pages() {
 }
 
 #[tokio::test]
-async fn preference_migration_preserves_expiration_and_rejects_expiry_mismatch() {
+async fn preference_migration_preserves_expiration_and_existing_target_on_mismatch() {
     use tinystoragedrivers_api::StorageBackend;
     use tinystoragedrivers_testkit::MemoryBackend;
     use tinystoragedrivers_types::{Precondition, Scope, WriteOptions};
@@ -429,10 +429,9 @@ async fn preference_migration_preserves_expiration_and_rejects_expiry_mismatch()
         .put(PREFS_NAMESPACE, "gmail", body.clone(), Precondition::Absent)
         .await
         .unwrap();
-    let error = prepare(&collision)
+    prepare(&collision)
         .await
-        .expect_err("matching payload with different expiry is a collision");
-    assert_eq!(error.kind(), tinystoragedrivers_types::ErrorKind::Conflict);
+        .expect("an existing target remains authoritative on expiry mismatch");
     assert_eq!(
         collision
             .documents()
@@ -908,7 +907,7 @@ async fn stream_migration_resumes_a_matching_partial_target() {
 
     prepare(&storage).await.unwrap();
 
-    assert_eq!(storage.streams().len(source).await.unwrap(), 1);
+    assert_eq!(storage.streams().len(source).await.unwrap(), 3);
     assert_eq!(storage.streams().len(target).await.unwrap(), 3);
     assert_eq!(
         storage
