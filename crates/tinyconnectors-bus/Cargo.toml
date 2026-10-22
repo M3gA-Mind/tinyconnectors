@@ -33,6 +33,10 @@ thiserror = { workspace = true, optional = true }
 tokio = { workspace = true }
 
 [features]
+# Retained for hosts that opt into the connector storage contract. Storage
+# names are plain strings here; engine-facing collection specs belong to
+# `tinyconnectors` and do not add storage-driver types to this crate.
+storage = []
 # `composio::triggers::webhook`: verify a delivery's signature and decode its
 # body into a `ComposioTriggerEvent`. Pure functions over bytes — no transport,
 # no runtime — for a host that owns a public webhook endpoint.
