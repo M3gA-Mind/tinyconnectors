@@ -361,15 +361,44 @@ async fn history_reads_report_retention_failures() {
 }
 
 #[tokio::test]
+async fn history_reads_report_both_archive_prefix_listing_failures() {
+    for failing_call in [3, 4] {
+        let streams = streams();
+        let failing = Failing::new(streams);
+        let archive = TriggerArchive::new(Arc::new(FailingStreams(failing.clone())));
+        failing
+            .faults
+            .fail_operation_nth("streams", failing_call, ErrorKind::Unavailable);
+
+        assert!(archive.list_recent(None).await.is_err());
+    }
+}
+
+#[tokio::test]
+async fn history_read_window_failures_are_reported() {
+    let streams = streams();
+    let failing = Failing::new(streams);
+    let archive = TriggerArchive::new(Arc::new(FailingStreams(failing.clone())));
+    archive
+        .record("gmail", "T", "evt-0", "u", &json!({}))
+        .await
+        .unwrap();
+    failing
+        .faults
+        .fail_operation_nth("read_window", 1, ErrorKind::Unavailable);
+
+    assert!(archive.list_recent(None).await.is_err());
+}
+
+#[tokio::test]
 async fn post_append_retention_failure_does_not_report_a_persisted_delivery_as_failed() {
     let streams = streams();
     let failing = Failing::new(streams);
     let adapter = Arc::new(FailingStreams(failing.clone()));
     let archive = TriggerArchive::new(adapter);
 
-    // The record is committed before the opportunistic idle-seal pass. A
-    // maintenance failure must not make the delivery caller retry a record
-    // that is already durable.
+    // Retention runs on history reads rather than every append. A previously
+    // injected maintenance error must not make a durable delivery look failed.
     failing
         .faults
         .fail_operation_nth("streams", 1, ErrorKind::Unavailable);
@@ -377,6 +406,7 @@ async fn post_append_retention_failure_does_not_report_a_persisted_delivery_as_f
         .record("gmail", "T", "evt-0", "u", &json!({}))
         .await
         .expect("the committed delivery remains successful");
+    failing.faults.clear();
 
     let history = archive
         .list_recent(None)

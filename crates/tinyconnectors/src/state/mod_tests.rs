@@ -148,9 +148,12 @@ fn the_declared_grant_matches_what_the_stores_write() {
     // refused by the grant.
     let needs = storage_needs();
     assert_eq!(
-        super::collections(),
-        tinyconnectors_bus::storage::collections(),
-        "host collection declarations and owner-open migration declarations must agree"
+        super::collections()
+            .iter()
+            .map(|spec| spec.name.as_str())
+            .collect::<Vec<_>>(),
+        [PREFS_NAMESPACE, MIGRATIONS_NAMESPACE],
+        "owner-open migration declarations must cover the connector collections"
     );
     assert!(needs.collections.contains(&PREFS_NAMESPACE.to_owned()));
     assert_eq!(

@@ -1,5 +1,6 @@
 //! Appending to and reading back the daily trigger archive stream.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -14,7 +15,7 @@ pub const DEFAULT_HISTORY_LIMIT: usize = 50;
 /// Each day's stream is `STREAM_PREFIX` and the UTC date. The names are
 /// declared once, in the contract crate, beside the migration that renames
 /// them.
-pub(crate) use tinyconnectors_bus::storage::STREAM_PREFIX;
+pub(crate) use tinyconnectors_bus::storage::{LEGACY_STREAM_PREFIX, STREAM_PREFIX};
 
 /// A daily-rotated record of webhook deliveries, one stream per UTC day.
 #[derive(Debug, Clone)]
@@ -80,12 +81,6 @@ impl TriggerArchive {
             .await
             .map_err(|error| failed(format!("could not append to the archive: {error}")))?;
 
-        if self.streams.capabilities().contains(Capability::StreamSeal)
-            && let Err(error) = self.seal_idle_days().await
-        {
-            tracing::warn!(%error, "[connectors][triggers] could not seal idle archive streams");
-        }
-
         tracing::debug!(
             toolkit = %entry.toolkit,
             trigger = %entry.trigger,
@@ -126,15 +121,23 @@ impl TriggerArchive {
                 format!("could not list the archive: {error}"),
             )
         })?;
+        day_streams.extend(
+            self.streams
+                .streams(LEGACY_STREAM_PREFIX)
+                .await
+                .map_err(|error| {
+                    failed(
+                        LEGACY_STREAM_PREFIX,
+                        format!("could not list the legacy archive: {error}"),
+                    )
+                })?,
+        );
         // Newest day first: the name ends in a sortable ISO date.
         day_streams.sort_unstable_by(|left, right| right.cmp(left));
 
         let mut entries: Vec<ComposioTriggerHistoryEntry> = Vec::new();
+        let mut seen = HashSet::new();
         for stream in day_streams {
-            if entries.len() >= limit {
-                break;
-            }
-            let wanted = limit - entries.len();
             let length = self.streams.len(&stream).await.map_err(|error| {
                 failed(&stream, format!("could not size the day's stream: {error}"))
             })?;
@@ -142,10 +145,10 @@ impl TriggerArchive {
             // backwards in windows until `wanted` valid entries are found, so a
             // corrupt record does not shrink the result while older valid ones
             // remain.
-            let mut day_entries: Vec<ComposioTriggerHistoryEntry> = Vec::new();
+            let mut stream_entries = 0;
             let mut end = length;
-            while end > 0 && day_entries.len() < wanted {
-                let need = wanted - day_entries.len();
+            while end > 0 && stream_entries < limit {
+                let need = limit - stream_entries;
                 let from = end.saturating_sub(need as u64);
                 let records = self
                     .streams
@@ -154,17 +157,23 @@ impl TriggerArchive {
                     .map_err(|error| {
                         failed(&stream, format!("could not read the day's stream: {error}"))
                     })?;
-                day_entries.extend(
-                    records
-                        .into_iter()
-                        .rev()
-                        .filter_map(|record| serde_json::from_value(record.value).ok()),
-                );
+                for record in records.into_iter().rev() {
+                    let Ok(entry) =
+                        serde_json::from_value::<ComposioTriggerHistoryEntry>(record.value)
+                    else {
+                        continue;
+                    };
+                    let key = archive_entry_key(&entry);
+                    if seen.insert(key) {
+                        stream_entries += 1;
+                        entries.push(entry);
+                    }
+                }
                 end = from;
             }
-            entries.extend(day_entries);
         }
 
+        entries.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.received_at_ms));
         entries.truncate(limit);
         Ok(ComposioTriggerHistoryResult {
             archive_dir: self.archive_dir().to_string(),
@@ -175,14 +184,24 @@ impl TriggerArchive {
 
     async fn seal_idle_days(&self) -> tinystoragedrivers_types::Result<()> {
         let now = i64::try_from(now_ms()).unwrap_or(i64::MAX);
-        for stream in self.streams.streams(STREAM_PREFIX).await? {
-            if let Some(info) = self.streams.info(&stream).await?
-                && RETENTION.should_seal(now, info.last_append_ms)
-            {
-                self.streams.seal(&stream).await?;
+        for prefix in [STREAM_PREFIX, LEGACY_STREAM_PREFIX] {
+            for stream in self.streams.streams(prefix).await? {
+                if let Some(info) = self.streams.info(&stream).await?
+                    && RETENTION.should_seal(now, info.last_append_ms)
+                {
+                    self.streams.seal(&stream).await?;
+                }
             }
         }
         Ok(())
+    }
+}
+
+fn archive_entry_key(entry: &ComposioTriggerHistoryEntry) -> String {
+    if entry.metadata_uuid.is_empty() {
+        serde_json::to_string(entry).unwrap_or_default()
+    } else {
+        format!("{}:{}", entry.metadata_id, entry.metadata_uuid)
     }
 }
 

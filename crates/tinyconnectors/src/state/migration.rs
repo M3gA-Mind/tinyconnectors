@@ -3,7 +3,7 @@
 use serde_json::{Value, json};
 use tinystoragedrivers_api::{DocumentStore, Storage, StreamStore};
 use tinystoragedrivers_types::{
-    CollectionSpec, Key, Precondition, Query, StorageError, WriteOptions,
+    CollectionSpec, Key, Precondition, Query, StorageError, Version, Versioned, WriteOptions,
 };
 
 use tinyconnectors_bus::storage::{
@@ -98,45 +98,133 @@ async fn migrate_preferences(
         let next = page.next.clone();
         for record in page.items {
             let id = legacy_key([record.id.as_str()])?;
-            let value = match record.doc {
-                Value::Object(mut fields) => fields.remove("value").unwrap_or(Value::Null),
-                _ => Value::Null,
-            };
-            let body = encode_preference(&value);
-            // Expiration is application-significant and is carried over the
-            // module storage bus. `created_ms` is host-owned, so the target
-            // receives the host's creation time for this new cross-collection
-            // record instead of impersonating the legacy record's timestamp.
-            let mut options = WriteOptions::new().schema(PREFS_SCHEMA_VERSION);
-            if let Some(expires_ms) = record.meta.expires_ms {
-                options = options.expires_ms(expires_ms);
-            }
-            match documents
-                .put_with(
-                    PREFS_NAMESPACE,
-                    id.as_str(),
-                    body.clone(),
-                    Precondition::Absent,
-                    options,
-                )
-                .await
-            {
-                Ok(_) => {}
-                Err(error) if error.kind() == tinystoragedrivers_types::ErrorKind::Conflict => {
-                    let current = documents.get(PREFS_NAMESPACE, id.as_str()).await?;
-                    if current.is_none_or(|current| {
-                        current.doc != body || current.meta.expires_ms != record.meta.expires_ms
-                    }) {
-                        return Err(error);
-                    }
-                }
-                Err(error) => return Err(error),
-            }
+            migrate_preference(documents, &id, record).await?;
         }
         let Some(cursor) = next else { break };
         query.cursor = Some(cursor);
     }
     Ok(())
+}
+
+async fn migrate_preference(
+    documents: &dyn DocumentStore,
+    id: &Key,
+    mut source: Versioned<Value>,
+) -> tinystoragedrivers_types::Result<()> {
+    let body = preference_body(&source);
+    let expires_ms = source.meta.expires_ms;
+    let mut target_version = match put_preference(
+        documents,
+        id,
+        body.clone(),
+        expires_ms,
+        Precondition::Absent,
+    )
+    .await
+    {
+        Ok(version) => version,
+        Err(error) if error.kind() == tinystoragedrivers_types::ErrorKind::Conflict => {
+            let Some(current) = documents.get(PREFS_NAMESPACE, id.as_str()).await? else {
+                return Err(error);
+            };
+            if current.doc != body || current.meta.expires_ms != expires_ms {
+                // A target already written by another module instance is
+                // authoritative. Preserve it and leave the legacy source
+                // intact so a later open can retry if necessary.
+                tracing::warn!(
+                    preference_id = id.as_str(),
+                    "preserving conflicting connector preference target"
+                );
+                return Ok(());
+            }
+            current.version
+        }
+        Err(error) => return Err(error),
+    };
+
+    // A legacy writer may update this row while the paged scan is in flight.
+    // Re-read after each conditional target write and follow any observed
+    // source update while the target remains the version this migration wrote.
+    loop {
+        let Some(latest) = documents
+            .get(LEGACY_PREFS_NAMESPACE, source.id.as_str())
+            .await?
+        else {
+            match documents
+                .delete(
+                    PREFS_NAMESPACE,
+                    id.as_str(),
+                    Precondition::Version(target_version),
+                )
+                .await
+            {
+                Ok(_) => {}
+                Err(error) if error.kind() == tinystoragedrivers_types::ErrorKind::Conflict => {
+                    tracing::warn!(
+                        preference_id = id.as_str(),
+                        "preserving a preference changed after legacy deletion"
+                    );
+                }
+                Err(error) => return Err(error),
+            }
+            return Ok(());
+        };
+        if preference_body(&latest) == preference_body(&source)
+            && latest.meta.expires_ms == source.meta.expires_ms
+        {
+            return Ok(());
+        }
+        let latest_body = preference_body(&latest);
+        match put_preference(
+            documents,
+            id,
+            latest_body,
+            latest.meta.expires_ms,
+            Precondition::Version(target_version),
+        )
+        .await
+        {
+            Ok(version) => {
+                target_version = version;
+                source = latest;
+            }
+            Err(error) if error.kind() == tinystoragedrivers_types::ErrorKind::Conflict => {
+                tracing::warn!(
+                    preference_id = id.as_str(),
+                    "preserving a preference changed while its legacy source was being migrated"
+                );
+                return Ok(());
+            }
+            Err(error) => return Err(error),
+        }
+    }
+}
+
+async fn put_preference(
+    documents: &dyn DocumentStore,
+    id: &Key,
+    body: Value,
+    expires_ms: Option<i64>,
+    precondition: Precondition,
+) -> tinystoragedrivers_types::Result<Version> {
+    // Expiration is application-significant and is carried over the module
+    // storage bus. `created_ms` remains host-owned for this new cross-collection
+    // record rather than impersonating the legacy record's timestamp.
+    let mut options = WriteOptions::new().schema(PREFS_SCHEMA_VERSION);
+    if let Some(expires_ms) = expires_ms {
+        options = options.expires_ms(expires_ms);
+    }
+    documents
+        .put_with(PREFS_NAMESPACE, id.as_str(), body, precondition, options)
+        .await
+}
+
+fn preference_body(source: &Versioned<Value>) -> Value {
+    let value = match &source.doc {
+        Value::Object(fields) => fields.get("value").cloned().unwrap_or(Value::Null),
+        _ => Value::Null,
+    };
+    encode_preference(&value)
 }
 
 async fn migrate_streams(streams: &dyn StreamStore) -> tinystoragedrivers_types::Result<()> {
@@ -219,7 +307,10 @@ async fn migrate_streams(streams: &dyn StreamStore) -> tinystoragedrivers_types:
                 "migration source `{source}` changed while it was copied"
             )));
         }
-        streams.delete_stream(&source).await?;
+        // Keep the legacy source after copying. StreamStore has no
+        // compare-and-delete operation, so a legacy writer could append after
+        // the final length check and before deletion. Trigger history reads
+        // both prefixes and deduplicates the copied entries by event identity.
     }
     Ok(())
 }

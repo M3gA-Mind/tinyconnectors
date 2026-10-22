@@ -148,3 +148,42 @@ async fn migrated_trigger_history_reads_back_through_the_archive() {
         ["connectors.triggers/2026-10-15"]
     );
 }
+
+#[tokio::test]
+async fn migrated_trigger_history_includes_late_legacy_appends_without_duplicates() {
+    let backend = MemoryBackend::new();
+    let storage = module_storage(&backend);
+    let entry = |id: &str| {
+        json!({
+            "received_at_ms": 1_760_000_000_000_u64,
+            "toolkit": "gmail",
+            "trigger": "GMAIL_NEW_GMAIL_MESSAGE",
+            "metadata_id": id,
+            "metadata_uuid": format!("uuid-{id}"),
+            "payload": {"subject": "hi"},
+        })
+    };
+    storage
+        .streams()
+        .append(LEGACY_STREAM, entry("copied"))
+        .await
+        .unwrap();
+    migrated(&storage).await;
+    storage
+        .streams()
+        .append(LEGACY_STREAM, entry("late"))
+        .await
+        .unwrap();
+
+    let history = TriggerArchive::new(Arc::clone(storage.streams()))
+        .list_recent(None)
+        .await
+        .unwrap();
+    let mut ids: Vec<&str> = history
+        .entries
+        .iter()
+        .map(|entry| entry.metadata_id.as_str())
+        .collect();
+    ids.sort_unstable();
+    assert_eq!(ids, ["copied", "late"]);
+}

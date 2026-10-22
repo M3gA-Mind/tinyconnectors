@@ -67,7 +67,11 @@ impl StorageLink {
         }
         tracing::debug!("[connectors][storage] connecting to the host storage bus");
         let storage = tinystoragedrivers_busproxy::connect_storage(connection.clone()).await?;
-        crate::state::migration::prepare(&storage).await?;
+        crate::state::migration::prepare(&storage)
+            .await
+            .map_err(|error| {
+                StorageError::new(error.kind(), format!("storage migration failed: {error}"))
+            })?;
         *slot = Some(storage.clone());
         Ok(storage)
     }

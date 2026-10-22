@@ -1,4 +1,6 @@
-use super::RETENTION;
+//! Tests the age policy used to seal completed trigger archive streams.
+
+use super::*;
 
 #[test]
 fn only_streams_idle_beyond_the_policy_window_are_sealed() {
