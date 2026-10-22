@@ -6,12 +6,14 @@ use std::sync::Arc;
 
 use serde_json::json;
 use tinyconnectors_sync::{Error, PREFS_NAMESPACE, PrefsStore, ScopePrefStore, UserScopePref};
-use tinystoragedrivers_core::{DocumentStore, MemoryStorage, Scope, StorageBackend};
+use tinystoragedrivers_api::{DocumentStore, StorageBackend};
+use tinystoragedrivers_testkit::MemoryBackend;
+use tinystoragedrivers_types::Scope;
 
 use super::{DocumentPrefsStore, storage_needs};
 
-fn scoped(name: &str) -> tinystoragedrivers_core::ScopedStorage {
-    MemoryStorage::new()
+fn scoped(name: &str) -> tinystoragedrivers_api::Storage {
+    MemoryBackend::new()
         .for_scope(&Scope::new(name).unwrap())
         .unwrap()
 }
@@ -91,7 +93,7 @@ async fn preferences_live_in_the_prefs_collection_one_document_per_toolkit() {
 
 #[tokio::test]
 async fn two_users_do_not_see_each_others_preferences() {
-    let backend = MemoryStorage::new();
+    let backend = MemoryBackend::new();
     let alice = DocumentPrefsStore::new(
         backend
             .for_scope(&Scope::new("alice").unwrap())
@@ -145,8 +147,17 @@ fn the_declared_grant_matches_what_the_stores_write() {
     // another collection or stream prefix without it, every call would be
     // refused by the grant.
     let needs = storage_needs();
-    assert_eq!(needs.collections, [PREFS_NAMESPACE]);
-    assert_eq!(needs.stream_prefixes, ["connectors.triggers/"]);
+    assert_eq!(
+        super::collections(),
+        tinyconnectors_bus::storage::collections(),
+        "host collection declarations and owner-open migration declarations must agree"
+    );
+    assert!(needs.collections.contains(&PREFS_NAMESPACE.to_owned()));
+    assert_eq!(
+        needs.stream_prefixes,
+        ["connectors.triggers/", "triggers/"],
+        "owner migrations still need the source stream prefix"
+    );
     let archive = crate::triggers::TriggerArchive::new(scoped("grant").streams().clone());
     assert!(
         archive

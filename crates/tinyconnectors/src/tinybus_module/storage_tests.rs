@@ -16,3 +16,13 @@ async fn unlinked_stores_are_unavailable() {
     assert!(link.documents().await.is_err());
     assert!(link.streams().await.is_err());
 }
+
+#[tokio::test]
+async fn unlinked_preferences_report_read_and_write_failures() {
+    use serde_json::json;
+    use tinyconnectors_sync::PrefsStore;
+
+    let store = LinkedPrefsStore::new(StorageLink::none());
+    assert!(store.get("gmail").await.is_err());
+    assert!(store.set("gmail", &json!({"read": true})).await.is_err());
+}

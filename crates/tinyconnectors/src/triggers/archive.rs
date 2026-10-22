@@ -1,9 +1,11 @@
 //! Appending to and reading back the daily trigger archive stream.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tinystoragedrivers_core::StreamStore;
+use tinystoragedrivers_api::StreamStore;
+use tinystoragedrivers_types::Capability;
 
 use crate::{ComposioTriggerHistoryEntry, ComposioTriggerHistoryResult, Error, Result};
 
@@ -13,7 +15,7 @@ pub const DEFAULT_HISTORY_LIMIT: usize = 50;
 /// Each day's stream is `STREAM_PREFIX` and the UTC date. The names are
 /// declared once, in the contract crate, beside the migration that renames
 /// them.
-pub(crate) use tinyconnectors_bus::storage::STREAM_PREFIX;
+pub(crate) use tinyconnectors_bus::storage::{LEGACY_STREAM_PREFIX, STREAM_PREFIX};
 
 /// A daily-rotated record of webhook deliveries, one stream per UTC day.
 #[derive(Debug, Clone)]
@@ -99,6 +101,14 @@ impl TriggerArchive {
     ///
     /// Returns [`Error::Archive`] when the archive cannot be listed or read.
     pub async fn list_recent(&self, limit: Option<usize>) -> Result<ComposioTriggerHistoryResult> {
+        if self.streams.capabilities().contains(Capability::StreamSeal) {
+            self.seal_idle_days()
+                .await
+                .map_err(|error| Error::Archive {
+                    path: STREAM_PREFIX.to_owned(),
+                    message: format!("could not apply archive retention: {error}"),
+                })?;
+        }
         let limit = limit.unwrap_or(DEFAULT_HISTORY_LIMIT).max(1);
         let failed = |stream: &str, message: String| Error::Archive {
             path: stream.to_string(),
@@ -111,15 +121,23 @@ impl TriggerArchive {
                 format!("could not list the archive: {error}"),
             )
         })?;
+        day_streams.extend(
+            self.streams
+                .streams(LEGACY_STREAM_PREFIX)
+                .await
+                .map_err(|error| {
+                    failed(
+                        LEGACY_STREAM_PREFIX,
+                        format!("could not list the legacy archive: {error}"),
+                    )
+                })?,
+        );
         // Newest day first: the name ends in a sortable ISO date.
         day_streams.sort_unstable_by(|left, right| right.cmp(left));
 
         let mut entries: Vec<ComposioTriggerHistoryEntry> = Vec::new();
+        let mut seen = HashSet::new();
         for stream in day_streams {
-            if entries.len() >= limit {
-                break;
-            }
-            let wanted = limit - entries.len();
             let length = self.streams.len(&stream).await.map_err(|error| {
                 failed(&stream, format!("could not size the day's stream: {error}"))
             })?;
@@ -127,10 +145,10 @@ impl TriggerArchive {
             // backwards in windows until `wanted` valid entries are found, so a
             // corrupt record does not shrink the result while older valid ones
             // remain.
-            let mut day_entries: Vec<ComposioTriggerHistoryEntry> = Vec::new();
+            let mut stream_entries = 0;
             let mut end = length;
-            while end > 0 && day_entries.len() < wanted {
-                let need = wanted - day_entries.len();
+            while end > 0 && stream_entries < limit {
+                let need = limit - stream_entries;
                 let from = end.saturating_sub(need as u64);
                 let records = self
                     .streams
@@ -139,23 +157,71 @@ impl TriggerArchive {
                     .map_err(|error| {
                         failed(&stream, format!("could not read the day's stream: {error}"))
                     })?;
-                day_entries.extend(
-                    records
-                        .into_iter()
-                        .rev()
-                        .filter_map(|record| serde_json::from_value(record.value).ok()),
-                );
+                for record in records.into_iter().rev() {
+                    let Ok(entry) =
+                        serde_json::from_value::<ComposioTriggerHistoryEntry>(record.value)
+                    else {
+                        continue;
+                    };
+                    let key = archive_entry_key(&entry);
+                    if seen.insert(key) {
+                        stream_entries += 1;
+                        entries.push(entry);
+                    }
+                }
                 end = from;
             }
-            entries.extend(day_entries);
         }
 
+        entries.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.received_at_ms));
         entries.truncate(limit);
         Ok(ComposioTriggerHistoryResult {
             archive_dir: self.archive_dir().to_string(),
             current_day_file: self.current_day_file(),
             entries,
         })
+    }
+
+    async fn seal_idle_days(&self) -> tinystoragedrivers_types::Result<()> {
+        let now = i64::try_from(now_ms()).unwrap_or(i64::MAX);
+        for prefix in [STREAM_PREFIX, LEGACY_STREAM_PREFIX] {
+            for stream in self.streams.streams(prefix).await? {
+                if let Some(info) = self.streams.info(&stream).await?
+                    && RETENTION.should_seal(now, info.last_append_ms)
+                {
+                    self.streams.seal(&stream).await?;
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+fn archive_entry_key(entry: &ComposioTriggerHistoryEntry) -> String {
+    if entry.metadata_uuid.is_empty() {
+        serde_json::to_string(entry).unwrap_or_default()
+    } else {
+        format!("{}:{}", entry.metadata_id, entry.metadata_uuid)
+    }
+}
+
+/// An archive day is immutable after its UTC day plus this idle margin.
+const DAY_STREAM_IDLE_MS: u64 = 2 * 24 * 60 * 60 * 1000;
+
+/// Connector-owned retention trigger for completed UTC-day streams.
+#[derive(Debug, Clone, Copy)]
+struct ArchiveRetention {
+    idle_ms: u64,
+}
+
+const RETENTION: ArchiveRetention = ArchiveRetention {
+    idle_ms: DAY_STREAM_IDLE_MS,
+};
+
+impl ArchiveRetention {
+    fn should_seal(self, now_ms: i64, last_append_ms: Option<i64>) -> bool {
+        let idle_ms = i64::try_from(self.idle_ms).unwrap_or(i64::MAX);
+        last_append_ms.is_some_and(|last| last <= now_ms.saturating_sub(idle_ms))
     }
 }
 
@@ -182,3 +248,7 @@ fn now_ms() -> u64 {
 fn utc_day() -> String {
     chrono::Utc::now().format("%Y-%m-%d").to_string()
 }
+
+#[cfg(test)]
+#[path = "archive_tests.rs"]
+mod tests;

@@ -1087,18 +1087,15 @@ impl ConnectorService {
     }
 }
 
-/// Preferences that live only as long as the module.
-///
-/// A user's scope choices on this are forgotten at every restart, which is why
-/// a host that means them to stick should name a `state_dir`. It exists so the
-/// members that need no persistence — profiles, capabilities — work without
-/// one, rather than making every deployment carry a path it does not use.
+/// Test-only preference store for service logic that does not exercise storage.
+#[cfg(test)]
 #[derive(Debug, Default)]
 struct EphemeralPrefsStore {
     values: std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
 }
 
 #[async_trait::async_trait]
+#[cfg(test)]
 impl PrefsStore for EphemeralPrefsStore {
     async fn get(&self, key: &str) -> tinyconnectors_sync::Result<Option<serde_json::Value>> {
         Ok(self
@@ -1157,8 +1154,8 @@ async fn setup(connection: Connection, config: ModuleConfig) -> TinyBusResult<()
         // if a provider ever reaches it. It shares the handle rather than
         // copying it, so a later `Configure` reaches it too.
         actions: Arc::new(ClientActions::new(Arc::clone(&client))),
-        // Preferences go to the host's documents; with no storage served they
-        // stay in memory, which beats a module that refuses to load.
+        // Preferences go to the host's document port; a missing storage
+        // service fails the preference operation instead of losing state.
         prefs: Arc::new(storage::LinkedPrefsStore::new(storage.clone())),
         registry: crate::providers::default_registry(),
         contract_caches: Arc::default(),

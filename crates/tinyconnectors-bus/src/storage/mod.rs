@@ -1,33 +1,49 @@
-//! What the module stores, declared as a contract.
-//!
-//! The host composes every owner's storage schema at boot and derives each
-//! module's storage grant from it, so the declaration has to be reachable
-//! without linking the module's implementation. It lives here, beside the wire
-//! types, as plain data: names, versions, and pure v1 to v2 migration steps.
-//! Nothing in this module performs I/O; the host runs the steps.
-//!
-//! The names and the preference encoding are always available. The schema and
-//! the grant need the storage ports and sit behind the `storage` feature, off
-//! by default.
-//!
-//! - `storage_schema` — every collection and stream, plus the steps.
-//! - `storage_needs` — the grant generated from that schema.
-//! - the name constants and the preference body encoding the document store
-//!   in the module crate shares with the steps.
+//! Pure storage names and collection declarations used by hosts.
 
 mod names;
-#[cfg(feature = "storage")]
-mod needs;
 mod preference;
-#[cfg(feature = "storage")]
-mod schema;
 
 pub use names::{
-    LEGACY_PREFS_NAMESPACE, LEGACY_STREAM_PREFIX, NON_OBJECT_FIELD, PREFS_NAMESPACE,
-    PREFS_SCHEMA_VERSION, STREAM_NAME, STREAM_PREFIX,
+    LEGACY_PREFS_NAMESPACE, LEGACY_STREAM_PREFIX, MIGRATIONS_NAMESPACE, NON_OBJECT_FIELD,
+    PREFS_NAMESPACE, PREFS_SCHEMA_VERSION, STREAM_NAME, STREAM_PREFIX,
 };
-#[cfg(feature = "storage")]
-pub use needs::{StorageNeeds, storage_needs};
 pub use preference::{decode_preference, encode_preference};
+
 #[cfg(feature = "storage")]
-pub use schema::storage_schema;
+use tinystoragedrivers_types::CollectionSpec;
+
+/// The collections a host should provision for this module.
+#[must_use]
+#[cfg(feature = "storage")]
+pub fn collections() -> Vec<CollectionSpec> {
+    vec![
+        CollectionSpec::new(PREFS_NAMESPACE),
+        CollectionSpec::new(MIGRATIONS_NAMESPACE),
+    ]
+}
+
+/// Collections and stream prefixes the module may access through its storage grant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StorageNeeds {
+    /// Document collections containing one preference per toolkit.
+    pub collections: Vec<String>,
+    /// Stream prefixes containing daily trigger archives.
+    pub stream_prefixes: Vec<String>,
+}
+
+/// The storage names required by `TinyConnectors`.
+#[must_use]
+pub fn storage_needs() -> StorageNeeds {
+    StorageNeeds {
+        collections: vec![
+            PREFS_NAMESPACE.to_owned(),
+            MIGRATIONS_NAMESPACE.to_owned(),
+            LEGACY_PREFS_NAMESPACE.to_owned(),
+        ],
+        stream_prefixes: vec![STREAM_PREFIX.to_owned(), LEGACY_STREAM_PREFIX.to_owned()],
+    }
+}
+
+#[cfg(test)]
+#[path = "mod_tests.rs"]
+mod tests;

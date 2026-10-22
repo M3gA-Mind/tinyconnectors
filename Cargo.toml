@@ -76,6 +76,8 @@ ureq = { version = "3", features = ["json", "platform-verifier", "socks-proxy"] 
 # the versions match what the lockfile already carries through other crates.
 hmac = { version = "0.13", default-features = false }
 sha2 = { version = "0.11", default-features = false }
+# Base32 digest used to preserve the legacy storage driver's long-key encoding.
+data-encoding = "2"
 base64 = { version = "0.23", default-features = false, features = ["alloc"] }
 # Base-URL validation in the HTTP transport. A parser, not a prefix match: a
 # `starts_with("http://127.0.0.1")` check is fooled by userinfo smuggling like
@@ -89,17 +91,16 @@ percent-encoding = "2"
 # Civil dates for the trigger archive, which rotates at a calendar boundary
 # rather than after a fixed number of elapsed seconds. No default features.
 chrono = { version = "0.4", default-features = false, features = ["std", "clock", "serde"] }
-# The storage ports (documents, streams) the scope preferences and the trigger
-# archive are written through. Ports only: no driver crate, no database client.
-# A tag so a host that vendors tinystoragedrivers once can `[patch]` it.
-tinystoragedrivers-core = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0", default-features = false }
+# Storage contracts are split into data types and runtime-neutral ports.
+tinystoragedrivers-types = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "05eaada962decbab33bafa4763d2bd1a67f6b456" }
+tinystoragedrivers-api = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "05eaada962decbab33bafa4763d2bd1a67f6b456" }
 # The module's side of the storage bus: `connect_storage` hands back the same
 # port traits over the module's TinyBus connection, so the host's backend (not a
 # process-local registry) is what the cdylib reads and writes. The host side of
 # the same crate (`serve`) is what the loopback tests stand up.
-tinystoragedrivers-busproxy = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0" }
-# `StorageServer` binds a scope to a backend; dev-only, for the loopback host.
-tinystoragedrivers-client = { git = "https://github.com/tinyhumansai/tinystoragedrivers", tag = "v1.0.0" }
+tinystoragedrivers-busproxy = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "05eaada962decbab33bafa4763d2bd1a67f6b456" }
+# Test-only backend factories and decorators; never part of a published normal tree.
+tinystoragedrivers-testkit = { git = "https://github.com/tinyhumansai/tinystoragedrivers", rev = "05eaada962decbab33bafa4763d2bd1a67f6b456" }
 
 # Lints apply to every member that opts in with `[lints] workspace = true`, and
 # to every target of that member. CI runs clippy with `-D warnings`, so anything
