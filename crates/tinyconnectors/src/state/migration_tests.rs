@@ -406,7 +406,7 @@ async fn preference_migration_follows_a_legacy_update_after_the_initial_copy() {
             .unwrap()
             .unwrap()
             .doc,
-        json!({"old": true, "updated_during_migration": true})
+        json!({"updated_during_migration": true})
     );
 }
 
