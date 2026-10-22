@@ -1,6 +1,9 @@
+//! Tests the pure storage declarations and their feature-gated collection specs.
+
 use super::*;
 
 #[test]
+#[cfg(feature = "storage")]
 fn declarations_are_pure_and_cover_the_owner_migration_records() {
     assert_eq!(
         collections()

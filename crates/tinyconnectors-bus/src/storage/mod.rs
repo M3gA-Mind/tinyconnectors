@@ -9,10 +9,12 @@ pub use names::{
 };
 pub use preference::{decode_preference, encode_preference};
 
+#[cfg(feature = "storage")]
 use tinystoragedrivers_types::CollectionSpec;
 
 /// The collections a host should provision for this module.
 #[must_use]
+#[cfg(feature = "storage")]
 pub fn collections() -> Vec<CollectionSpec> {
     vec![
         CollectionSpec::new(PREFS_NAMESPACE),
