@@ -9,16 +9,23 @@ pub use names::{
 };
 pub use preference::{decode_preference, encode_preference};
 
-#[cfg(feature = "storage")]
-use tinystoragedrivers_types::CollectionSpec;
+/// A collection the host should provision for this module.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StorageCollection {
+    /// Collection namespace.
+    pub name: String,
+}
 
 /// The collections a host should provision for this module.
 #[must_use]
-#[cfg(feature = "storage")]
-pub fn collections() -> Vec<CollectionSpec> {
+pub fn collections() -> Vec<StorageCollection> {
     vec![
-        CollectionSpec::new(PREFS_NAMESPACE),
-        CollectionSpec::new(MIGRATIONS_NAMESPACE),
+        StorageCollection {
+            name: PREFS_NAMESPACE.to_owned(),
+        },
+        StorageCollection {
+            name: MIGRATIONS_NAMESPACE.to_owned(),
+        },
     ]
 }
 
