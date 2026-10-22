@@ -3,7 +3,7 @@ use crate::triggers::TriggerArchive;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tinyconnectors_bus::ArchiveHandle;
-use tinystoragedrivers_core::StreamStore;
+use tinystoragedrivers_api::StreamStore;
 
 #[derive(Debug, Default)]
 pub(super) struct Archives(Mutex<HashMap<ArchiveHandle, TriggerArchive>>);

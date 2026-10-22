@@ -20,13 +20,17 @@ it without deleting data. Leases are bounded, unknown/closed handles fail, and
 module shutdown drops the table. Hosts close the old user's lease when switching
 identity. Existing load-time `ListTriggerHistory` remains compatible. Records
 live in the host's tinystoragedrivers stream and document stores, reached over
-the storage bus (`tinystoragedrivers-busproxy::connect_storage`); the grant the
-host must give is generated from `tinyconnectors_bus::storage::storage_schema()` (everything
-in it is `ScopeClass::Module`; `tinyconnectors_bus::storage::storage_needs()` lists
-it: collection `connectors.user_scopes`, stream prefix `connectors.triggers/`).
-The schema also carries the v1 to v2 migration steps the host runs with
-`Registry::migrate`; existing
-arities are unchanged.
+the storage bus (`tinystoragedrivers-busproxy::connect_storage`). The host
+ensures the current collections returned by
+`tinyconnectors_bus::storage::collections()` and grants the names in
+`tinyconnectors_bus::storage::storage_needs()`, including legacy source names.
+On the first bound open, the module migrates v1 preferences and trigger streams
+and records progress in its owner-scoped `connectors.migrations` collection;
+the host does not compose or execute migration registries.
+Before opening a new module version, the host must stop and drain any older
+module instance that can still write the legacy collections. Older writers do
+not participate in this owner's migration progress, so the migration cannot
+atomically fence them out while copying and retiring legacy rows.
 
 The dynamic verifier exercises preparation and filtering with local payloads.
 Hosts must wait for a published compatible artifact with a verified digest

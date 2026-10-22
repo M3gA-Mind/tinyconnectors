@@ -85,9 +85,10 @@ constructing a client and start choosing a blob. `state_dir` is accepted and
 ignored: the module keeps its scope-preference store and the trigger archive in
 the host's storage, reached over the storage bus
 (`tinystoragedrivers-busproxy::connect_storage`), with the scope bound by the
-host from the authenticated caller and the grant generated from `storage_schema()`. Without
-served storage, history is unavailable and preferences are ephemeral. Until the preference migration in section 6
-lands, the host still owns the user's actual preference.
+host from the authenticated caller. The host provisions `collections()` and
+grants the names in `tinyconnectors_bus::storage::storage_needs()`; the module
+runs its own data migrations on first open. Without served storage, history and
+preference operations report unavailability rather than using ephemeral state.
 
 The blob is also optional. A module loaded without one still answers the
 capability members, so a signed-out user is not locked out of the question
