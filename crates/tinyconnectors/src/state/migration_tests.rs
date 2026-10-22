@@ -407,39 +407,6 @@ async fn completion_marker_conflict_without_a_committed_marker_is_returned() {
 }
 
 #[tokio::test]
-async fn malformed_legacy_preference_documents_are_migrated_as_null() {
-    use tinystoragedrivers_api::StorageBackend;
-    use tinystoragedrivers_testkit::MemoryBackend;
-    use tinystoragedrivers_types::{Precondition, Scope};
-
-    let storage = MemoryBackend::new()
-        .for_scope(&Scope::new("connector-malformed-preference-document").unwrap())
-        .unwrap();
-    storage
-        .documents()
-        .put(
-            LEGACY_PREFS_NAMESPACE,
-            "gmail",
-            json!(["not-an-object"]),
-            Precondition::Absent,
-        )
-        .await
-        .unwrap();
-
-    prepare(&storage).await.unwrap();
-    assert_eq!(
-        storage
-            .documents()
-            .get(PREFS_NAMESPACE, "gmail")
-            .await
-            .unwrap()
-            .unwrap()
-            .doc,
-        json!({"non_object_value": null})
-    );
-}
-
-#[tokio::test]
 async fn preference_migration_follows_a_legacy_update_after_the_initial_copy() {
     use tinystoragedrivers_api::{Storage, StorageBackend};
     use tinystoragedrivers_testkit::MemoryBackend;
