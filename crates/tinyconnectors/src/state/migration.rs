@@ -131,7 +131,10 @@ async fn migrate_preference(
                 // A target already written by another module instance is
                 // authoritative. Preserve it and leave the legacy source
                 // intact so a later open can retry if necessary.
-                tracing::warn!(preference_id = id.as_str(), "preserving conflicting connector preference target");
+                tracing::warn!(
+                    preference_id = id.as_str(),
+                    "preserving conflicting connector preference target"
+                );
                 return Ok(());
             }
             current.version
@@ -143,7 +146,10 @@ async fn migrate_preference(
     // Re-read after each conditional target write and follow any observed
     // source update while the target remains the version this migration wrote.
     loop {
-        let Some(latest) = documents.get(LEGACY_PREFS_NAMESPACE, source.id.as_str()).await? else {
+        let Some(latest) = documents
+            .get(LEGACY_PREFS_NAMESPACE, source.id.as_str())
+            .await?
+        else {
             match documents
                 .delete(
                     PREFS_NAMESPACE,
@@ -153,10 +159,11 @@ async fn migrate_preference(
                 .await
             {
                 Ok(_) => {}
-                Err(error)
-                    if error.kind() == tinystoragedrivers_types::ErrorKind::Conflict =>
-                {
-                    tracing::warn!(preference_id = id.as_str(), "preserving a preference changed after legacy deletion");
+                Err(error) if error.kind() == tinystoragedrivers_types::ErrorKind::Conflict => {
+                    tracing::warn!(
+                        preference_id = id.as_str(),
+                        "preserving a preference changed after legacy deletion"
+                    );
                 }
                 Err(error) => return Err(error),
             }
@@ -182,7 +189,10 @@ async fn migrate_preference(
                 source = latest;
             }
             Err(error) if error.kind() == tinystoragedrivers_types::ErrorKind::Conflict => {
-                tracing::warn!(preference_id = id.as_str(), "preserving a preference changed while its legacy source was being migrated");
+                tracing::warn!(
+                    preference_id = id.as_str(),
+                    "preserving a preference changed while its legacy source was being migrated"
+                );
                 return Ok(());
             }
             Err(error) => return Err(error),
@@ -205,13 +215,7 @@ async fn put_preference(
         options = options.expires_ms(expires_ms);
     }
     documents
-        .put_with(
-            PREFS_NAMESPACE,
-            id.as_str(),
-            body,
-            precondition,
-            options,
-        )
+        .put_with(PREFS_NAMESPACE, id.as_str(), body, precondition, options)
         .await
 }
 

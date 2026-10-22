@@ -1,8 +1,8 @@
 //! Appending to and reading back the daily trigger archive stream.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
-use std::collections::HashSet;
 
 use tinystoragedrivers_api::StreamStore;
 use tinystoragedrivers_types::Capability;
@@ -158,7 +158,8 @@ impl TriggerArchive {
                         failed(&stream, format!("could not read the day's stream: {error}"))
                     })?;
                 for record in records.into_iter().rev() {
-                    let Ok(entry) = serde_json::from_value::<ComposioTriggerHistoryEntry>(record.value)
+                    let Ok(entry) =
+                        serde_json::from_value::<ComposioTriggerHistoryEntry>(record.value)
                     else {
                         continue;
                     };
