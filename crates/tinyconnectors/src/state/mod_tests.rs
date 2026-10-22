@@ -5,7 +5,6 @@
 use std::sync::Arc;
 
 use serde_json::json;
-use tinyconnectors_bus::storage::MIGRATIONS_NAMESPACE;
 use tinyconnectors_sync::{Error, PREFS_NAMESPACE, PrefsStore, ScopePrefStore, UserScopePref};
 use tinystoragedrivers_api::{DocumentStore, StorageBackend};
 use tinystoragedrivers_testkit::MemoryBackend;
@@ -153,7 +152,10 @@ fn the_declared_grant_matches_what_the_stores_write() {
             .iter()
             .map(|spec| spec.name.as_str())
             .collect::<Vec<_>>(),
-        [PREFS_NAMESPACE, MIGRATIONS_NAMESPACE],
+        tinyconnectors_bus::storage::collections()
+            .iter()
+            .map(|collection| collection.name.as_str())
+            .collect::<Vec<_>>(),
         "owner-open migration declarations must cover the connector collections"
     );
     assert!(needs.collections.contains(&PREFS_NAMESPACE.to_owned()));

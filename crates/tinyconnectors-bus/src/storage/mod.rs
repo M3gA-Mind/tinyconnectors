@@ -9,6 +9,26 @@ pub use names::{
 };
 pub use preference::{decode_preference, encode_preference};
 
+/// A collection the host should provision for this module.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StorageCollection {
+    /// Collection namespace.
+    pub name: String,
+}
+
+/// The collections a host should provision for this module.
+#[must_use]
+pub fn collections() -> Vec<StorageCollection> {
+    vec![
+        StorageCollection {
+            name: PREFS_NAMESPACE.to_owned(),
+        },
+        StorageCollection {
+            name: MIGRATIONS_NAMESPACE.to_owned(),
+        },
+    ]
+}
+
 /// Collections and stream prefixes the module may access through its storage grant.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageNeeds {

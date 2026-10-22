@@ -22,7 +22,7 @@ identity. Existing load-time `ListTriggerHistory` remains compatible. Records
 live in the host's tinystoragedrivers stream and document stores, reached over
 the storage bus (`tinystoragedrivers-busproxy::connect_storage`). The host
 ensures the current collections returned by
-`tinyconnectors::state::collections()` and grants the names in
+`tinyconnectors_bus::storage::collections()` and grants the names in
 `tinyconnectors_bus::storage::storage_needs()`, including legacy source names.
 On the first bound open, the module migrates v1 preferences and trigger streams
 and records progress in its owner-scoped `connectors.migrations` collection;
