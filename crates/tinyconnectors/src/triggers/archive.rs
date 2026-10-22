@@ -173,7 +173,7 @@ impl TriggerArchive {
             }
         }
 
-        entries.sort_unstable_by(|left, right| right.received_at_ms.cmp(&left.received_at_ms));
+        entries.sort_unstable_by_key(|entry| std::cmp::Reverse(entry.received_at_ms));
         entries.truncate(limit);
         Ok(ComposioTriggerHistoryResult {
             archive_dir: self.archive_dir().to_string(),
@@ -198,10 +198,10 @@ impl TriggerArchive {
 }
 
 fn archive_entry_key(entry: &ComposioTriggerHistoryEntry) -> String {
-    if !entry.metadata_uuid.is_empty() {
-        format!("{}:{}", entry.metadata_id, entry.metadata_uuid)
-    } else {
+    if entry.metadata_uuid.is_empty() {
         serde_json::to_string(entry).unwrap_or_default()
+    } else {
+        format!("{}:{}", entry.metadata_id, entry.metadata_uuid)
     }
 }
 
