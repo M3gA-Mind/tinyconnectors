@@ -15,6 +15,7 @@ struct CommitThenConflictStreams {
 struct CommitThenConflictMarker {
     inner: std::sync::Arc<dyn tinystoragedrivers_api::DocumentStore>,
     pending: std::sync::atomic::AtomicBool,
+    drop_marker_before_conflict: std::sync::atomic::AtomicBool,
     update_legacy_after_target_write: std::sync::atomic::AtomicBool,
     delete_legacy_after_target_write: std::sync::atomic::AtomicBool,
 }
@@ -81,6 +82,18 @@ impl tinystoragedrivers_api::DocumentStore for CommitThenConflictMarker {
                 .pending
                 .swap(false, std::sync::atomic::Ordering::SeqCst)
         {
+            if self
+                .drop_marker_before_conflict
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+            {
+                self.inner
+                    .delete(
+                        collection,
+                        id,
+                        tinystoragedrivers_types::Precondition::None,
+                    )
+                    .await?;
+            }
             return Err(tinystoragedrivers_types::StorageError::conflict(
                 "marker committed by a competing opener",
             ));
@@ -340,6 +353,7 @@ async fn completion_marker_conflict_accepts_the_valid_marker_written_by_a_racer(
     let documents = std::sync::Arc::new(CommitThenConflictMarker {
         inner: base.documents().clone(),
         pending: std::sync::atomic::AtomicBool::new(true),
+        drop_marker_before_conflict: std::sync::atomic::AtomicBool::new(false),
         update_legacy_after_target_write: std::sync::atomic::AtomicBool::new(false),
         delete_legacy_after_target_write: std::sync::atomic::AtomicBool::new(false),
     });
@@ -386,6 +400,7 @@ async fn preference_migration_follows_a_legacy_update_after_the_initial_copy() {
     let documents = std::sync::Arc::new(CommitThenConflictMarker {
         inner: base.documents().clone(),
         pending: std::sync::atomic::AtomicBool::new(false),
+        drop_marker_before_conflict: std::sync::atomic::AtomicBool::new(false),
         update_legacy_after_target_write: std::sync::atomic::AtomicBool::new(true),
         delete_legacy_after_target_write: std::sync::atomic::AtomicBool::new(false),
     });
@@ -431,6 +446,7 @@ async fn preference_migration_drops_a_target_when_the_legacy_row_was_deleted() {
     let documents = std::sync::Arc::new(CommitThenConflictMarker {
         inner: base.documents().clone(),
         pending: std::sync::atomic::AtomicBool::new(false),
+        drop_marker_before_conflict: std::sync::atomic::AtomicBool::new(false),
         update_legacy_after_target_write: std::sync::atomic::AtomicBool::new(false),
         delete_legacy_after_target_write: std::sync::atomic::AtomicBool::new(true),
     });
