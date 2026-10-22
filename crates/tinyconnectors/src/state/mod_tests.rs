@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use serde_json::json;
 use tinyconnectors_sync::{Error, PREFS_NAMESPACE, PrefsStore, ScopePrefStore, UserScopePref};
+use tinyconnectors_bus::storage::MIGRATIONS_NAMESPACE;
 use tinystoragedrivers_api::{DocumentStore, StorageBackend};
 use tinystoragedrivers_testkit::MemoryBackend;
 use tinystoragedrivers_types::Scope;
