@@ -292,7 +292,7 @@ async fn completion_marker_conflict_accepts_the_valid_marker_written_by_a_racer(
 }
 
 #[tokio::test]
-async fn preference_collision_preserves_the_legacy_source_and_refuses_open() {
+async fn preference_collision_preserves_the_existing_target_and_completes() {
     use tinystoragedrivers_api::StorageBackend;
     use tinystoragedrivers_testkit::MemoryBackend;
     use tinystoragedrivers_types::{Precondition, Scope};
@@ -322,10 +322,9 @@ async fn preference_collision_preserves_the_legacy_source_and_refuses_open() {
         .await
         .unwrap();
 
-    let error = prepare(&storage)
+    prepare(&storage)
         .await
-        .expect_err("different target content is not overwritten");
-    assert_eq!(error.kind(), tinystoragedrivers_types::ErrorKind::Conflict);
+        .expect("an existing target remains authoritative");
     assert_eq!(
         storage
             .documents()
@@ -707,7 +706,7 @@ async fn stream_copy_accepts_conflict_after_an_identical_page_was_committed() {
     );
 
     prepare(&storage).await.unwrap();
-    assert_eq!(base.streams().len(source).await.unwrap(), 0);
+    assert_eq!(base.streams().len(source).await.unwrap(), 1);
     assert_eq!(base.streams().len(target).await.unwrap(), 1);
     assert_eq!(
         base.streams().read_window(target, 0, 1).await.unwrap()[0].value,
@@ -909,7 +908,7 @@ async fn stream_migration_resumes_a_matching_partial_target() {
 
     prepare(&storage).await.unwrap();
 
-    assert_eq!(storage.streams().len(source).await.unwrap(), 0);
+    assert_eq!(storage.streams().len(source).await.unwrap(), 1);
     assert_eq!(storage.streams().len(target).await.unwrap(), 3);
     assert_eq!(
         storage
@@ -967,16 +966,15 @@ async fn stream_write_failure_preserves_source_for_retry() {
 
     faults.clear();
     prepare(&storage).await.unwrap();
-    assert_eq!(base.streams().len(source).await.unwrap(), 0);
+    assert_eq!(base.streams().len(source).await.unwrap(), 1);
     assert_eq!(base.streams().len(target).await.unwrap(), 1);
 }
 
 #[tokio::test]
-async fn failed_stream_delete_keeps_both_copies_for_retry() {
-    use std::sync::Arc;
-    use tinystoragedrivers_api::{Storage, StorageBackend, StreamStore};
-    use tinystoragedrivers_testkit::{Failing, FaultPlan, MemoryBackend};
-    use tinystoragedrivers_types::{ErrorKind, Scope};
+async fn stream_migration_retains_the_legacy_source_for_late_appends() {
+    use tinystoragedrivers_api::StorageBackend;
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::Scope;
 
     let base = MemoryBackend::new()
         .for_scope(&Scope::new("connector-stream-delete-failure").unwrap())
@@ -988,29 +986,16 @@ async fn failed_stream_delete_keeps_both_copies_for_retry() {
         .await
         .unwrap();
 
-    let faults = FaultPlan::new();
-    faults.fail_operation_nth("streams.delete_stream", 1, ErrorKind::Backend);
-    let streams: Arc<dyn StreamStore> =
-        Arc::new(Failing::with_plan(base.streams().clone(), faults.clone()));
-    let storage = Storage::new(
-        base.documents().clone(),
-        streams,
-        base.kv().clone(),
-        base.blobs().clone(),
-        base.queues().clone(),
-        base.secrets().clone(),
-    );
-
-    let error = prepare(&storage)
-        .await
-        .expect_err("source deletion failure is returned after copying the target");
-    assert_eq!(error.kind(), ErrorKind::Backend);
+    prepare(&base).await.unwrap();
     assert_eq!(base.streams().len(source).await.unwrap(), 1);
     assert_eq!(base.streams().len(target).await.unwrap(), 1);
 
-    faults.clear();
-    prepare(&storage).await.unwrap();
-    assert_eq!(base.streams().len(source).await.unwrap(), 0);
+    base.streams()
+        .append(source, json!({"event": "late"}))
+        .await
+        .unwrap();
+    prepare(&base).await.unwrap();
+    assert_eq!(base.streams().len(source).await.unwrap(), 2);
     assert_eq!(base.streams().len(target).await.unwrap(), 1);
 }
 
