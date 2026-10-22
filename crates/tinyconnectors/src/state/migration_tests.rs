@@ -1,3 +1,5 @@
+//! Covers owner-local migration compatibility, retries, and concurrent opens.
+
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use super::*;
@@ -1060,5 +1062,4 @@ async fn concurrent_opens_resume_owner_migrations_without_duplicate_stream_entri
         json!({"read": true})
     );
 }
-//! Covers owner-local migration compatibility, retries, and concurrent opens.
 

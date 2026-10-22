@@ -80,12 +80,6 @@ impl TriggerArchive {
             .await
             .map_err(|error| failed(format!("could not append to the archive: {error}")))?;
 
-        if self.streams.capabilities().contains(Capability::StreamSeal)
-            && let Err(error) = self.seal_idle_days().await
-        {
-            tracing::warn!(%error, "[connectors][triggers] could not seal idle archive streams");
-        }
-
         tracing::debug!(
             toolkit = %entry.toolkit,
             trigger = %entry.trigger,
