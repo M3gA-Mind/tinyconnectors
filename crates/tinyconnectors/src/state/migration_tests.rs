@@ -15,6 +15,8 @@ struct CommitThenConflictStreams {
 struct CommitThenConflictMarker {
     inner: std::sync::Arc<dyn tinystoragedrivers_api::DocumentStore>,
     pending: std::sync::atomic::AtomicBool,
+    update_legacy_after_target_write: std::sync::atomic::AtomicBool,
+    delete_legacy_after_target_write: std::sync::atomic::AtomicBool,
 }
 
 #[tinystoragedrivers_api::async_trait]
@@ -46,6 +48,33 @@ impl tinystoragedrivers_api::DocumentStore for CommitThenConflictMarker {
         precondition: tinystoragedrivers_types::Precondition,
     ) -> tinystoragedrivers_types::Result<tinystoragedrivers_types::Version> {
         let version = self.inner.put(collection, id, value, precondition).await?;
+        if collection == PREFS_NAMESPACE
+            && self
+                .update_legacy_after_target_write
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            self.inner
+                .put(
+                    LEGACY_PREFS_NAMESPACE,
+                    id,
+                    json!({"value": {"updated_during_migration": true}}),
+                    tinystoragedrivers_types::Precondition::None,
+                )
+                .await?;
+        }
+        if collection == PREFS_NAMESPACE
+            && self
+                .delete_legacy_after_target_write
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+        {
+            self.inner
+                .delete(
+                    LEGACY_PREFS_NAMESPACE,
+                    id,
+                    tinystoragedrivers_types::Precondition::None,
+                )
+                .await?;
+        }
         if collection == MIGRATIONS
             && id == PREFS_STEP
             && self
@@ -269,6 +298,8 @@ async fn completion_marker_conflict_accepts_the_valid_marker_written_by_a_racer(
     let documents = std::sync::Arc::new(CommitThenConflictMarker {
         inner: base.documents().clone(),
         pending: std::sync::atomic::AtomicBool::new(true),
+        update_legacy_after_target_write: std::sync::atomic::AtomicBool::new(false),
+        delete_legacy_after_target_write: std::sync::atomic::AtomicBool::new(false),
     });
     let storage = Storage::new(
         documents,
@@ -289,6 +320,94 @@ async fn completion_marker_conflict_accepts_the_valid_marker_written_by_a_racer(
         done(storage.documents().as_ref(), STREAMS_STEP)
             .await
             .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn preference_migration_follows_a_legacy_update_after_the_initial_copy() {
+    use tinystoragedrivers_api::{Storage, StorageBackend};
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::{Precondition, Scope};
+
+    let base = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-preference-update-race").unwrap())
+        .unwrap();
+    base.documents()
+        .put(
+            LEGACY_PREFS_NAMESPACE,
+            "gmail",
+            json!({"value": {"old": true}}),
+            Precondition::Absent,
+        )
+        .await
+        .unwrap();
+    let documents = std::sync::Arc::new(CommitThenConflictMarker {
+        inner: base.documents().clone(),
+        pending: std::sync::atomic::AtomicBool::new(false),
+        update_legacy_after_target_write: std::sync::atomic::AtomicBool::new(true),
+        delete_legacy_after_target_write: std::sync::atomic::AtomicBool::new(false),
+    });
+    let storage = Storage::new(
+        documents,
+        base.streams().clone(),
+        base.kv().clone(),
+        base.blobs().clone(),
+        base.queues().clone(),
+        base.secrets().clone(),
+    );
+
+    prepare(&storage).await.unwrap();
+    assert_eq!(
+        base.documents()
+            .get(PREFS_NAMESPACE, "gmail")
+            .await
+            .unwrap()
+            .unwrap()
+            .doc,
+        json!({"old": true, "updated_during_migration": true})
+    );
+}
+
+#[tokio::test]
+async fn preference_migration_drops_a_target_when_the_legacy_row_was_deleted() {
+    use tinystoragedrivers_api::{Storage, StorageBackend};
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::{Precondition, Scope};
+
+    let base = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-preference-delete-race").unwrap())
+        .unwrap();
+    base.documents()
+        .put(
+            LEGACY_PREFS_NAMESPACE,
+            "gmail",
+            json!({"value": {"read": true}}),
+            Precondition::Absent,
+        )
+        .await
+        .unwrap();
+    let documents = std::sync::Arc::new(CommitThenConflictMarker {
+        inner: base.documents().clone(),
+        pending: std::sync::atomic::AtomicBool::new(false),
+        update_legacy_after_target_write: std::sync::atomic::AtomicBool::new(false),
+        delete_legacy_after_target_write: std::sync::atomic::AtomicBool::new(true),
+    });
+    let storage = Storage::new(
+        documents,
+        base.streams().clone(),
+        base.kv().clone(),
+        base.blobs().clone(),
+        base.queues().clone(),
+        base.secrets().clone(),
+    );
+
+    prepare(&storage).await.unwrap();
+    assert!(
+        base.documents()
+            .get(PREFS_NAMESPACE, "gmail")
+            .await
+            .unwrap()
+            .is_none()
     );
 }
 
