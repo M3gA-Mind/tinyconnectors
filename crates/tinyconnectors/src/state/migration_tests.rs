@@ -217,6 +217,7 @@ fn storage() -> tinystoragedrivers_api::Storage {
 fn legacy_composite_key_bytes_keep_the_pre_split_encoding() {
     assert_eq!(legacy_key(["a/b"]).unwrap().as_str(), "a%2Fb");
     assert_eq!(legacy_key(["%00"]).unwrap().as_str(), "%2500");
+    assert_eq!(legacy_key(["\0"]).unwrap().as_str(), "%00");
     assert_eq!(legacy_key(["~reserved"]).unwrap().as_str(), "%7Ereserved");
     assert_eq!(legacy_key(["雪/猫"]).unwrap().as_str(), "雪%2F猫");
     assert_eq!(
