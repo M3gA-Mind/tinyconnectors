@@ -87,11 +87,7 @@ impl tinystoragedrivers_api::DocumentStore for CommitThenConflictMarker {
                 .swap(false, std::sync::atomic::Ordering::SeqCst)
             {
                 self.inner
-                    .delete(
-                        collection,
-                        id,
-                        tinystoragedrivers_types::Precondition::None,
-                    )
+                    .delete(collection, id, tinystoragedrivers_types::Precondition::None)
                     .await?;
             }
             return Err(tinystoragedrivers_types::StorageError::conflict(
@@ -376,6 +372,70 @@ async fn completion_marker_conflict_accepts_the_valid_marker_written_by_a_racer(
         done(storage.documents().as_ref(), STREAMS_STEP)
             .await
             .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn completion_marker_conflict_without_a_committed_marker_is_returned() {
+    use tinystoragedrivers_api::{Storage, StorageBackend};
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::Scope;
+
+    let base = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-marker-uncommitted-race").unwrap())
+        .unwrap();
+    let documents = std::sync::Arc::new(CommitThenConflictMarker {
+        inner: base.documents().clone(),
+        pending: std::sync::atomic::AtomicBool::new(true),
+        drop_marker_before_conflict: std::sync::atomic::AtomicBool::new(true),
+        update_legacy_after_target_write: std::sync::atomic::AtomicBool::new(false),
+        delete_legacy_after_target_write: std::sync::atomic::AtomicBool::new(false),
+    });
+    let storage = Storage::new(
+        documents,
+        base.streams().clone(),
+        base.kv().clone(),
+        base.blobs().clone(),
+        base.queues().clone(),
+        base.secrets().clone(),
+    );
+
+    let error = prepare(&storage)
+        .await
+        .expect_err("a conflict without a valid done marker is not accepted");
+    assert_eq!(error.kind(), tinystoragedrivers_types::ErrorKind::Conflict);
+}
+
+#[tokio::test]
+async fn malformed_legacy_preference_documents_are_migrated_as_null() {
+    use tinystoragedrivers_api::StorageBackend;
+    use tinystoragedrivers_testkit::MemoryBackend;
+    use tinystoragedrivers_types::{Precondition, Scope};
+
+    let storage = MemoryBackend::new()
+        .for_scope(&Scope::new("connector-malformed-preference-document").unwrap())
+        .unwrap();
+    storage
+        .documents()
+        .put(
+            LEGACY_PREFS_NAMESPACE,
+            "gmail",
+            json!(["not-an-object"]),
+            Precondition::Absent,
+        )
+        .await
+        .unwrap();
+
+    prepare(&storage).await.unwrap();
+    assert_eq!(
+        storage
+            .documents()
+            .get(PREFS_NAMESPACE, "gmail")
+            .await
+            .unwrap()
+            .unwrap()
+            .doc,
+        json!({"non_object_value": null})
     );
 }
 
