@@ -1954,3 +1954,55 @@ fn the_load_configuration_reads_the_offered_toolkits() -> serde_json::Result<()>
     assert!(bare.offered.is_unrestricted());
     Ok(())
 }
+
+/// Saves a read-only preference under `toolkit`, then asserts a Zoho Books
+/// write action is refused before it reaches the backend.
+async fn a_read_only_preference_refuses_zoho_books_writes(toolkit: &str) -> tinybus::Result<()> {
+    let transport = StubTransport::replying(json!({ "successful": true, "data": {} }));
+    let (_serving, _client, proxy, _bus) = proxy_to(service_over(transport.clone())).await?;
+
+    let _: ComposioUserScopesResponse = proxy
+        .call(
+            names::methods::SET_USER_SCOPES,
+            (ComposioSetUserScopesRequest {
+                toolkit: toolkit.into(),
+                scopes: ComposioUserScopes {
+                    read: true,
+                    write: false,
+                    admin: false,
+                },
+            },),
+        )
+        .await?;
+
+    let result = proxy
+        .call::<ComposioExecuteResponse>(
+            names::methods::EXECUTE,
+            (ComposioExecuteRequest {
+                tool: "ZOHO_BOOKS_CREATE_INVOICE".into(),
+                arguments: None,
+                connection_id: None,
+            },),
+        )
+        .await;
+    assert!(
+        result.is_err(),
+        "a write action ran on a toolkit set to read-only under {toolkit:?}: {result:?}"
+    );
+    assert!(
+        transport.last_body.lock().unwrap().is_none(),
+        "nothing may reach the backend"
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_read_only_preference_binds_a_toolkit_whose_slug_has_an_underscore() -> tinybus::Result<()>
+{
+    a_read_only_preference_refuses_zoho_books_writes("zoho_books").await
+}
+
+#[tokio::test]
+async fn a_preference_on_the_first_segment_still_governs_a_longer_toolkit() -> tinybus::Result<()> {
+    a_read_only_preference_refuses_zoho_books_writes("zoho").await
+}
