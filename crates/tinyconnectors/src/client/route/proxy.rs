@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::de::DeserializeOwned;
 
 use super::Route;
-use super::url::{comma_joined, encode};
+use super::url::{comma_joined, encode, segment};
 use crate::client::Transport;
 use crate::{
     ComposioActiveTriggersResponse, ComposioAuthorizeResponse, ComposioAvailableTriggersResponse,
@@ -164,7 +164,7 @@ impl Route for ProxyRoute {
         tracing::debug!(connection_id = %connection_id, "[connectors][proxy] delete_connection");
         let path = format!(
             "/agent-integrations/composio/connections/{}",
-            encode(connection_id)
+            segment(connection_id, "connection_id")?
         );
         decode(&path, self.transport.delete(&path).await?)
     }
@@ -254,7 +254,7 @@ impl Route for ProxyRoute {
         tracing::debug!(trigger_id = %trigger_id, "[connectors][proxy] disable_trigger");
         let path = format!(
             "/agent-integrations/composio/triggers/{}",
-            encode(trigger_id)
+            segment(trigger_id, "trigger_id")?
         );
         decode(&path, self.transport.delete(&path).await?)
     }

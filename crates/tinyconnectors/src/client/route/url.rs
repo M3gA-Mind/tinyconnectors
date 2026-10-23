@@ -23,6 +23,24 @@ pub(super) fn encode(value: &str) -> String {
     percent_encoding::utf8_percent_encode(value.trim(), UNRESERVED_KEPT).to_string()
 }
 
+/// Encode one value that becomes a whole path segment.
+///
+/// `.` is unreserved, so `encode` keeps it, and an id of `.` or `..` would
+/// become a dot segment that URL parsers resolve: `/connected_accounts/..`
+/// addresses the collection, not an account. Escaping it does not help either,
+/// since parsers treat `%2e%2e` as `..` too. An empty value would drop the
+/// segment the same way. So these are refused before any request is built.
+pub(super) fn segment(value: &str, what: &str) -> crate::Result<String> {
+    let trimmed = value.trim();
+    if trimmed.chars().all(|c| c == '.') {
+        return Err(crate::Error::InvalidArguments {
+            tool: what.to_string(),
+            message: format!("`{trimmed}` is not a valid path segment"),
+        });
+    }
+    Ok(encode(trimmed))
+}
+
 /// Join non-empty, trimmed, encoded values for a comma-separated parameter.
 ///
 /// Returns `None` when nothing survives trimming, so the caller omits the

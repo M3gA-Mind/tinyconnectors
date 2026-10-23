@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 
 use super::Route;
-use super::url::{comma_joined, encode};
+use super::url::{comma_joined, encode, segment};
 
 #[path = "direct_triggers.rs"]
 mod triggers;
@@ -176,7 +176,10 @@ impl DirectRoute {
     /// stops the execute that would only be refused again; that failure (and a
     /// closed gate) is returned instead of swallowed.
     async fn account_owner(&self, connection_id: &str) -> Result<Option<String>> {
-        let path = format!("/connected_accounts/{}", encode(connection_id));
+        let path = format!(
+            "/connected_accounts/{}",
+            segment(connection_id, "connection_id")?
+        );
         match self.call(self.transport.get(&path)).await {
             Ok(value) => {
                 let owner = slug_field(&value, &["user_id", "userId"]);
@@ -241,7 +244,10 @@ impl DirectRoute {
             body["trigger_config"] = config.clone();
         }
 
-        let path = format!("/trigger_instances/{}/upsert", encode(slug));
+        let path = format!(
+            "/trigger_instances/{}/upsert",
+            segment(slug, "trigger slug")?
+        );
         tracing::debug!(slug = %slug, "[connectors][direct] upsert trigger");
         let value = self.call(self.transport.post(&path, &body)).await?;
         let status = field(&value, &["status"]);
@@ -559,7 +565,7 @@ impl Route for DirectRoute {
         // upper-snake-case and comes from a catalog rather than free text, but
         // it still reaches here over the bus, so it is encoded before it
         // becomes part of a URL.
-        let path = format!("/tools/execute/{}", encode(tool));
+        let path = format!("/tools/execute/{}", segment(tool, tool)?);
         tracing::debug!(tool = %tool, "[connectors][direct] execute");
 
         // Composio rejects an execute whose user does not own the connected
@@ -742,7 +748,10 @@ impl Route for DirectRoute {
             });
         }
 
-        let path = format!("/trigger_instances/manage/{}", encode(trigger_id));
+        let path = format!(
+            "/trigger_instances/manage/{}",
+            segment(trigger_id, "trigger_id")?
+        );
         self.call(self.transport.delete(&path)).await?;
         Ok(ComposioDisableTriggerResponse { deleted: true })
     }
