@@ -134,7 +134,7 @@ impl DirectRoute {
             Ok(_) => {
                 failures.remove(&self.key_fingerprint);
             }
-            Err(error) if is_invalid_api_key(&error.to_string()) => {
+            Err(error) if is_invalid_api_key(error) => {
                 let count = failures.entry(self.key_fingerprint).or_insert(0);
                 *count += 1;
                 tracing::warn!(
@@ -187,7 +187,7 @@ impl DirectRoute {
                 Ok(owner)
             }
             Err(error @ Error::DirectAuthGated { .. }) => Err(error),
-            Err(error) if is_invalid_api_key(&error.to_string()) => Err(error),
+            Err(error) if is_invalid_api_key(&error) => Err(error),
             Err(error) => {
                 tracing::debug!(%error, "[connectors][direct] account owner lookup failed; using configured entity");
                 Ok(None)
@@ -357,11 +357,13 @@ fn fingerprint(api_key: &str) -> u64 {
     hasher.finish()
 }
 
-/// Whether a rendered failure says the key itself was refused.
-fn is_invalid_api_key(message: &str) -> bool {
-    let lower = message.to_ascii_lowercase();
-    lower.contains("invalid api key")
-        || (lower.contains("401") && lower.contains("api key") && lower.contains("invalid"))
+/// Whether a failure says Composio refused the key itself: a 401 about the
+/// API key. The `HTTP 401` prefix is written by our transport, not the
+/// provider, so a tool's own error text ("Invalid API key for Stripe" in a
+/// 400) cannot close the gate on the user's Composio key.
+fn is_invalid_api_key(error: &Error) -> bool {
+    matches!(error, Error::Transport { message, .. }
+        if message.starts_with("HTTP 401") && message.to_ascii_lowercase().contains("api key"))
 }
 
 /// Read a string field, tolerating the object-wrapped form Composio also emits.
@@ -786,16 +788,18 @@ fn tool_schemas_from_v3(value: &serde_json::Value) -> Vec<crate::ComposioToolSch
 /// Reshape a v3 execute result into the envelope the proxy returns.
 ///
 /// Two differences are load-bearing. `successful` defaults to *true* when the
-/// response carries no verdict at all: v3 answers a plain result for some
+/// response carries no verdict and no `error` at all: v3 answers a plain result for some
 /// actions, and defaulting to failure would report a completed action as
 /// broken. And `cost_usd` is zero because direct mode carries no billing
 /// margin — the user is paying Composio, not us.
 fn execute_response_from_v3(raw: serde_json::Value) -> ComposioExecuteResponse {
+    // An `error` with no verdict is a failure, not the plain-result default.
+    let has_error = raw.get("error").is_some_and(|error| !error.is_null());
     let successful = raw
         .get("successful")
         .or_else(|| raw.get("success"))
         .and_then(serde_json::Value::as_bool)
-        .unwrap_or(true);
+        .unwrap_or(!has_error);
     let error = raw
         .get("error")
         .and_then(serde_json::Value::as_str)

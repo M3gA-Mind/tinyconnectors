@@ -640,7 +640,7 @@ async fn still_refuses_the_github_repository_listing() {
 async fn a_rejected_key_on_a_trigger_call_counts_toward_the_gate() {
     let transport = ScriptedTransport::new();
     for _ in 0..super::INVALID_API_KEY_THRESHOLD {
-        transport.expect_failure("GET", ACTIVE_PATH, "401 invalid api key");
+        transport.expect_failure("GET", ACTIVE_PATH, "HTTP 401: Invalid API key");
     }
     let direct = route(&transport);
 
