@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 
 use super::Route;
-use super::url::{comma_joined, encode};
+use super::url::{comma_joined, encode, segment};
 
 #[path = "direct_triggers.rs"]
 mod triggers;
@@ -134,7 +134,7 @@ impl DirectRoute {
             Ok(_) => {
                 failures.remove(&self.key_fingerprint);
             }
-            Err(error) if is_invalid_api_key(&error.to_string()) => {
+            Err(error) if is_invalid_api_key(error) => {
                 let count = failures.entry(self.key_fingerprint).or_insert(0);
                 *count += 1;
                 tracing::warn!(
@@ -176,7 +176,10 @@ impl DirectRoute {
     /// stops the execute that would only be refused again; that failure (and a
     /// closed gate) is returned instead of swallowed.
     async fn account_owner(&self, connection_id: &str) -> Result<Option<String>> {
-        let path = format!("/connected_accounts/{}", encode(connection_id));
+        let path = format!(
+            "/connected_accounts/{}",
+            segment(connection_id, "connection_id")?
+        );
         match self.call(self.transport.get(&path)).await {
             Ok(value) => {
                 let owner = slug_field(&value, &["user_id", "userId"]);
@@ -187,7 +190,7 @@ impl DirectRoute {
                 Ok(owner)
             }
             Err(error @ Error::DirectAuthGated { .. }) => Err(error),
-            Err(error) if is_invalid_api_key(&error.to_string()) => Err(error),
+            Err(error) if is_invalid_api_key(&error) => Err(error),
             Err(error) => {
                 tracing::debug!(%error, "[connectors][direct] account owner lookup failed; using configured entity");
                 Ok(None)
@@ -241,7 +244,10 @@ impl DirectRoute {
             body["trigger_config"] = config.clone();
         }
 
-        let path = format!("/trigger_instances/{}/upsert", encode(slug));
+        let path = format!(
+            "/trigger_instances/{}/upsert",
+            segment(slug, "trigger slug")?
+        );
         tracing::debug!(slug = %slug, "[connectors][direct] upsert trigger");
         let value = self.call(self.transport.post(&path, &body)).await?;
         let status = field(&value, &["status"]);
@@ -357,11 +363,13 @@ fn fingerprint(api_key: &str) -> u64 {
     hasher.finish()
 }
 
-/// Whether a rendered failure says the key itself was refused.
-fn is_invalid_api_key(message: &str) -> bool {
-    let lower = message.to_ascii_lowercase();
-    lower.contains("invalid api key")
-        || (lower.contains("401") && lower.contains("api key") && lower.contains("invalid"))
+/// Whether a failure says Composio refused the key itself: a 401 about the
+/// API key. The `HTTP 401` prefix is written by our transport, not the
+/// provider, so a tool's own error text ("Invalid API key for Stripe" in a
+/// 400) cannot close the gate on the user's Composio key.
+fn is_invalid_api_key(error: &Error) -> bool {
+    matches!(error, Error::Transport { message, .. }
+        if message.starts_with("HTTP 401") && message.to_ascii_lowercase().contains("api key"))
 }
 
 /// Read a string field, tolerating the object-wrapped form Composio also emits.
@@ -557,7 +565,7 @@ impl Route for DirectRoute {
         // upper-snake-case and comes from a catalog rather than free text, but
         // it still reaches here over the bus, so it is encoded before it
         // becomes part of a URL.
-        let path = format!("/tools/execute/{}", encode(tool));
+        let path = format!("/tools/execute/{}", segment(tool, tool)?);
         tracing::debug!(tool = %tool, "[connectors][direct] execute");
 
         // Composio rejects an execute whose user does not own the connected
@@ -740,7 +748,10 @@ impl Route for DirectRoute {
             });
         }
 
-        let path = format!("/trigger_instances/manage/{}", encode(trigger_id));
+        let path = format!(
+            "/trigger_instances/manage/{}",
+            segment(trigger_id, "trigger_id")?
+        );
         self.call(self.transport.delete(&path)).await?;
         Ok(ComposioDisableTriggerResponse { deleted: true })
     }
@@ -786,16 +797,18 @@ fn tool_schemas_from_v3(value: &serde_json::Value) -> Vec<crate::ComposioToolSch
 /// Reshape a v3 execute result into the envelope the proxy returns.
 ///
 /// Two differences are load-bearing. `successful` defaults to *true* when the
-/// response carries no verdict at all: v3 answers a plain result for some
+/// response carries no verdict and no `error` at all: v3 answers a plain result for some
 /// actions, and defaulting to failure would report a completed action as
 /// broken. And `cost_usd` is zero because direct mode carries no billing
 /// margin — the user is paying Composio, not us.
 fn execute_response_from_v3(raw: serde_json::Value) -> ComposioExecuteResponse {
+    // An `error` with no verdict is a failure, not the plain-result default.
+    let has_error = raw.get("error").is_some_and(|error| !error.is_null());
     let successful = raw
         .get("successful")
         .or_else(|| raw.get("success"))
         .and_then(serde_json::Value::as_bool)
-        .unwrap_or(true);
+        .unwrap_or(!has_error);
     let error = raw
         .get("error")
         .and_then(serde_json::Value::as_str)
